@@ -547,10 +547,10 @@ class TaskStore {
 
   // ── Tree (replaces ai-task-tree.json + ai-task:sync-tree) ───────────────
 
-  /** Return rows for tree reconstruction. Plans and tasks have NO foreign-key
-   *  relationship at the SQL level — plans reference tasks via the
-   *  `plans.steps[].taskId` JSON array. So we return plans (with their steps
-   *  JSON inline) plus a separate task list, and let the caller merge in JS. */
+  /** Return rows for tree reconstruction. Tree items are SCHEDULE SLOTS
+   *  (manual / once / cron) per plan, NOT tasks — runs are tagged with
+   *  itemId = `{planId}-{schedSlot}` by the scheduler, so the tree must
+   *  match that semantics for the run-history lookup to work. */
   getTreeRows() {
     const db = this._open()
     const plans = db.prepare(`
@@ -561,16 +561,19 @@ class TaskStore {
         pc.name         AS categoryName,
         pc.emoji        AS categoryEmoji,
         p.deleted_at    AS planDeletedAt,
-        p.steps         AS stepsJson
+        p.schedule      AS scheduleJson,
+        p.created_at    AS createdAt
       FROM plans p
       LEFT JOIN plan_categories pc ON p.category_id = pc.id
       ORDER BY p.created_at DESC
     `).all()
-    const tasks = db.prepare(`
-      SELECT id, name, description, type, cron_expr, created_at, deleted_at
-      FROM tasks
+    // Distinct itemIds that have ever been used in runs — surfaces tombstones
+    // for schedule slots that no longer exist on the plan but still have run
+    // history attached (e.g., user changed plan from cron to manual).
+    const runItems = db.prepare(`
+      SELECT DISTINCT plan_id, item_id FROM runs WHERE item_id IS NOT NULL
     `).all()
-    return { plans, tasks }
+    return { plans, runItems }
   }
 
   // ── Counts (migration idempotency) ──────────────────────────────────────

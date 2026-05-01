@@ -188,32 +188,83 @@ function register() {
   })
 
   // --- AI Task Tree (replaces ai-task-tree.json + ai-task:sync-tree) ---
+  // Tree items are SCHEDULE SLOTS, not tasks. Item ids must match what
+  // task-scheduler.js _computeItemId() produces for runs to be findable.
+  function _itemIdFor(planId, type, cronExpr) {
+    if (type === 'cron' && cronExpr) {
+      const hash = Buffer.from(cronExpr).toString('base64url')
+      return `${planId}-cron-${hash}`
+    }
+    if (type === 'once') return `${planId}-once`
+    return `${planId}-manual`
+  }
+
   ipcMain.handle('ai-task:get-tree', async () => {
     try {
-      const { plans: planRows, tasks: taskRows } = _store().getTreeRows()
-      // Index tasks by id for step lookup
-      const taskMap = new Map()
-      for (const t of taskRows) {
-        taskMap.set(t.id, t)
+      const { plans: planRows, runItems } = _store().getTreeRows()
+
+      // Group historical itemIds by plan for tombstone surfacing
+      const itemsByPlan = new Map()
+      for (const r of runItems) {
+        if (!r.plan_id || !r.item_id) continue
+        if (!itemsByPlan.has(r.plan_id)) itemsByPlan.set(r.plan_id, new Set())
+        itemsByPlan.get(r.plan_id).add(r.item_id)
       }
+
       const result = []
       for (const p of planRows) {
-        let steps = []
-        try { steps = JSON.parse(p.stepsJson || '[]') } catch {}
-        const items = []
-        for (const step of steps) {
-          if (!step?.taskId) continue
-          const task = taskMap.get(step.taskId)
-          if (!task) continue   // step references a missing/hard-deleted task — skip
-          items.push({
-            itemId: task.id,
-            type: task.type || 'manual',
-            description: task.description || task.name || '',
-            cronExpr: task.cron_expr || undefined,
-            createdAt: task.created_at ? new Date(task.created_at).toISOString() : null,
-            deletedAt: task.deleted_at ? new Date(task.deleted_at).toISOString() : null,
-          })
+        // Parse schedule JSON. May be a string (legacy "cron expr"), an object
+        // {type, cron, ...}, or null.
+        let schedule = null
+        try {
+          const raw = p.scheduleJson
+          if (raw && raw.startsWith('{')) schedule = JSON.parse(raw)
+          else if (raw) schedule = { type: 'cron', cron: raw }
+        } catch {}
+
+        const schedType = schedule?.type || 'manual'
+        const cronExpr  = schedule?.cron || null
+        const planCreatedIso = p.createdAt ? new Date(p.createdAt).toISOString() : null
+
+        // Current schedule slot — always present
+        const currentItem = {
+          itemId: _itemIdFor(p.planId, schedType, cronExpr),
+          type: schedType,
+          description: '',
+          cronExpr: schedType === 'cron' ? cronExpr || undefined : undefined,
+          createdAt: planCreatedIso,
+          deletedAt: null,
         }
+        const items = [currentItem]
+        const seen = new Set([currentItem.itemId])
+
+        // Surface historical itemIds (tombstones) — schedule slots that have
+        // run history but are no longer the plan's current slot.
+        const historical = itemsByPlan.get(p.planId)
+        if (historical) {
+          for (const histId of historical) {
+            if (seen.has(histId)) continue
+            // Decode type from the suffix
+            let type = 'manual'
+            let cron = null
+            if (histId.includes('-cron-')) {
+              type = 'cron'
+              try { cron = Buffer.from(histId.split('-cron-')[1], 'base64url').toString('utf8') } catch {}
+            } else if (histId.endsWith('-once')) {
+              type = 'once'
+            }
+            items.push({
+              itemId: histId,
+              type,
+              description: '',
+              cronExpr: cron || undefined,
+              createdAt: planCreatedIso,
+              deletedAt: planCreatedIso,   // mark as historical
+            })
+            seen.add(histId)
+          }
+        }
+
         result.push({
           planId: p.planId,
           planName: p.planName,
