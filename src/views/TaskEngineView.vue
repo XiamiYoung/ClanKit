@@ -288,8 +288,7 @@
                   <button
                     class="tev-action-btn tev-action-danger"
                     @click="confirmDeletePlan(plan)"
-                    :disabled="tasksStore.planHasRuns(plan.id)"
-                    v-tooltip="getPlanDeleteTooltip(plan)"
+                    v-tooltip="t('tasks.actions.delete')"
                   >
                     <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                   </button>
@@ -561,15 +560,9 @@ async function onPlanSaved(plan) {
 }
 
 function confirmDeletePlan(plan) {
-  if (tasksStore.planHasRuns(plan.id)) {
-    confirmModal.value = {
-      visible: true,
-      title: t('tasks.deleteConfirm.cannotDeletePlan'),
-      message: t('tasks.deleteConfirm.planHasRuns'),
-      onConfirm: () => {},
-    }
-    return
-  }
+  // Plan deletion is allowed even when run history exists. The runs row's
+  // plan_id FK is `ON DELETE SET NULL`, so historical runs are preserved
+  // (they show in the execution tree as orphaned tombstones).
   confirmModal.value = {
     visible: true,
     title: t('tasks.deleteConfirm.deletePlan'),
