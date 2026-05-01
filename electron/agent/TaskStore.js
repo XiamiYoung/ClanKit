@@ -24,19 +24,22 @@ const SCHEMA_VERSION = 1
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS plans (
-  id          TEXT PRIMARY KEY,
-  name        TEXT NOT NULL,
-  description TEXT,
-  prompt      TEXT,
-  agent_id    TEXT,
-  schedule    TEXT,
-  enabled     INTEGER NOT NULL DEFAULT 1,
-  category_id TEXT,
-  steps       TEXT NOT NULL DEFAULT '[]',
-  created_at  INTEGER NOT NULL,
-  updated_at  INTEGER NOT NULL,
-  last_run_at INTEGER,
-  deleted_at  INTEGER
+  id              TEXT PRIMARY KEY,
+  name            TEXT NOT NULL,
+  description     TEXT,
+  icon            TEXT,
+  prompt          TEXT,
+  agent_id        TEXT,
+  schedule        TEXT,
+  enabled         INTEGER NOT NULL DEFAULT 1,
+  category_id     TEXT,
+  permission_mode TEXT,
+  allow_list      TEXT NOT NULL DEFAULT '[]',
+  steps           TEXT NOT NULL DEFAULT '[]',
+  created_at      INTEGER NOT NULL,
+  updated_at      INTEGER NOT NULL,
+  last_run_at     INTEGER,
+  deleted_at      INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_plans_active        ON plans(deleted_at) WHERE deleted_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_plans_enabled_sched ON plans(enabled, schedule) WHERE deleted_at IS NULL;
@@ -134,37 +137,43 @@ function _deserializeSchedule(v) {
 function rowToPlan(row) {
   if (!row) return null
   return {
-    id:          row.id,
-    name:        row.name,
-    description: row.description || '',
-    prompt:      row.prompt || '',
-    agentId:     row.agent_id || null,
-    schedule:    _deserializeSchedule(row.schedule),
-    enabled:     Boolean(row.enabled),
-    categoryId:  row.category_id || null,
-    steps:       deserializeJsonArray(row.steps),
-    createdAt:   row.created_at || 0,
-    updatedAt:   row.updated_at || 0,
-    lastRunAt:   row.last_run_at || null,
-    deletedAt:   _coerceDeletedAt(row.deleted_at),
+    id:             row.id,
+    name:           row.name,
+    description:    row.description || '',
+    icon:           row.icon || '',
+    prompt:         row.prompt || '',
+    agentId:        row.agent_id || null,
+    schedule:       _deserializeSchedule(row.schedule),
+    enabled:        Boolean(row.enabled),
+    categoryId:     row.category_id || null,
+    permissionMode: row.permission_mode || null,
+    allowList:      deserializeJsonArray(row.allow_list),
+    steps:          deserializeJsonArray(row.steps),
+    createdAt:      row.created_at || 0,
+    updatedAt:      row.updated_at || 0,
+    lastRunAt:      row.last_run_at || null,
+    deletedAt:      _coerceDeletedAt(row.deleted_at),
   }
 }
 
 function planToRow(p) {
   return {
-    id:           p.id,
-    name:         p.name,
-    description:  p.description || null,
-    prompt:       p.prompt || null,
-    agent_id:     p.agentId || null,
-    schedule:     _serializeSchedule(p.schedule),
-    enabled:      p.enabled === false ? 0 : 1,
-    category_id:  p.categoryId || null,
-    steps:        serializeJsonArray(p.steps),
-    created_at:   p.createdAt || Date.now(),
-    updated_at:   p.updatedAt || Date.now(),
-    last_run_at:  p.lastRunAt || null,
-    deleted_at:   p.deletedAt || null,
+    id:              p.id,
+    name:            p.name,
+    description:     p.description || null,
+    icon:            p.icon || null,
+    prompt:          p.prompt || null,
+    agent_id:        p.agentId || null,
+    schedule:        _serializeSchedule(p.schedule),
+    enabled:         p.enabled === false ? 0 : 1,
+    category_id:     p.categoryId || null,
+    permission_mode: p.permissionMode || null,
+    allow_list:      serializeJsonArray(p.allowList),
+    steps:           serializeJsonArray(p.steps),
+    created_at:      p.createdAt || Date.now(),
+    updated_at:      p.updatedAt || Date.now(),
+    last_run_at:     p.lastRunAt || null,
+    deleted_at:      p.deletedAt || null,
   }
 }
 
@@ -259,14 +268,14 @@ class TaskStore {
     db.pragma('journal_mode = WAL')
     db.pragma('foreign_keys = ON')
     db.exec(SCHEMA)
-    // Idempotent column-drift fix: ensure plans table has steps column.
+    // Idempotent column-drift fix: ensure plans table has all expected columns.
     // CREATE TABLE IF NOT EXISTS doesn't add columns to existing tables.
     try {
-      const cols = db.prepare('PRAGMA table_info(plans)').all().map(c => c.name)
-      if (!cols.includes('steps')) {
-        db.exec("ALTER TABLE plans ADD COLUMN steps TEXT NOT NULL DEFAULT '[]'")
-        logger.info('[TaskStore] migrated plans table: added steps column')
-      }
+      const planCols = db.prepare('PRAGMA table_info(plans)').all().map(c => c.name)
+      if (!planCols.includes('steps'))           db.exec("ALTER TABLE plans ADD COLUMN steps TEXT NOT NULL DEFAULT '[]'")
+      if (!planCols.includes('icon'))            db.exec('ALTER TABLE plans ADD COLUMN icon TEXT')
+      if (!planCols.includes('permission_mode')) db.exec('ALTER TABLE plans ADD COLUMN permission_mode TEXT')
+      if (!planCols.includes('allow_list'))      db.exec("ALTER TABLE plans ADD COLUMN allow_list TEXT NOT NULL DEFAULT '[]'")
     } catch (err) {
       logger.warn('[TaskStore] plans column-drift check failed:', err.message)
     }
@@ -314,16 +323,21 @@ class TaskStore {
     const r = planToRow(plan)
     db.prepare(`
       INSERT INTO plans (
-        id, name, description, prompt, agent_id, schedule, enabled,
-        category_id, steps, created_at, updated_at, last_run_at, deleted_at
+        id, name, description, icon, prompt, agent_id, schedule, enabled,
+        category_id, permission_mode, allow_list, steps,
+        created_at, updated_at, last_run_at, deleted_at
       ) VALUES (
-        @id, @name, @description, @prompt, @agent_id, @schedule, @enabled,
-        @category_id, @steps, @created_at, @updated_at, @last_run_at, @deleted_at
+        @id, @name, @description, @icon, @prompt, @agent_id, @schedule, @enabled,
+        @category_id, @permission_mode, @allow_list, @steps,
+        @created_at, @updated_at, @last_run_at, @deleted_at
       )
       ON CONFLICT(id) DO UPDATE SET
-        name=excluded.name, description=excluded.description, prompt=excluded.prompt,
+        name=excluded.name, description=excluded.description,
+        icon=excluded.icon, prompt=excluded.prompt,
         agent_id=excluded.agent_id, schedule=excluded.schedule, enabled=excluded.enabled,
-        category_id=excluded.category_id, steps=excluded.steps,
+        category_id=excluded.category_id,
+        permission_mode=excluded.permission_mode, allow_list=excluded.allow_list,
+        steps=excluded.steps,
         updated_at=excluded.updated_at,
         last_run_at=excluded.last_run_at, deleted_at=excluded.deleted_at
     `).run(r)

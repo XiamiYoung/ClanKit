@@ -60,10 +60,13 @@ function migrate(dataDir) {
       store.savePlan({
         id: p.id, name: p.name,
         description: p.description, prompt: p.prompt,
+        icon: p.icon || null,
         agentId: p.agentId || p.agent_id,
         schedule: p.schedule || p.cron || null,
         enabled: p.enabled !== false,
         categoryId: p.categoryId || null,
+        permissionMode: p.permissionMode || null,
+        allowList: Array.isArray(p.allowList) ? p.allowList : [],
         steps: Array.isArray(p.steps) ? p.steps : [],
         createdAt: _toMs(p.createdAt) || Date.now(),
         updatedAt: _toMs(p.updatedAt) || Date.now(),

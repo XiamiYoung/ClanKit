@@ -24,26 +24,32 @@ describe('serializeJsonArray / deserializeJsonArray', () => {
 })
 
 describe('plan round-trip', () => {
-  it('preserves all fields with legacy string schedule', () => {
+  it('preserves all fields', () => {
     const plan = {
       id: 'plan-1',
       name: 'Daily digest',
       description: 'Morning summary',
+      icon: '📅',
       prompt: 'Run the news fetch',
       agentId: 'agent-x',
       schedule: '0 9 * * *',
       enabled: true,
       categoryId: 'cat-1',
-      steps: [
-        { taskId: 'task-a', runCondition: 'always' },
-        { taskId: 'task-b', runCondition: 'on-success' },
-      ],
+      permissionMode: 'all_permissions',
+      allowList: [{ id: 'a1', pattern: 'foo', description: 'bar' }],
+      steps: [{ taskId: 'task-a', runCondition: 'always' }],
       createdAt: 1700000000000,
       updatedAt: 1700000001000,
       lastRunAt: 1700000002000,
       deletedAt: null,
     }
     expect(rowToPlan(planToRow(plan))).toMatchObject(plan)
+  })
+  it('plan without allowList round-trips with empty array', () => {
+    const plan = { id: 'p2', name: 'P', enabled: true, createdAt: 0, updatedAt: 0 }
+    const back = rowToPlan(planToRow(plan))
+    expect(back.allowList).toEqual([])
+    expect(back.steps).toEqual([])
   })
   it('plan without steps round-trips with empty array', () => {
     const plan = { id: 'p', name: 'P', enabled: true, createdAt: 0, updatedAt: 0 }
