@@ -968,6 +968,9 @@ ipcMain.handle('agent:run-additional', async (event, {
     loopConfig.DoCPath             = groupCfg.DoCPath || ''
     loopConfig.memoryDir           = ds.paths().MEMORY_DIR
     loopConfig.chatId              = chatId
+    loopConfig.mode                = meta.mode || 'chat'
+    loopConfig.chatWorkingPath     = meta.chatWorkingPath || null
+    loopConfig.modeTransitionPending = meta.modeTransitionPending || null
     _injectCachedModelMaxOutputTokens(loopConfig)
 
     if (pendingStops.has(chatId)) {
@@ -1045,6 +1048,9 @@ ipcMain.handle('agent:run-additional', async (event, {
   })
 
   const results = await Promise.all(promises)
+  if (!event.sender.isDestroyed() && meta.modeTransitionPending) {
+    event.sender.send('chat:clear-mode-transition-pending', { chatId })
+  }
   return { success: true, results }
 })
 
