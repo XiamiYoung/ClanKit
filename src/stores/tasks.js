@@ -262,6 +262,19 @@ export const useTasksStore = defineStore('tasks', () => {
     return taskUsageCount.value[taskId] || 0
   }
 
+  function taskUsedByPlans(taskId) {
+    if (!taskId) return []
+    const result = []
+    for (const plan of plans.value) {
+      const steps = plan.steps || []
+      const matchCount = steps.filter(s => s.taskId === taskId).length
+      if (matchCount > 0) {
+        result.push({ id: plan.id, name: plan.name || '(unnamed plan)', stepCount: matchCount })
+      }
+    }
+    return result
+  }
+
   function planHasRuns(planId) {
     return planRunSet.value.has(planId)
   }
@@ -363,26 +376,6 @@ export const useTasksStore = defineStore('tasks', () => {
     try {
       await window.electronAPI.tasks.saveRun(runDetail)
       await loadRuns()
-      // Sync with AI Task Tree
-      if (window.electronAPI?.aiTask) {
-        try {
-          const planCat = planCategories.value.find(c => c.id === plan?.categoryId)
-          await window.electronAPI.aiTask.syncTree({
-            planId: plan?.id,
-            planName: plan?.name || '',
-            categoryId: plan?.categoryId || null,
-            categoryName: planCat?.name || null,
-            categoryEmoji: planCat?.emoji || null,
-            itemId,
-            itemType: schedType,
-            itemDescription: schedType === 'cron' ? `Recurring: ${plan?.schedule?.cron}` : schedType === 'once' ? 'One-time scheduled' : 'Manual',
-            itemCronExpr: schedType === 'cron' ? plan?.schedule?.cron : undefined,
-            itemCreatedAt: new Date().toISOString(),
-          })
-        } catch (err) {
-          console.warn('[TasksStore] ai-task sync error:', err)
-        }
-      }
     } catch (err) {
       console.warn('[TasksStore] Failed to persist run:', err)
     } finally {
@@ -730,6 +723,6 @@ export const useTasksStore = defineStore('tasks', () => {
     // Subscription
     subscribeToScheduledRuns, unsubscribeFromScheduledRuns,
     // Deletion protection
-    taskUsageCount, planRunSet, taskUsedByPlanCount, planHasRuns,
+    taskUsageCount, planRunSet, taskUsedByPlanCount, taskUsedByPlans, planHasRuns,
   }
 })

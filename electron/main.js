@@ -591,6 +591,17 @@ app.whenReady().then(async () => {
     // until then, store:get-agents still falls back to agents.json on disk.
   }
 
+  // One-shot tasks/plans/runs JSON → tasks.db migration. No-op after first run.
+  try {
+    const { migrate: migrateTasks } = require('./migrations/tasksToSqlite')
+    const result = migrateTasks(ds.paths().DATA_DIR)
+    if (!result.skipped) {
+      logger.info(`[main] tasks.db migration complete: ${JSON.stringify(result.migrated)}`)
+    }
+  } catch (err) {
+    logger.error('[main] tasks.db migration failed:', err.message, err.stack)
+  }
+
   createWindow()
 
   // ── Lazy local file server for HTML preview (started on first use) ──
@@ -623,6 +634,15 @@ app.whenReady().then(async () => {
 
   // Anonymous install telemetry (async, non-blocking, silent on failure)
   require('./lib/telemetry').sendInstallPing().catch(() => {})
+
+  // Auto-update: first check 30s after app ready (avoid cold-start contention).
+  // No periodic polling — users restart the app often enough; manual check
+  // available from Settings page in the meantime.
+  setTimeout(() => {
+    require('./updater').check({ trigger: 'auto' }).catch(err => {
+      logger.warn('[updater] startup check threw', err?.message)
+    })
+  }, 30_000)
 
   // ── Built-in skills: seed missing skills from source tree into user skillsDir ──
   // Runs after IPC registration so the first scan-dir call picks them up.
@@ -657,32 +677,19 @@ app.whenReady().then(async () => {
 
   // ── Clean up stale 'running' run entries from a previous session ────────────
   try {
-    if (fs.existsSync(p().TASK_RUNS_INDEX)) {
-      const runIndex = JSON.parse(fs.readFileSync(p().TASK_RUNS_INDEX, 'utf8'))
-      const stoppedAt = new Date().toISOString()
-      let dirty = false
-      for (const entry of runIndex) {
-        if (entry.status === 'running') {
-          entry.status      = 'error'
-          entry.completedAt = stoppedAt
-          entry.error       = 'Interrupted by app restart'
-          dirty = true
-          // Also patch the run detail file if it exists
-          const detailFile = path.join(p().TASK_RUNS_DIR, `${entry.id}.json`)
-          if (fs.existsSync(detailFile)) {
-            try {
-              const detail = JSON.parse(fs.readFileSync(detailFile, 'utf8'))
-              if (detail.status === 'running') {
-                detail.status      = 'error'
-                detail.completedAt = stoppedAt
-                detail.error       = 'Interrupted by app restart'
-                fs.writeFileSync(detailFile, JSON.stringify(detail, null, 2), 'utf8')
-              }
-            } catch {}
-          }
-        }
-      }
-      if (dirty) fs.writeFileSync(p().TASK_RUNS_INDEX, JSON.stringify(runIndex, null, 2), 'utf8')
+    const { getInstance: getTaskStore } = require('./agent/TaskStore')
+    const taskStore = getTaskStore(p().DATA_DIR)
+    const stale = taskStore.listRuns({ limit: 1000 }).filter(r => r.status === 'running')
+    for (const run of stale) {
+      taskStore.saveRun({
+        ...run,
+        status: 'error',
+        completedAt: Date.now(),
+        error: 'Interrupted by app restart',
+      })
+    }
+    if (stale.length > 0) {
+      logger.info(`[main] cleaned up ${stale.length} stale 'running' run(s) from previous session`)
     }
   } catch (err) {
     logger.warn('Failed to clean up stale run entries:', err.message)

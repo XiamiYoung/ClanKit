@@ -7,7 +7,7 @@
 
     <div class="att-tree">
       <div v-for="group in groupedTree" :key="group.id" class="att-category">
-        <button class="att-cat-toggle" @click="toggleCategory(group.id)">
+        <button class="att-cat-toggle" :class="{ 'is-open': openCategories.has(group.id) }" @click="toggleCategory(group.id)">
           <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z"/></svg>
           <span class="att-cat-emoji">{{ group.emoji }}</span>
           <span class="att-cat-name">{{ group.name }}</span>
@@ -16,7 +16,7 @@
 
         <div v-show="openCategories.has(group.id)" class="att-category-content">
           <div v-for="plan in filteredPlans(group)" :key="plan.planId" class="att-plan">
-            <button class="att-plan-toggle" @click="togglePlan(plan.planId)">
+            <button class="att-plan-toggle" :class="{ 'is-open': openPlans.has(plan.planId) }" @click="togglePlan(plan.planId)">
               <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z"/></svg>
               <span class="att-plan-label" :class="{ deleted: plan.deletedAt }">{{ plan.planName }}</span>
               <span v-if="plan.deletedAt" class="att-deleted-badge">(deleted)</span>
@@ -46,7 +46,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from '../../i18n/useI18n'
 
 const { t } = useI18n()
@@ -64,7 +64,7 @@ const openPlans = ref(new Set())
 
 const groupedTree = computed(() => {
   const catMap = Object.fromEntries(props.planCategories.map(c => [c.id, { ...c, plans: [] }]))
-  const uncategorized = { id: null, name: 'Uncategorized', emoji: '📋', plans: [] }
+  const uncategorized = { id: '__uncat__', name: 'Uncategorized', emoji: '📋', plans: [] }
 
   for (const plan of props.tree.plans) {
     if (plan.categoryId && catMap[plan.categoryId]) {
@@ -74,13 +74,25 @@ const groupedTree = computed(() => {
     }
   }
 
-  const result = [...Object.values(catMap).filter(g => g.plans.length), ...(uncategorized.plans.length ? [uncategorized] : [])]
-  // Auto-open first category
-  if (result.length > 0 && openCategories.value.size === 0) {
-    openCategories.value.add(result[0].id)
-  }
-  return result
+  return [...Object.values(catMap).filter(g => g.plans.length), ...(uncategorized.plans.length ? [uncategorized] : [])]
 })
+
+// Auto-open the first category ONCE on initial tree population. Doing this
+// inside the computed creates a feedback loop: collapsing the only category
+// makes openCategories.size === 0, which re-fires the computed (since it
+// reads .size) and re-adds the category — toggle appears stuck.
+let _autoOpenedOnce = false
+watch(
+  () => groupedTree.value,
+  (groups) => {
+    if (_autoOpenedOnce) return
+    if (groups.length > 0) {
+      openCategories.value.add(groups[0].id)
+      _autoOpenedOnce = true
+    }
+  },
+  { immediate: true },
+)
 
 function toggleCategory(id) {
   if (openCategories.value.has(id)) {
@@ -178,6 +190,17 @@ function selectItem(payload) {
 
 .att-cat-toggle svg {
   transition: transform 0.15s;
+  flex-shrink: 0;
+}
+.att-cat-toggle.is-open svg {
+  transform: rotate(90deg);
+}
+.att-plan-toggle svg {
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+.att-plan-toggle.is-open svg {
+  transform: rotate(90deg);
 }
 
 .att-cat-emoji {

@@ -288,8 +288,7 @@
                   <button
                     class="tev-action-btn tev-action-danger"
                     @click="confirmDeletePlan(plan)"
-                    :disabled="tasksStore.planHasRuns(plan.id)"
-                    v-tooltip="getPlanDeleteTooltip(plan)"
+                    v-tooltip="t('tasks.actions.delete')"
                   >
                     <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                   </button>
@@ -311,9 +310,11 @@
       <TaskDashboard
         :runs="tasksStore.runs"
         :plans="tasksStore.plans"
+        :tasks="tasksStore.tasks"
         :planColors="planColors"
         :plan-categories="tasksStore.planCategories"
         @open-run="onDashboardOpenRun"
+        @navigate="onDashboardNavigate"
       />
     </div>
 
@@ -410,8 +411,10 @@ import TaskCalendar from '../components/tasks/TaskCalendar.vue'
 import TaskDashboard from '../components/tasks/TaskDashboard.vue'
 import PlanHistoryModal from '../components/tasks/PlanHistoryModal.vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
+import { useRouter } from 'vue-router'
 
 const { t } = useI18n()
+const router = useRouter()
 
 const tasksStore = useTasksStore()
 
@@ -511,12 +514,19 @@ async function onTaskSaved(task) {
 }
 
 function confirmDeleteTask(task) {
-  const usedCount = tasksStore.taskUsedByPlanCount(task.id)
-  if (usedCount > 0) {
+  const usingPlans = tasksStore.taskUsedByPlans(task.id)
+  if (usingPlans.length > 0) {
+    const planList = usingPlans.map(p => `• ${p.name}${p.stepCount > 1 ? ` (×${p.stepCount})` : ''}`).join('\n')
     confirmModal.value = {
       visible: true,
       title: t('tasks.deleteConfirm.cannotDeleteTask'),
-      message: t('tasks.deleteConfirm.taskUsedInPlans', { count: usedCount }),
+      message: t('tasks.deleteConfirm.taskUsedInPlansList', {
+        count: usingPlans.length,
+        plans: planList,
+        taskName: task.name || task.id.slice(0, 8),
+      }),
+      cancelText: t('common.ok'),
+      confirmText: '',
       onConfirm: () => {},
     }
     return
@@ -550,15 +560,9 @@ async function onPlanSaved(plan) {
 }
 
 function confirmDeletePlan(plan) {
-  if (tasksStore.planHasRuns(plan.id)) {
-    confirmModal.value = {
-      visible: true,
-      title: t('tasks.deleteConfirm.cannotDeletePlan'),
-      message: t('tasks.deleteConfirm.planHasRuns'),
-      onConfirm: () => {},
-    }
-    return
-  }
+  // Plan deletion is allowed even when run history exists. The runs row's
+  // plan_id FK is `ON DELETE SET NULL`, so historical runs are preserved
+  // (they show in the execution tree as orphaned tombstones).
   confirmModal.value = {
     visible: true,
     title: t('tasks.deleteConfirm.deletePlan'),
@@ -750,9 +754,11 @@ function relativeTime(iso) {
 // ── Tooltip helpers ───────────────────────────────────────────────────────────
 
 function getTaskDeleteTooltip(task) {
-  const usedCount = tasksStore.taskUsedByPlanCount(task.id)
-  if (usedCount > 0) {
-    return t('tasks.deleteConfirm.taskUsedInPlans', { count: usedCount })
+  const usingPlans = tasksStore.taskUsedByPlans(task.id)
+  if (usingPlans.length > 0) {
+    return t('tasks.deleteConfirm.taskUsedInPlansTooltip', {
+      plans: usingPlans.map(p => p.name).join(', '),
+    })
   }
   return t('tasks.actions.delete')
 }
@@ -931,6 +937,18 @@ async function refreshTab() {
     }
   } finally {
     isRefreshing.value = false
+  }
+}
+
+// ── Dashboard stat-card navigation ────────────────────────────────────────────
+function onDashboardNavigate(target) {
+  // Targets: 'tasks' | 'plans' | 'calendar' | 'history'
+  if (target === 'history') {
+    router.push('/ai-tasks')
+    return
+  }
+  if (target === 'tasks' || target === 'plans' || target === 'calendar') {
+    activeTab.value = target
   }
 }
 

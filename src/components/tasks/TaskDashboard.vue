@@ -3,7 +3,7 @@
 
     <!-- Stats cards -->
     <div class="tdb-stats">
-      <div class="tdb-stat-card">
+      <div class="tdb-stat-card tdb-stat-card--clickable" @click="emit('navigate', 'history')">
         <div class="tdb-stat-icon tdb-stat-icon--total">
           <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         </div>
@@ -12,7 +12,16 @@
           <div class="tdb-stat-label">{{ t('tasks.dashboard.totalRuns') }}</div>
         </div>
       </div>
-      <div class="tdb-stat-card">
+      <div class="tdb-stat-card tdb-stat-card--clickable" @click="emit('navigate', 'tasks')">
+        <div class="tdb-stat-icon tdb-stat-icon--tasks">
+          <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        </div>
+        <div class="tdb-stat-body">
+          <div class="tdb-stat-value">{{ props.tasks.length }}</div>
+          <div class="tdb-stat-label">{{ t('tasks.dashboard.totalTasks') }}</div>
+        </div>
+      </div>
+      <div class="tdb-stat-card tdb-stat-card--clickable" @click="emit('navigate', 'calendar')">
         <div class="tdb-stat-icon tdb-stat-icon--scheduled">
           <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
         </div>
@@ -21,7 +30,7 @@
           <div class="tdb-stat-label">{{ t('tasks.dashboard.scheduledAhead') }}</div>
         </div>
       </div>
-      <div class="tdb-stat-card">
+      <div class="tdb-stat-card tdb-stat-card--clickable" @click="emit('navigate', 'history')">
         <div class="tdb-stat-icon tdb-stat-icon--success">
           <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
         </div>
@@ -30,7 +39,7 @@
           <div class="tdb-stat-label">{{ t('tasks.dashboard.successRate') }}</div>
         </div>
       </div>
-      <div class="tdb-stat-card">
+      <div class="tdb-stat-card tdb-stat-card--clickable" @click="emit('navigate', 'history')">
         <div class="tdb-stat-icon tdb-stat-icon--dur">
           <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
         </div>
@@ -39,7 +48,7 @@
           <div class="tdb-stat-label">{{ t('tasks.dashboard.avgDuration') }}</div>
         </div>
       </div>
-      <div class="tdb-stat-card">
+      <div class="tdb-stat-card tdb-stat-card--clickable" @click="emit('navigate', 'plans')">
         <div class="tdb-stat-icon tdb-stat-icon--top">
           <svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
         </div>
@@ -229,11 +238,12 @@ const { t } = useI18n()
 const props = defineProps({
   runs:     { type: Array, default: () => [] },
   plans:    { type: Array, default: () => [] },
+  tasks:    { type: Array, default: () => [] },
   planColors: { type: Object, default: () => ({}) },
   planCategories: { type: Array, default: () => [] },
 })
 
-const emit = defineEmits(['open-run'])
+const emit = defineEmits(['open-run', 'navigate'])
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -475,13 +485,20 @@ function openDetail(row) {
 
 .tdb-stat-card {
   background: var(--bg-card);
-  border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 1.25rem 1.5rem;
   display: flex;
   align-items: center;
   gap: 1rem;
   box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.tdb-stat-card--clickable {
+  cursor: pointer;
+}
+.tdb-stat-card--clickable:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
 }
 
 .tdb-stat-icon {
@@ -495,6 +512,7 @@ function openDetail(row) {
   color: #FFFFFF;
 }
 .tdb-stat-icon--total     { background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); }
+.tdb-stat-icon--tasks     { background: linear-gradient(135deg, #1E3A8A, #3B82F6); }
 .tdb-stat-icon--scheduled { background: linear-gradient(135deg, #312E81, #6366F1); }
 .tdb-stat-icon--success   { background: linear-gradient(135deg, #065F46, #10B981); }
 .tdb-stat-icon--dur       { background: linear-gradient(135deg, #1E3A5F, #3B82F6); }

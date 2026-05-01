@@ -29,6 +29,7 @@
 <script setup>
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import { getAvatarDataUri } from '../agents/agentAvatars.js'
 
 const props = defineProps({
   taskName:     { type: String, required: true },
@@ -49,12 +50,7 @@ function getAgent(agentId) {
 function getAgentAvatar(agentId) {
   const agent = getAgent(agentId)
   if (!agent?.avatar) return null
-  try {
-    const url = new URL(agent.avatar)
-    return url.href
-  } catch {
-    return null
-  }
+  return getAvatarDataUri(agent.avatar)
 }
 
 function getAgentInitials(agentId) {

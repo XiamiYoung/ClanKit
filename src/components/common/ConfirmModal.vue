@@ -57,7 +57,7 @@ const props = defineProps({
   },
   confirmText: {
     type: String,
-    default: '',
+    default: undefined,
   },
   confirmClass: {
     type: String,
@@ -91,7 +91,8 @@ function onBackdropClick() {
 
 const computedConfirmText = computed(() => {
   if (props.confirmText === '') return null
-  return props.confirmText || t('common.delete')
+  if (props.confirmText === null || props.confirmText === undefined) return t('common.delete')
+  return props.confirmText
 })
 const computedCancelText = computed(() => {
   if (props.cancelText === '') return null
@@ -188,6 +189,7 @@ onUnmounted(() => {
   color: #9CA3AF;
   line-height: 1.6;
   margin: 0;
+  white-space: pre-line;
 }
 
 .confirm-error {

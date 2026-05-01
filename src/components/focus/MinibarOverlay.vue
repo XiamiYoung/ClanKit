@@ -2,7 +2,7 @@
   <Teleport to="body">
     <div v-if="focusModeStore.isMinibarMode" class="minibar-bar minibar-bar--enter" ref="barEl" @mousedown="onBarDragStart">
       <!-- Logo -->
-      <img :src="appIconUrl" class="minibar-icon" alt="ClanKit" draggable="false" @dragstart.prevent />
+      <img :src="appIconUrl" class="minibar-icon" :alt="t('app.name')" draggable="false" @dragstart.prevent />
       <div class="minibar-sep" />
 
       <!-- Shared content (count, plan, ticker, compose) -->

@@ -41,12 +41,12 @@
             <!-- Category -->
             <div class="te-field">
               <label class="te-label">{{ t('tasks.taskEditor.category') }}</label>
-              <ComboBox
-                :model-value="draft.categoryId"
-                :options="props.taskCategories.map(c => ({ id: c.id, name: c.emoji + ' ' + c.name }))"
-                :placeholder="t('tasks.taskEditor.uncategorized')"
-                @update:model-value="draft.categoryId = $event"
-              />
+              <select v-model="draft.categoryId" class="te-input te-select">
+                <option :value="null">{{ t('tasks.taskEditor.uncategorized') }}</option>
+                <option v-for="c in props.taskCategories" :key="c.id" :value="c.id">
+                  {{ c.emoji ? c.emoji + ' ' : '' }}{{ c.name }}
+                </option>
+              </select>
             </div>
 
             <!-- Prompt -->
@@ -118,7 +118,6 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { v4 as uuid } from 'uuid'
 import EmojiPicker from '../agents/EmojiPicker.vue'
-import ComboBox from '../common/ComboBox.vue'
 import { useConfigStore } from '../../stores/config'
 import { useI18n } from '../../i18n/useI18n'
 import { detectAgentLanguage } from '../../utils/agentDefinitionPrompts'
@@ -386,6 +385,14 @@ function cancel() {
   transition: border-color 0.15s ease;
   width: 100%;
   box-sizing: border-box;
+}
+.te-select {
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.8);
+}
+.te-select option {
+  background: #1A1A1A;
+  color: #FFFFFF;
 }
 .te-input::placeholder { color: rgba(255,255,255,0.25); }
 .te-input:focus { border-color: #4B5563; box-shadow: 0 0 0 3px rgba(255,255,255,0.04); }

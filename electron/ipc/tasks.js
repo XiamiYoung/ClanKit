@@ -1,9 +1,11 @@
 /**
  * IPC handlers for tasks, plans, task runs, categories, and AI task tree.
  * Channels: tasks:*, plans:*, task-categories:*, plan-categories:*, ai-task:*
+ *
+ * All persistence delegates to TaskStore (electron/agent/TaskStore.js) which
+ * is backed by tasks.db (SQLite). The wire shape of every channel is
+ * preserved so the renderer is unaware that storage changed.
  */
-const path = require('path')
-const fs = require('fs')
 const { ipcMain } = require('electron')
 const { logger } = require('../logger')
 const ds = require('../lib/dataStore')
@@ -28,19 +30,19 @@ function _fireTaskCompletionNotification(runDetail) {
   }
 }
 
+function _store() {
+  const { getInstance } = require('../agent/TaskStore')
+  return getInstance(ds.paths().DATA_DIR)
+}
+
 function register() {
-  const p = () => ds.paths()
 
   // --- Tasks ---
-  ipcMain.handle('tasks:list', async () => ds.readJSONAsync(p().TASKS_FILE, []))
+  ipcMain.handle('tasks:list', async () => _store().listActiveTasks())
 
   ipcMain.handle('tasks:save', async (_, task) => {
     try {
-      let tasks = await ds.readJSONAsync(p().TASKS_FILE, [])
-      const idx = tasks.findIndex(t => t.id === task.id)
-      if (idx >= 0) tasks[idx] = task
-      else tasks.unshift(task)
-      await ds.writeJSONAtomic(p().TASKS_FILE, tasks)
+      _store().saveTask(task)
       return { success: true, task }
     } catch (err) {
       logger.error('tasks:save error', err.message)
@@ -50,9 +52,7 @@ function register() {
 
   ipcMain.handle('tasks:delete', async (_, id) => {
     try {
-      let tasks = await ds.readJSONAsync(p().TASKS_FILE, [])
-      tasks = tasks.filter(t => t.id !== id)
-      await ds.writeJSONAtomic(p().TASKS_FILE, tasks)
+      _store().softDeleteTask(id)
       return { success: true }
     } catch (err) {
       logger.error('tasks:delete error', err.message)
@@ -61,15 +61,11 @@ function register() {
   })
 
   // --- Plans ---
-  ipcMain.handle('plans:list', async () => ds.readJSONAsync(p().PLANS_FILE, []))
+  ipcMain.handle('plans:list', async () => _store().listActivePlans())
 
   ipcMain.handle('plans:save', async (_, plan) => {
     try {
-      let plans = await ds.readJSONAsync(p().PLANS_FILE, [])
-      const idx = plans.findIndex(pp => pp.id === plan.id)
-      if (idx >= 0) plans[idx] = plan
-      else plans.unshift(plan)
-      await ds.writeJSONAtomic(p().PLANS_FILE, plans)
+      _store().savePlan(plan)
       const taskScheduler = require('../task-scheduler')
       taskScheduler.schedulePlan(plan)
       return { success: true, plan }
@@ -81,9 +77,7 @@ function register() {
 
   ipcMain.handle('plans:delete', async (_, id) => {
     try {
-      let plans = await ds.readJSONAsync(p().PLANS_FILE, [])
-      plans = plans.filter(pp => pp.id !== id)
-      await ds.writeJSONAtomic(p().PLANS_FILE, plans)
+      _store().softDeletePlan(id)
       const taskScheduler = require('../task-scheduler')
       taskScheduler.unschedulePlan(id)
       return { success: true }
@@ -96,28 +90,25 @@ function register() {
   // --- Task Runs ---
   ipcMain.handle('tasks:get-runs', async (_, { planId, itemId, limit } = {}) => {
     try {
-      let index = await ds.readJSONAsync(p().TASK_RUNS_INDEX, [])
-      if (planId) index = index.filter(r => r.planId === planId)
-      if (itemId) index = index.filter(r => r.itemId === itemId)
-      if (limit) index = index.slice(0, limit)
-      return index
-    } catch { return [] }
+      return _store().listRunSummaries({ planId, itemId, limit })
+    } catch (err) {
+      logger.warn('tasks:get-runs error', err.message)
+      return []
+    }
   })
 
   ipcMain.handle('tasks:get-run', async (_, runId) => {
     try {
-      const file = path.join(p().TASK_RUNS_DIR, `${runId}.json`)
-      return await ds.readJSONAsync(file, null)
-    } catch { return null }
+      return _store().getRunById(runId)
+    } catch (err) {
+      logger.warn('tasks:get-run error', err.message)
+      return null
+    }
   })
 
   ipcMain.handle('tasks:delete-run', async (_, runId) => {
     try {
-      const file = path.join(p().TASK_RUNS_DIR, `${runId}.json`)
-      if (fs.existsSync(file)) fs.unlinkSync(file)
-      let index = await ds.readJSONAsync(p().TASK_RUNS_INDEX, [])
-      index = index.filter(r => r.id !== runId)
-      await ds.writeJSONAtomic(p().TASK_RUNS_INDEX, index)
+      _store().deleteRun(runId)
       return { success: true }
     } catch (err) {
       logger.error('tasks:delete-run error', err.message)
@@ -127,27 +118,9 @@ function register() {
 
   ipcMain.handle('tasks:save-run', async (_, runDetail) => {
     try {
-      const runsDir = p().TASK_RUNS_DIR
-      if (!fs.existsSync(runsDir)) fs.mkdirSync(runsDir, { recursive: true })
-      const file = path.join(runsDir, `${runDetail.id}.json`)
-      await ds.writeJSONAtomic(file, runDetail)
-      let index = await ds.readJSONAsync(p().TASK_RUNS_INDEX, [])
-      const existing = index.findIndex(r => r.id === runDetail.id)
-      const summary = {
-        id:          runDetail.id,
-        planId:      runDetail.planId,
-        planName:    runDetail.planName,
-        itemId:      runDetail.itemId || null,
-        triggeredBy: runDetail.triggeredBy,
-        status:      runDetail.status,
-        startedAt:   runDetail.startedAt,
-        completedAt: runDetail.completedAt,
-        error:       runDetail.error || null,
-      }
-      if (existing >= 0) index[existing] = summary
-      else index.unshift(summary)
-      if (index.length > 200) index = index.slice(0, 200)
-      await ds.writeJSONAtomic(p().TASK_RUNS_INDEX, index)
+      const store = _store()
+      store.saveRun(runDetail)
+      store.pruneRuns(200)   // keep most-recent 200, mirrors old index-cap behavior
 
       if (runDetail.completedAt) {
         const win = winRef.get()
@@ -169,15 +142,11 @@ function register() {
   })
 
   // --- Task Categories ---
-  ipcMain.handle('task-categories:list', async () => ds.readJSONAsync(p().TASK_CATEGORIES_FILE, []))
+  ipcMain.handle('task-categories:list', async () => _store().listTaskCategories())
 
   ipcMain.handle('task-categories:save', async (_, cat) => {
     try {
-      let categories = await ds.readJSONAsync(p().TASK_CATEGORIES_FILE, [])
-      const idx = categories.findIndex(c => c.id === cat.id)
-      if (idx >= 0) categories[idx] = cat
-      else categories.push(cat)
-      await ds.writeJSONAtomic(p().TASK_CATEGORIES_FILE, categories)
+      _store().saveTaskCategory(cat)
       return { success: true }
     } catch (err) {
       logger.error('task-categories:save error', err.message)
@@ -187,9 +156,7 @@ function register() {
 
   ipcMain.handle('task-categories:delete', async (_, id) => {
     try {
-      let categories = await ds.readJSONAsync(p().TASK_CATEGORIES_FILE, [])
-      categories = categories.filter(c => c.id !== id)
-      await ds.writeJSONAtomic(p().TASK_CATEGORIES_FILE, categories)
+      _store().deleteTaskCategory(id)
       return { success: true }
     } catch (err) {
       logger.error('task-categories:delete error', err.message)
@@ -198,15 +165,11 @@ function register() {
   })
 
   // --- Plan Categories ---
-  ipcMain.handle('plan-categories:list', async () => ds.readJSONAsync(p().PLAN_CATEGORIES_FILE, []))
+  ipcMain.handle('plan-categories:list', async () => _store().listPlanCategories())
 
   ipcMain.handle('plan-categories:save', async (_, cat) => {
     try {
-      let categories = await ds.readJSONAsync(p().PLAN_CATEGORIES_FILE, [])
-      const idx = categories.findIndex(c => c.id === cat.id)
-      if (idx >= 0) categories[idx] = cat
-      else categories.push(cat)
-      await ds.writeJSONAtomic(p().PLAN_CATEGORIES_FILE, categories)
+      _store().savePlanCategory(cat)
       return { success: true }
     } catch (err) {
       logger.error('plan-categories:save error', err.message)
@@ -216,9 +179,7 @@ function register() {
 
   ipcMain.handle('plan-categories:delete', async (_, id) => {
     try {
-      let categories = await ds.readJSONAsync(p().PLAN_CATEGORIES_FILE, [])
-      categories = categories.filter(c => c.id !== id)
-      await ds.writeJSONAtomic(p().PLAN_CATEGORIES_FILE, categories)
+      _store().deletePlanCategory(id)
       return { success: true }
     } catch (err) {
       logger.error('plan-categories:delete error', err.message)
@@ -226,66 +187,103 @@ function register() {
     }
   })
 
-  // --- AI Task Tree ---
+  // --- AI Task Tree (replaces ai-task-tree.json + ai-task:sync-tree) ---
+  // Tree items are SCHEDULE SLOTS, not tasks. Item ids must match what
+  // task-scheduler.js _computeItemId() produces for runs to be findable.
+  function _itemIdFor(planId, type, cronExpr) {
+    if (type === 'cron' && cronExpr) {
+      const hash = Buffer.from(cronExpr).toString('base64url')
+      return `${planId}-cron-${hash}`
+    }
+    if (type === 'once') return `${planId}-once`
+    return `${planId}-manual`
+  }
+
   ipcMain.handle('ai-task:get-tree', async () => {
     try {
-      let index = await ds.readJSONAsync(p().TASK_RUNS_INDEX, [])
-      let changed = false
-      for (const entry of index) {
-        if (!entry.itemId) {
-          try {
-            const runFile = path.join(p().TASK_RUNS_DIR, `${entry.id}.json`)
-            const detail = await ds.readJSONAsync(runFile, null)
-            if (detail?.itemId) {
-              entry.itemId = detail.itemId
-              changed = true
+      const { plans: planRows, runItems } = _store().getTreeRows()
+
+      // Group historical itemIds by plan for tombstone surfacing
+      const itemsByPlan = new Map()
+      for (const r of runItems) {
+        if (!r.plan_id || !r.item_id) continue
+        if (!itemsByPlan.has(r.plan_id)) itemsByPlan.set(r.plan_id, new Set())
+        itemsByPlan.get(r.plan_id).add(r.item_id)
+      }
+
+      const result = []
+      for (const p of planRows) {
+        // Parse schedule JSON. May be a string (legacy "cron expr"), an object
+        // {type, cron, ...}, or null.
+        let schedule = null
+        try {
+          const raw = p.scheduleJson
+          if (raw && raw.startsWith('{')) schedule = JSON.parse(raw)
+          else if (raw) schedule = { type: 'cron', cron: raw }
+        } catch {}
+
+        const schedType = schedule?.type || 'manual'
+        const cronExpr  = schedule?.cron || null
+        const planCreatedIso = p.createdAt ? new Date(p.createdAt).toISOString() : null
+
+        // Current schedule slot — always present
+        const currentItem = {
+          itemId: _itemIdFor(p.planId, schedType, cronExpr),
+          type: schedType,
+          description: '',
+          cronExpr: schedType === 'cron' ? cronExpr || undefined : undefined,
+          createdAt: planCreatedIso,
+          deletedAt: null,
+        }
+        const items = [currentItem]
+        const seen = new Set([currentItem.itemId])
+
+        // Surface historical itemIds (tombstones) — schedule slots that have
+        // run history but are no longer the plan's current slot.
+        const historical = itemsByPlan.get(p.planId)
+        if (historical) {
+          for (const histId of historical) {
+            if (seen.has(histId)) continue
+            // Decode type from the suffix
+            let type = 'manual'
+            let cron = null
+            if (histId.includes('-cron-')) {
+              type = 'cron'
+              try { cron = Buffer.from(histId.split('-cron-')[1], 'base64url').toString('utf8') } catch {}
+            } else if (histId.endsWith('-once')) {
+              type = 'once'
             }
-          } catch {}
+            items.push({
+              itemId: histId,
+              type,
+              description: '',
+              cronExpr: cron || undefined,
+              createdAt: planCreatedIso,
+              deletedAt: planCreatedIso,   // mark as historical
+            })
+            seen.add(histId)
+          }
         }
+
+        result.push({
+          planId: p.planId,
+          planName: p.planName,
+          categoryId: p.categoryId || null,
+          categoryName: p.categoryName || null,
+          categoryEmoji: p.categoryEmoji || null,
+          deletedAt: p.planDeletedAt ? new Date(p.planDeletedAt).toISOString() : null,
+          items,
+        })
       }
-      if (changed) await ds.writeJSONAtomic(p().TASK_RUNS_INDEX, index)
-    } catch {}
-    return await ds.readJSONAsync(p().AI_TASK_TREE_FILE, { plans: [] })
-  })
-
-  ipcMain.handle('ai-task:sync-tree', async (_, payload) => {
-    try {
-      const { planId, planName, categoryId, categoryName, categoryEmoji, itemId, itemType, itemDescription, itemCronExpr, itemCreatedAt } = payload
-      let tree = await ds.readJSONAsync(p().AI_TASK_TREE_FILE, { plans: [] })
-
-      let planEntry = tree.plans.find(pp => pp.planId === planId)
-      if (!planEntry) {
-        planEntry = {
-          planId, planName,
-          categoryId: categoryId || null,
-          categoryName: categoryName || null,
-          categoryEmoji: categoryEmoji || null,
-          deletedAt: null, items: [],
-        }
-        tree.plans.push(planEntry)
-      } else {
-        planEntry.planName = planName
-        planEntry.categoryId = categoryId || null
-        planEntry.categoryName = categoryName || null
-        planEntry.categoryEmoji = categoryEmoji || null
-      }
-
-      if (!planEntry.items.find(i => i.itemId === itemId)) {
-        const itemObj = {
-          itemId, type: itemType, description: itemDescription,
-          createdAt: itemCreatedAt || new Date().toISOString(), deletedAt: null,
-        }
-        if (itemCronExpr) itemObj.cronExpr = itemCronExpr
-        planEntry.items.push(itemObj)
-      }
-
-      await ds.writeJSONAtomic(p().AI_TASK_TREE_FILE, tree)
-      return { success: true }
+      return { plans: result }
     } catch (err) {
-      logger.error('ai-task:sync-tree error', err.message)
-      return { success: false, error: err.message }
+      logger.warn('ai-task:get-tree error', err.message, err.stack)
+      return { plans: [] }
     }
   })
+
+  // ai-task:sync-tree intentionally removed — plans/tasks tables are now the
+  // source of truth. Renderer code that called this can drop the call.
 }
 
 module.exports = { register }

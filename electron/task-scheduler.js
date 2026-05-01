@@ -13,8 +13,6 @@
  * After plan save:   taskScheduler.schedulePlan(plan)
  * After plan delete: taskScheduler.unschedulePlan(planId)
  */
-const fs = require('fs')
-const path = require('path')
 const { v4: uuidv4 } = require('uuid')
 const { logger } = require('./logger')
 
@@ -28,8 +26,13 @@ try {
 const { AgentLoop } = require('./agent/agentLoop')
 
 const ds = require('./lib/dataStore')
+const { getInstance: getTaskStore } = require('./agent/TaskStore')
 const { normalizeAgents } = require('./agent/dataNormalizers')
 const notifier = require('./lib/notifier')
+
+function _store() {
+  return getTaskStore(ds.paths().DATA_DIR)
+}
 
 function _fireTaskCompletionNotification(runDetail) {
   try {
@@ -73,12 +76,9 @@ function _stopOncePoll() {
   if (_oncePoll) { clearInterval(_oncePoll); _oncePoll = null }
 }
 
-async function _recordSkippedRun(plan, scheduledAt) {
-  const { taskRunsDir, taskRunsIndex } = getPaths()
-  if (!fs.existsSync(taskRunsDir)) fs.mkdirSync(taskRunsDir, { recursive: true })
-  const { v4: uuidv4 } = require('uuid')
+async function _recordSkippedRun(plan, scheduledAtMs) {
+  const store = _store()
   const runId = uuidv4()
-  const ts = scheduledAt  // use the original scheduled time as startedAt
 
   const runDetail = {
     id:          runId,
@@ -86,17 +86,13 @@ async function _recordSkippedRun(plan, scheduledAt) {
     planName:    plan.name,
     status:      'skipped',
     triggeredBy: 'schedule',
-    startedAt:   ts,
-    completedAt: ts,
+    startedAt:   scheduledAtMs,
+    completedAt: scheduledAtMs,
     stepResults: [],
     error:       'Missed — system was asleep or app was not running',
   }
-  await writeJSONAtomic(path.join(taskRunsDir, `${runId}.json`), runDetail)
-
-  let idx = readJSON(taskRunsIndex, [])
-  idx.unshift({ id: runId, planId: plan.id, planName: plan.name, triggeredBy: 'schedule', status: 'skipped', startedAt: ts, completedAt: ts, error: runDetail.error })
-  if (idx.length > 200) idx = idx.slice(0, 200)
-  await writeJSONAtomic(taskRunsIndex, idx)
+  store.saveRun(runDetail)
+  store.pruneRuns(200)
 
   // Notify renderer so run list refreshes
   const win = _getMainWindow?.()
@@ -118,9 +114,8 @@ async function _checkOncePlans() {
     // Check if a scheduled run already exists for this plan near the scheduled time
     let alreadyRan = false
     try {
-      const { taskRunsIndex } = getPaths()
-      const idx = readJSON(taskRunsIndex, [])
-      alreadyRan = idx.some(r =>
+      const summaries = _store().listRunSummaries({ planId, limit: 20 })
+      alreadyRan = summaries.some(r =>
         r.planId === planId &&
         r.triggeredBy === 'schedule' &&
         Math.abs(new Date(r.startedAt).getTime() - runAt) < ONCE_MAX_LATE_MS
@@ -135,7 +130,7 @@ async function _checkOncePlans() {
       // Missed window (system was asleep/off) — record as skipped so history is accurate
       logger.warn(`[TaskScheduler] Once plan "${plan.name}" (${planId}) missed by ${Math.round(lateMs / 1000)}s — recording as skipped`)
       try {
-        await _recordSkippedRun(plan, new Date(runAt).toISOString())
+        await _recordSkippedRun(plan, runAt)
       } catch (err) {
         logger.error(`[TaskScheduler] Failed to record skipped run for ${planId}:`, err.message)
       }
@@ -169,35 +164,8 @@ function _computeItemId(plan, triggeredBy) {
 function getPaths() {
   const pp = ds.paths()
   return {
-    configFile:         pp.CONFIG_FILE,
-    tasksFile:          pp.TASKS_FILE,
-    plansFile:          pp.PLANS_FILE,
-    taskRunsDir:        pp.TASK_RUNS_DIR,
-    taskRunsIndex:      pp.TASK_RUNS_INDEX,
-    agentArtifactsDir:  pp.AGENT_ARTIFACTS_DIR,
-    taskCategoriesFile: pp.TASK_CATEGORIES_FILE,
-    planCategoriesFile: pp.PLAN_CATEGORIES_FILE,
-    aiTaskTreeFile:     pp.AI_TASK_TREE_FILE,
-  }
-}
-
-function readJSON(file, fallback) {
-  try {
-    if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, 'utf8'))
-  } catch {}
-  return fallback
-}
-
-async function writeJSONAtomic(file, data) {
-  const dir = path.dirname(file)
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-  const tmp = file + `.tmp.${process.pid}.${Date.now()}`
-  try {
-    await fs.promises.writeFile(tmp, JSON.stringify(data, null, 2), 'utf8')
-    await fs.promises.rename(tmp, file)
-  } catch (err) {
-    try { await fs.promises.unlink(tmp) } catch {}
-    throw err
+    configFile:        pp.CONFIG_FILE,
+    agentArtifactsDir: pp.AGENT_ARTIFACTS_DIR,
   }
 }
 
@@ -355,69 +323,17 @@ function shouldRunStep(step, stepStatuses) {
   return true
 }
 
-// ── Sync AI Task Tree with execution history ───────────────────────────────────
-
-async function _syncAiTaskTree(plan, itemId, triggeredBy) {
-  const { aiTaskTreeFile, planCategoriesFile } = getPaths()
-  const tree = readJSON(aiTaskTreeFile, { plans: [] })
-  const allPlanCats = readJSON(planCategoriesFile, [])
-  const cat = plan.categoryId ? allPlanCats.find(c => c.id === plan.categoryId) : null
-
-  let planEntry = tree.plans.find(p => p.planId === plan.id)
-  if (!planEntry) {
-    planEntry = {
-      planId: plan.id,
-      planName: plan.name,
-      categoryId: plan.categoryId || null,
-      categoryName: cat?.name || null,
-      categoryEmoji: cat?.emoji || null,
-      deletedAt: null,
-      items: [],
-    }
-    tree.plans.push(planEntry)
-  } else {
-    planEntry.planName = plan.name
-    planEntry.categoryId = plan.categoryId || null
-    planEntry.categoryName = cat?.name || null
-    planEntry.categoryEmoji = cat?.emoji || null
-  }
-
-  const schedType = plan.schedule?.type || 'manual'
-  let itemType = 'manual', itemDescription = 'Manual', itemCronExpr = null
-  if (triggeredBy !== 'manual' && schedType === 'once') {
-    itemType = 'once'
-    itemDescription = 'One-time scheduled'
-  } else if (triggeredBy !== 'manual' && schedType === 'cron' && plan.schedule?.cron) {
-    itemType = 'cron'
-    itemCronExpr = plan.schedule.cron
-    itemDescription = `Recurring: ${plan.schedule.cron}`
-  }
-
-  if (!planEntry.items.find(i => i.itemId === itemId)) {
-    const itemObj = {
-      itemId,
-      type: itemType,
-      description: itemDescription,
-      createdAt: new Date().toISOString(),
-      deletedAt: null,
-    }
-    if (itemCronExpr) itemObj.cronExpr = itemCronExpr
-    planEntry.items.push(itemObj)
-  }
-
-  await writeJSONAtomic(aiTaskTreeFile, tree)
-}
-
 // ── Execute a full plan (all steps sequentially) ──────────────────────────────
 
 async function _executePlan(plan, triggeredBy = 'schedule') {
-  const { configFile, tasksFile, taskRunsDir, taskRunsIndex, agentArtifactsDir } = getPaths()
-  const globalCfg   = readJSON(configFile,   {})
-  const allAgents   = normalizeAgents(ds.readAgentsCompat())
-  const allTasks     = readJSON(tasksFile, [])
+  const { configFile, agentArtifactsDir } = getPaths()
+  const globalCfg = ds.readJSON(configFile, {})
+  const allAgents = normalizeAgents(ds.readAgentsCompat())
+  const store     = _store()
+  const allTasks  = store.listActiveTasks()
 
-  const runId      = uuidv4()
-  const startedAt  = new Date().toISOString()
+  const runId     = uuidv4()
+  const startedAt = Date.now()
 
   logger.info(`[TaskScheduler] Executing plan "${plan.name}" (${plan.id}), runId=${runId}, by=${triggeredBy}`)
 
@@ -426,35 +342,26 @@ async function _executePlan(plan, triggeredBy = 'schedule') {
   const DoCPath       = globalCfg.DoCPath       || ''
   const sandboxConfig = globalCfg.sandboxConfig || { defaultMode: 'allow_all', sandboxAllowList: [], dangerBlockList: [] }
 
-  // Initialize run record
-  if (!fs.existsSync(taskRunsDir)) fs.mkdirSync(taskRunsDir, { recursive: true })
-
   const stepResults = [] // { stepIndex, taskId, taskName, agentId, agentName, output, status, error }
   let runStatus = 'completed'
   let runError  = null
 
   // Write initial run record
   const runDetail = {
-    id:         runId,
-    planId:     plan.id,
-    planName:   plan.name,
-    status:     'running',
+    id:          runId,
+    planId:      plan.id,
+    planName:    plan.name,
+    status:      'running',
     triggeredBy,
     startedAt,
     completedAt: null,
     stepResults: [],
     error:       null,
   }
-  await writeJSONAtomic(path.join(taskRunsDir, `${runId}.json`), runDetail)
-
-  // Update index
-  const itemId = _computeItemId(plan, triggeredBy)
-  let runIndex = readJSON(taskRunsIndex, [])
-  runIndex.unshift({ id: runId, planId: plan.id, planName: plan.name, triggeredBy, status: 'running', startedAt, completedAt: null, error: null, itemId, stepCount: (plan.steps || []).length })
-  if (runIndex.length > 200) runIndex = runIndex.slice(0, 200)
-  await writeJSONAtomic(taskRunsIndex, runIndex)
+  store.saveRun(runDetail)
 
   // Push run-started to renderer
+  const itemId = _computeItemId(plan, triggeredBy)
   {
     const win = _getMainWindow?.()
     if (win && !win.isDestroyed()) {
@@ -463,7 +370,7 @@ async function _executePlan(plan, triggeredBy = 'schedule') {
         planId:    plan.id,
         planName:  plan.name,
         stepCount: (plan.steps || []).length,
-        startedAt,
+        startedAt: new Date(startedAt).toISOString(),
       })
     }
   }
@@ -484,7 +391,7 @@ async function _executePlan(plan, triggeredBy = 'schedule') {
 
       if (!shouldRunStep(step, stepStatuses)) {
         logger.info(`[TaskScheduler] Step ${stepIdx}: condition not met, skipping`)
-        const ts = new Date().toISOString()
+        const ts = Date.now()
         stepResults.push({ stepIndex: stepIdx, taskId: step.taskId, taskName: '(skipped)', status: 'skipped', error: 'Run condition not met', startedAt: ts, completedAt: ts })
         stepStatuses[step.id] = 'skipped'
         return
@@ -493,7 +400,7 @@ async function _executePlan(plan, triggeredBy = 'schedule') {
       const task = allTasks.find(t => t.id === step.taskId)
       if (!task) {
         logger.warn(`[TaskScheduler] Step ${stepIdx}: task ${step.taskId} not found, skipping`)
-        const ts = new Date().toISOString()
+        const ts = Date.now()
         stepResults.push({ stepIndex: stepIdx, taskId: step.taskId, taskName: '(not found)', status: 'skipped', error: 'Task not found', startedAt: ts, completedAt: ts })
         stepStatuses[step.id] = 'skipped'
         return
@@ -513,7 +420,7 @@ async function _executePlan(plan, triggeredBy = 'schedule') {
 
       if (agentIds.length === 0) {
         logger.warn(`[TaskScheduler] Step ${stepIdx} (${task.name}): no agents assigned, skipping`)
-        const ts = new Date().toISOString()
+        const ts = Date.now()
         stepResults.push({ stepIndex: stepIdx, taskId: task.id, taskName: task.name, status: 'skipped', error: 'No agents assigned', startedAt: ts, completedAt: ts })
         stepStatuses[step.id] = 'skipped'
         return
@@ -528,20 +435,20 @@ async function _executePlan(plan, triggeredBy = 'schedule') {
         const agent = allAgents.find(p => p.id === agentId)
         if (!agent) {
           logger.warn(`[TaskScheduler] Step ${stepIdx}: agent ${agentId} not found, skipping`)
-          const ts = new Date().toISOString()
+          const ts = Date.now()
           stepResults.push({ stepIndex: stepIdx, taskId: task.id, taskName: task.name, agentId, agentName: '(not found)', status: 'skipped', error: 'Agent not found', startedAt: ts, completedAt: ts })
           return
         }
 
-        const stepStartedAt = new Date().toISOString()
+        const stepStartedAt = Date.now()
         try {
           const output = await _runAgentStep(agent, promptText, globalCfg, agentArtifactsDir, artifactPath, skillsPath, DoCPath, sandboxConfig)
           stepOutputs.push(output)
-          stepResults.push({ stepIndex: stepIdx, taskId: task.id, taskName: task.name, agentId: agent.id, agentName: agent.name, output, status: 'done', startedAt: stepStartedAt, completedAt: new Date().toISOString() })
+          stepResults.push({ stepIndex: stepIdx, taskId: task.id, taskName: task.name, agentId: agent.id, agentName: agent.name, output, status: 'done', startedAt: stepStartedAt, completedAt: Date.now() })
           logger.info(`[TaskScheduler] Step ${stepIdx} agent ${agent.name}: done`)
         } catch (err) {
           logger.error(`[TaskScheduler] Step ${stepIdx} agent ${agent.name} error:`, err.message)
-          stepResults.push({ stepIndex: stepIdx, taskId: task.id, taskName: task.name, agentId: agent.id, agentName: agent.name, output: '', status: 'failed', error: err.message, startedAt: stepStartedAt, completedAt: new Date().toISOString() })
+          stepResults.push({ stepIndex: stepIdx, taskId: task.id, taskName: task.name, agentId: agent.id, agentName: agent.name, output: '', status: 'failed', error: err.message, startedAt: stepStartedAt, completedAt: Date.now() })
           stepFailed = true
           runStatus = 'error'
           runError  = err.message
@@ -556,16 +463,16 @@ async function _executePlan(plan, triggeredBy = 'schedule') {
       }
     }))
 
-    // Write partial results to disk after each wave so the UI can show live progress
+    // Write partial results after each wave so the UI can show live progress
     runDetail.stepResults = [...stepResults]
-    await writeJSONAtomic(path.join(taskRunsDir, `${runId}.json`), runDetail)
+    store.saveRun(runDetail)
     const winMid = _getMainWindow?.()
     if (winMid && !winMid.isDestroyed()) {
       winMid.webContents.send('tasks:run-updated', { runId, planId: plan.id })
     }
   }
 
-  const completedAt = new Date().toISOString()
+  const completedAt = Date.now()
 
   // Write final run detail
   runDetail.stepResults  = stepResults
@@ -574,37 +481,13 @@ async function _executePlan(plan, triggeredBy = 'schedule') {
   runDetail.error        = runError
   runDetail.itemId       = itemId
   runDetail.stepCount    = stepResults.length
-  await writeJSONAtomic(path.join(taskRunsDir, `${runId}.json`), runDetail)
-
-  // Update index entry
-  runIndex = readJSON(taskRunsIndex, [])
-  const idxEntry = runIndex.find(e => e.id === runId)
-  if (idxEntry) {
-    idxEntry.status      = runStatus
-    idxEntry.completedAt = completedAt
-    idxEntry.error       = runError
-    idxEntry.itemId      = itemId
-    idxEntry.stepCount   = stepResults.length
-    await writeJSONAtomic(taskRunsIndex, runIndex)
-  }
+  store.saveRun(runDetail)
+  store.pruneRuns(200)
 
   // Update plan's lastRunAt
   try {
-    const { plansFile } = getPaths()
-    const plans = readJSON(plansFile, [])
-    const pl = plans.find(p => p.id === plan.id)
-    if (pl) {
-      pl.lastRunAt = completedAt
-      await writeJSONAtomic(plansFile, plans)
-    }
+    store.setPlanLastRunAt(plan.id, completedAt)
   } catch {}
-
-  // Sync AI Task Tree
-  try {
-    await _syncAiTaskTree(plan, itemId, triggeredBy)
-  } catch (err) {
-    logger.warn('[TaskScheduler] ai-task sync error:', err.message)
-  }
 
   logger.info(`[TaskScheduler] Plan run ${runId} ${runStatus}`)
 
@@ -687,8 +570,7 @@ function init(getDataDir, getMainWindow, getSettingsDir) {
   }
 
   try {
-    const { plansFile } = getPaths()
-    const plans = readJSON(plansFile, [])
+    const plans = _store().listActivePlans()
     let scheduled = 0
     for (const plan of plans) {
       if (plan?.schedule?.enabled) {

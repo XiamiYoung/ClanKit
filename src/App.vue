@@ -11,6 +11,9 @@
           @mousedown.prevent="startNavResize"
         ></div>
         <main class="flex-1 min-w-0 overflow-hidden flex flex-col">
+          <!-- Auto-update banner: appears 30s after launch when a newer version is on R2. Non-blocking. -->
+          <UpdateBanner />
+
           <!-- Setup banner: shown when wizard was skipped but not completed -->
           <div v-if="showSetupBanner" class="setup-banner">
             <svg class="setup-banner-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -79,7 +82,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch, watchEffect, computed } from 'vue'
 import { useFocusModeStore } from './stores/focusMode'
 import { RouterView, useRouter, useRoute } from 'vue-router'
 import Sidebar  from './components/layout/Sidebar.vue'
@@ -92,6 +95,7 @@ import AuthDialog from './components/common/AuthDialog.vue'
 import SessionExpiredDialog from './components/common/SessionExpiredDialog.vue'
 import ConfirmModal from './components/common/ConfirmModal.vue'
 import PreviewLimitModal from './components/common/PreviewLimitModal.vue'
+import UpdateBanner from './components/common/UpdateBanner.vue'
 import { usePreviewLimit } from './composables/usePreviewLimit'
 import { useAuth } from './composables/useAuth'
 import { useNewChatGuard } from './composables/useNewChatGuard'
@@ -196,6 +200,12 @@ async function reopenWizard() {
   await configStore.saveConfig({ setupDismissed: false, setupWizardStep: 0 })
   bannerDismissed.value = false
 }
+
+// Keep document.title in sync with the localized app name (zh shows 叮咣AI, en shows ClanKit)
+watchEffect(() => {
+  const name = t('app.name')
+  if (name) document.title = name
+})
 
 // Handle quick-send from minibar — runs here so it works even when ChatsView is unmounted
 watch(() => chatsStore.pendingMinibarSend, async (pending) => {
