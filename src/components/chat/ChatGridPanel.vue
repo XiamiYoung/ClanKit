@@ -11,17 +11,20 @@
       @start-call="cId => $emit('start-call', cId)"
     >
       <template #actions>
-        <!-- Mode toggle indicator (read-only mini switch) -->
-        <span
+        <!-- Mode toggle switch (chat ↔ professional) -->
+        <button
           v-if="showModeChip"
           class="gp-mode-switch"
           v-tooltip="modeLabel"
-          aria-hidden="true"
+          :aria-label="modeLabel"
+          role="switch"
+          :aria-checked="isProductivity ? 'true' : 'false'"
+          @click.stop="onModeChipClick"
         >
           <span class="gp-mode-switch-track" :class="{ on: isProductivity }">
             <span class="gp-mode-switch-thumb"></span>
           </span>
-        </span>
+        </button>
         <!-- Call -->
         <button class="gp-maximize-btn" @click.stop="$emit('start-call', chatId)" v-tooltip="t('chats.voiceCall')">
           <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -230,6 +233,13 @@
       </div>
     </div>
   </Teleport>
+
+  <!-- First-switch professional mode confirm modal (per grid cell) -->
+  <ConfirmProductivityModal
+    v-if="showProductivityConfirm"
+    @confirm="confirmProductivitySwitch"
+    @cancel="showProductivityConfirm = false"
+  />
 </template>
 
 <script setup>
@@ -246,6 +256,7 @@ import { v4 as uuidv4 } from 'uuid'
 import ChatHeader from './ChatHeader.vue'
 import ChatWindow from './ChatWindow.vue'
 import ChatMentionInput from './ChatMentionInput.vue'
+import ConfirmProductivityModal from './ConfirmProductivityModal.vue'
 import { parseMentions } from '../../utils/mentions'
 import { useI18n } from '../../i18n/useI18n'
 import { useInterrupt } from '../../composables/useInterrupt'
@@ -403,7 +414,23 @@ const chat = computed(() => chatsStore.chats.find(c => c.id === props.chatId) ||
 const isRunning = computed(() => chat.value?.isRunning ?? false)
 const isProductivity = computed(() => chat.value?.mode === 'productivity')
 const showModeChip = computed(() => chat.value && chat.value.type !== 'analysis')
-const modeLabel = computed(() => isProductivity.value ? t('chats.modeProductivity') : t('chats.modeChat'))
+const modeLabel = computed(() => isProductivity.value ? t('chats.modeProductivityTooltip') : t('chats.modeChatTooltip'))
+
+// ── Mode toggle ──
+const showProductivityConfirm = ref(false)
+function onModeChipClick() {
+  if (!chat.value) return
+  if (!isProductivity.value && !chat.value.productivityModeNoticeShown) {
+    showProductivityConfirm.value = true
+    return
+  }
+  const target = isProductivity.value ? 'chat' : 'productivity'
+  chatsStore.setMode(chat.value.id, target)
+}
+function confirmProductivitySwitch() {
+  showProductivityConfirm.value = false
+  if (chat.value) chatsStore.setMode(chat.value.id, 'productivity')
+}
 
 // ── Swap ──
 const collapsedFolders = ref(new Set())
@@ -1082,11 +1109,26 @@ function deleteMessage(msg) {
 
 .gp-swap-wrap { position: relative; }
 
-/* ── Mode toggle indicator (read-only mini switch) ── */
+/* ── Mode toggle switch (clickable) ── */
 .gp-mode-switch {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+  /* Reset <button> defaults */
+  padding: 0.25rem 0.375rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 0.25rem;
+  outline: none;
+  transition: background 0.15s;
+}
+.gp-mode-switch:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+.gp-mode-switch:focus-visible {
+  box-shadow: 0 0 0 2px rgba(15, 15, 15, 0.18);
 }
 .gp-mode-switch-track {
   position: relative;
@@ -1096,6 +1138,8 @@ function deleteMessage(msg) {
   background: #D1D5DB;
   transition: background 0.2s;
   flex-shrink: 0;
+  /* Decorative children — ensure click lands on outer <button> */
+  pointer-events: none;
 }
 .gp-mode-switch-track.on {
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
@@ -1110,6 +1154,7 @@ function deleteMessage(msg) {
   background: #FFFFFF;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
 }
 .gp-mode-switch-track.on .gp-mode-switch-thumb {
   transform: translateX(0.75rem);
