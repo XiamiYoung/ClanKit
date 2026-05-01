@@ -591,6 +591,17 @@ app.whenReady().then(async () => {
     // until then, store:get-agents still falls back to agents.json on disk.
   }
 
+  // One-shot tasks/plans/runs JSON → tasks.db migration. No-op after first run.
+  try {
+    const { migrate: migrateTasks } = require('./migrations/tasksToSqlite')
+    const result = migrateTasks(ds.paths().DATA_DIR)
+    if (!result.skipped) {
+      logger.info(`[main] tasks.db migration complete: ${JSON.stringify(result.migrated)}`)
+    }
+  } catch (err) {
+    logger.error('[main] tasks.db migration failed:', err.message, err.stack)
+  }
+
   createWindow()
 
   // ── Lazy local file server for HTML preview (started on first use) ──
