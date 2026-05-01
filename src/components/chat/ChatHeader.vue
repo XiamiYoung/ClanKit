@@ -63,21 +63,47 @@
       <div class="ch-row-top-actions">
         <template v-if="!isGridView">
           <!-- Mode toggle switch (chat ↔ productivity) -->
-          <div
-            v-if="showModeChip"
-            class="ch-mode-switch"
-            v-tooltip="isProductivity ? t('chats.modeProductivityTooltip') : t('chats.modeChatTooltip')"
-            :aria-label="isProductivity ? t('chats.modeProductivity') : t('chats.modeChat')"
-            role="switch"
-            :aria-checked="isProductivity ? 'true' : 'false'"
-            tabindex="0"
-            @click.stop="onModeChipClick"
-            @keydown.enter.prevent="onModeChipClick"
-            @keydown.space.prevent="onModeChipClick"
-          >
-            <span class="ch-mode-switch-label">{{ isProductivity ? t('chats.modeProductivity') : t('chats.modeChat') }}</span>
-            <div class="ch-mode-switch-track" :class="{ on: isProductivity }">
-              <span class="ch-mode-switch-thumb"></span>
+          <div v-if="showModeChip" class="ch-mode-dd-wrap" ref="modeDropdownWrapEl">
+            <button
+              class="ch-mode-dd-btn"
+              :class="{ 'ch-mode-dd-btn--productivity': isProductivity }"
+              :aria-label="isProductivity ? t('chats.modeProductivity') : t('chats.modeChat')"
+              :aria-haspopup="true"
+              :aria-expanded="modeDropdownOpen ? 'true' : 'false'"
+              @click.stop="modeDropdownOpen = !modeDropdownOpen"
+            >
+              <svg v-if="isProductivity" style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+              <svg v-else style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <span class="ch-mode-dd-label">{{ isProductivity ? t('chats.modeProductivity') : t('chats.modeChat') }}</span>
+              <svg class="ch-mode-dd-chevron" :class="{ open: modeDropdownOpen }" style="width:11px;height:11px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div v-if="modeDropdownOpen" class="ch-mode-dd-menu" role="menu">
+              <button
+                class="ch-mode-dd-item"
+                :class="{ active: !isProductivity }"
+                role="menuitem"
+                @click.stop="selectMode('chat')"
+              >
+                <div class="ch-mode-dd-item-head">
+                  <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  <span class="ch-mode-dd-item-title">{{ t('chats.modeChat') }}</span>
+                  <svg v-if="!isProductivity" class="ch-mode-dd-check" style="width:13px;height:13px;flex-shrink:0;margin-left:auto;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <div class="ch-mode-dd-item-desc">{{ t('chats.modeChatDesc') }}</div>
+              </button>
+              <button
+                class="ch-mode-dd-item"
+                :class="{ active: isProductivity }"
+                role="menuitem"
+                @click.stop="selectMode('productivity')"
+              >
+                <div class="ch-mode-dd-item-head">
+                  <svg style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                  <span class="ch-mode-dd-item-title">{{ t('chats.modeProductivity') }}</span>
+                  <svg v-if="isProductivity" class="ch-mode-dd-check" style="width:13px;height:13px;flex-shrink:0;margin-left:auto;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <div class="ch-mode-dd-item-desc">{{ t('chats.modeProductivityDesc') }}</div>
+              </button>
             </div>
           </div>
           <!-- Voice call button -->
@@ -923,6 +949,8 @@ const effectiveAgentRounds = computed(() => {
 // ── Mode chip ──
 const showProductivityConfirm = ref(false)
 const isProductivity = computed(() => chat.value?.mode === 'productivity')
+const modeDropdownOpen = ref(false)
+const modeDropdownWrapEl = ref(null)
 
 const showModeChip = computed(() => {
   const c = chat.value
@@ -940,6 +968,29 @@ function onModeChipClick() {
   const target = isProductivity.value ? 'chat' : 'productivity'
   chatsStore.setMode(chat.value.id, target)
 }
+
+function selectMode(target) {
+  modeDropdownOpen.value = false
+  if (!chat.value) return
+  // No-op when picking the current mode
+  if ((target === 'productivity') === isProductivity.value) return
+  // First-time switch to productivity → show confirm modal
+  if (target === 'productivity' && !chat.value.productivityModeNoticeShown) {
+    showProductivityConfirm.value = true
+    return
+  }
+  chatsStore.setMode(chat.value.id, target)
+}
+
+// Click outside the mode dropdown closes it
+function onDocClickForModeDropdown(e) {
+  if (!modeDropdownOpen.value) return
+  if (modeDropdownWrapEl.value && !modeDropdownWrapEl.value.contains(e.target)) {
+    modeDropdownOpen.value = false
+  }
+}
+onMounted(() => document.addEventListener('click', onDocClickForModeDropdown))
+onUnmounted(() => document.removeEventListener('click', onDocClickForModeDropdown))
 
 function confirmProductivitySwitch() {
   showProductivityConfirm.value = false
@@ -1754,67 +1805,105 @@ function confirmProductivitySwitch() {
   line-height: 1.5;
 }
 
-/* ── Mode toggle switch (right-actions area) ── */
-.ch-mode-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4375rem;
-  height: 1.875rem; /* match call/settings buttons */
-  padding: 0 0.625rem;
-  cursor: pointer;
-  user-select: none;
-  border-radius: 0.5rem;
-  outline: none;
-  transition: background 0.15s;
+/* ── Mode dropdown (right-actions area) ── */
+.ch-mode-dd-wrap {
+  position: relative;
   flex-shrink: 0;
 }
-.ch-mode-switch:hover {
-  background: rgba(0, 0, 0, 0.04);
-}
-.ch-mode-switch:focus-visible {
-  box-shadow: 0 0 0 2px rgba(15, 15, 15, 0.18);
-}
-.ch-mode-switch-label {
+.ch-mode-dd-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  height: 1.875rem;
+  padding: 0 0.625rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border, #E5E5EA);
+  background: var(--bg-card, #FFFFFF);
+  color: #4B5563;
+  cursor: pointer;
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-small, 0.75rem);
   font-weight: 600;
-  color: #6B7280;
   white-space: nowrap;
-  transition: color 0.15s;
+  transition: all 0.15s ease;
 }
-.ch-mode-switch:hover .ch-mode-switch-label {
+.ch-mode-dd-btn:hover {
+  border-color: #1A1A1A;
   color: #1A1A1A;
 }
-.ch-mode-switch-track {
-  position: relative;
-  width: 2.25rem;
-  height: 1.25rem;
-  border-radius: 9999px;
-  background: #D1D5DB;
-  transition: background 0.2s;
-  flex-shrink: 0;
-  /* Children are decorative — let clicks bubble straight to the outer .ch-mode-switch */
-  pointer-events: none;
-}
-.ch-mode-switch-label {
-  pointer-events: none;
-}
-.ch-mode-switch-track.on {
+.ch-mode-dd-btn--productivity {
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  border-color: #1A1A1A;
+  color: #FFFFFF;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08);
 }
-.ch-mode-switch-thumb {
-  position: absolute;
-  top: 0.1875rem;
-  left: 0.1875rem;
-  width: 0.875rem;
-  height: 0.875rem;
-  border-radius: 9999px;
-  background: #FFFFFF;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+.ch-mode-dd-btn--productivity:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  border-color: #2D2D2D;
+  color: #FFFFFF;
+}
+.ch-mode-dd-label {
   pointer-events: none;
 }
-.ch-mode-switch-track.on .ch-mode-switch-thumb {
-  transform: translateX(1rem);
+.ch-mode-dd-chevron {
+  transition: transform 0.18s ease;
+}
+.ch-mode-dd-chevron.open {
+  transform: rotate(180deg);
+}
+.ch-mode-dd-menu {
+  position: absolute;
+  top: calc(100% + 0.375rem);
+  right: 0;
+  min-width: 16rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.375rem;
+  background: #FFFFFF;
+  border: 1px solid #E5E5EA;
+  border-radius: 0.625rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
+  z-index: 1000;
+}
+.ch-mode-dd-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+  padding: 0.5rem 0.625rem;
+  border: none;
+  background: transparent;
+  border-radius: 0.4375rem;
+  cursor: pointer;
+  text-align: left;
+  font-family: 'Inter', sans-serif;
+  transition: background 0.12s;
+}
+.ch-mode-dd-item:hover {
+  background: #F5F5F7;
+}
+.ch-mode-dd-item.active {
+  background: linear-gradient(135deg, rgba(15, 15, 15, 0.04), rgba(55, 65, 81, 0.04));
+  border: 1px solid rgba(26, 26, 26, 0.18);
+}
+.ch-mode-dd-item-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4375rem;
+  color: #1A1A1A;
+}
+.ch-mode-dd-item-title {
+  font-size: var(--fs-secondary, 0.875rem);
+  font-weight: 600;
+}
+.ch-mode-dd-check {
+  color: #0F766E;
+}
+.ch-mode-dd-item-desc {
+  margin-left: 1.4rem;
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: #6B7280;
+  line-height: 1.4;
 }
 </style>

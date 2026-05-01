@@ -120,39 +120,56 @@ beforeEach(() => {
   setModeMock.mockClear()
 })
 
-describe('ChatHeader mode toggle switch', () => {
-  it('shows track without "on" class when chat.mode === "chat"', () => {
+describe('ChatHeader mode dropdown', () => {
+  it('shows button without productivity class when chat.mode === "chat"', () => {
     const wrapper = mountHeader({ mode: 'chat' })
-    const sw = wrapper.find('.ch-mode-switch')
-    expect(sw.exists()).toBe(true)
-    expect(wrapper.find('.ch-mode-switch-track').classes()).not.toContain('on')
-    expect(wrapper.find('.ch-mode-switch-label').text()).toMatch(/chat|聊天|Chat/i)
+    const btn = wrapper.find('.ch-mode-dd-btn')
+    expect(btn.exists()).toBe(true)
+    expect(btn.classes()).not.toContain('ch-mode-dd-btn--productivity')
+    expect(wrapper.find('.ch-mode-dd-label').text()).toMatch(/chat|聊天|Chat/i)
   })
 
-  it('shows productivity style (track.on) when chat.mode === "productivity"', () => {
+  it('shows productivity class when chat.mode === "productivity"', () => {
     const wrapper = mountHeader({ mode: 'productivity' })
-    expect(wrapper.find('.ch-mode-switch').exists()).toBe(true)
-    expect(wrapper.find('.ch-mode-switch-track').classes()).toContain('on')
+    const btn = wrapper.find('.ch-mode-dd-btn')
+    expect(btn.exists()).toBe(true)
+    expect(btn.classes()).toContain('ch-mode-dd-btn--productivity')
   })
 
-  it('clicking switch in chat mode with productivityModeNoticeShown=false opens confirm modal', async () => {
+  it('clicking button opens dropdown menu', async () => {
+    const wrapper = mountHeader({ mode: 'chat' })
+    expect(wrapper.find('.ch-mode-dd-menu').exists()).toBe(false)
+    wrapper.find('.ch-mode-dd-btn').element.click()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.ch-mode-dd-menu').exists()).toBe(true)
+    expect(wrapper.findAll('.ch-mode-dd-item')).toHaveLength(2)
+  })
+
+  it('selecting productivity item with productivityModeNoticeShown=false opens confirm modal', async () => {
     const wrapper = mountHeader({ mode: 'chat', productivityModeNoticeShown: false })
-    wrapper.find('.ch-mode-switch').element.click()
+    wrapper.find('.ch-mode-dd-btn').element.click()
+    await wrapper.vm.$nextTick()
+    const items = wrapper.findAll('.ch-mode-dd-item')
+    items[1].element.click() // productivity is the 2nd item
     await wrapper.vm.$nextTick()
     expect(wrapper.findComponent({ name: 'ConfirmProductivityModal' }).exists()).toBe(true)
   })
 
-  it('clicking switch when noticeShown=true switches silently without modal', async () => {
+  it('selecting productivity item when noticeShown=true switches silently without modal', async () => {
     const wrapper = mountHeader({ mode: 'chat', productivityModeNoticeShown: true })
-    wrapper.find('.ch-mode-switch').element.click()
+    wrapper.find('.ch-mode-dd-btn').element.click()
+    await wrapper.vm.$nextTick()
+    wrapper.findAll('.ch-mode-dd-item')[1].element.click()
     await wrapper.vm.$nextTick()
     expect(setModeMock).toHaveBeenCalledWith('c1', 'productivity')
     expect(wrapper.findComponent({ name: 'ConfirmProductivityModal' }).exists()).toBe(false)
   })
 
-  it('clicking switch in productivity mode switches to chat without modal', async () => {
+  it('selecting chat item from productivity mode switches without modal', async () => {
     const wrapper = mountHeader({ mode: 'productivity', productivityModeNoticeShown: true })
-    wrapper.find('.ch-mode-switch').element.click()
+    wrapper.find('.ch-mode-dd-btn').element.click()
+    await wrapper.vm.$nextTick()
+    wrapper.findAll('.ch-mode-dd-item')[0].element.click() // chat is the 1st item
     await wrapper.vm.$nextTick()
     expect(setModeMock).toHaveBeenCalledWith('c1', 'chat')
     expect(wrapper.findComponent({ name: 'ConfirmProductivityModal' }).exists()).toBe(false)
@@ -160,18 +177,28 @@ describe('ChatHeader mode toggle switch', () => {
 
   it('confirm button in modal calls setMode then closes modal', async () => {
     const wrapper = mountHeader({ mode: 'chat', productivityModeNoticeShown: false })
-    wrapper.find('.ch-mode-switch').element.click()
+    wrapper.find('.ch-mode-dd-btn').element.click()
+    await wrapper.vm.$nextTick()
+    wrapper.findAll('.ch-mode-dd-item')[1].element.click()
     await wrapper.vm.$nextTick()
     const modal = wrapper.findComponent({ name: 'ConfirmProductivityModal' })
     expect(modal.exists()).toBe(true)
     await modal.vm.$emit('confirm')
     expect(setModeMock).toHaveBeenCalledWith('c1', 'productivity')
-    // Modal should be gone
     expect(wrapper.findComponent({ name: 'ConfirmProductivityModal' }).exists()).toBe(false)
   })
 
-  it('switch is hidden when chat.type === "analysis"', () => {
+  it('selecting the current mode is a no-op (no setMode call)', async () => {
+    const wrapper = mountHeader({ mode: 'chat', productivityModeNoticeShown: true })
+    wrapper.find('.ch-mode-dd-btn').element.click()
+    await wrapper.vm.$nextTick()
+    wrapper.findAll('.ch-mode-dd-item')[0].element.click() // re-pick current 'chat'
+    await wrapper.vm.$nextTick()
+    expect(setModeMock).not.toHaveBeenCalled()
+  })
+
+  it('dropdown is hidden when chat.type === "analysis"', () => {
     const wrapper = mountHeader({ type: 'analysis' })
-    expect(wrapper.find('.ch-mode-switch').exists()).toBe(false)
+    expect(wrapper.find('.ch-mode-dd-btn').exists()).toBe(false)
   })
 })
