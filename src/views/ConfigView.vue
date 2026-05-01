@@ -1635,6 +1635,29 @@
               </div>
             </div>
           </div>
+
+          <!-- Auto-update check -->
+          <div class="config-card" style="margin-top: 1rem;">
+            <div class="form-group" style="margin-bottom:0;">
+              <div class="im-enable-row">
+                <div>
+                  <span class="im-enable-label">{{ t('updater.checkButton', 'Check for updates') }}</span>
+                  <p class="hint" style="margin-top:4px; margin-bottom:0;">
+                    {{ t('updater.currentVersion', 'Current version: {version}', { version: updater.currentVersion.value || '—' }) }}
+                    <template v-if="manualResultText">&nbsp;·&nbsp;{{ manualResultText }}</template>
+                  </p>
+                </div>
+                <AppButton
+                  size="compact"
+                  :disabled="updater.state.value === 'checking' || updater.state.value === 'downloading'"
+                  @click="manualCheck"
+                >
+                  <template v-if="updater.state.value === 'checking'">{{ t('updater.checking', 'Checking…') }}</template>
+                  <template v-else>{{ t('updater.checkButton', 'Check for updates') }}</template>
+                </AppButton>
+              </div>
+            </div>
+          </div>
         </template>
 
         <!-- ════════════════════════════════════════════════════════════════ -->
@@ -2799,6 +2822,7 @@ import ConfirmModal from '../components/common/ConfirmModal.vue'
 import PreviewLimitModal from '../components/common/PreviewLimitModal.vue'
 import { useI18n } from '../i18n/useI18n'
 import { useAuth } from '../composables/useAuth'
+import { useUpdater } from '../composables/useUpdater'
 import { buildDemoTooltipHtml } from '../utils/demoMode.js'
 import { PREVIEW_LIMITS, isLimitEnforced } from '../utils/guestLimits'
 
@@ -2811,6 +2835,28 @@ const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 const auth = useAuth()
+const updater = useUpdater()
+
+// Inline status text shown next to the manual "Check for updates" button.
+// Avoids depending on a toast helper that may not exist on this page.
+const manualResultKind = ref(null)  // null | 'idle' | 'error' | 'available'
+const manualResultText = computed(() => {
+  if (manualResultKind.value === 'idle')      return t('updater.upToDate', 'You are on the latest version ({version}).', { version: updater.currentVersion.value })
+  if (manualResultKind.value === 'error')     return t('updater.checkFailed', 'Update check failed. Please try again later.')
+  // 'available' — banner takes over, no inline text needed.
+  return ''
+})
+
+async function manualCheck() {
+  manualResultKind.value = null
+  await updater.check({ trigger: 'manual' })
+  manualResultKind.value = updater.state.value === 'error'
+    ? 'error'
+    : updater.available.value
+      ? 'available'
+      : 'idle'
+  setTimeout(() => { manualResultKind.value = null }, 8000)
+}
 
 const showPreviewLimitModal = ref(false)
 const previewLimitMessage = ref('')

@@ -654,6 +654,15 @@ app.whenReady().then(async () => {
   // Anonymous install telemetry (async, non-blocking, silent on failure)
   require('./lib/telemetry').sendInstallPing().catch(() => {})
 
+  // Auto-update: first check 30s after app ready (avoid cold-start contention).
+  // No periodic polling — users restart the app often enough; manual check
+  // available from Settings page in the meantime.
+  setTimeout(() => {
+    require('./updater').check({ trigger: 'auto' }).catch(err => {
+      logger.warn('[updater] startup check threw', err?.message)
+    })
+  }, 30_000)
+
   // ── Built-in skills: seed missing skills from source tree into user skillsDir ──
   // Runs after IPC registration so the first scan-dir call picks them up.
   try {
