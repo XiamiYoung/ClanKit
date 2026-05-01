@@ -88,15 +88,19 @@ describe('plan round-trip', () => {
 })
 
 describe('task round-trip', () => {
-  it('preserves all fields including dependsOn array', () => {
+  it('preserves all renderer fields', () => {
     const task = {
       id: 'task-1',
+      name: 'Fetch news',
+      description: 'Get morning headlines',
+      icon: '📰',
+      prompt: 'Run the news fetch',
+      categoryId: 'cat-news',
+      // step-level legacy fields (unused by renderer but stored)
       planId: 'plan-1',
       stepIndex: 0,
       type: 'cron',
-      description: 'Fetch news',
       cronExpr: '0 9 * * *',
-      prompt: 'go',
       agentId: 'a-1',
       dependsOn: ['task-0'],
       createdAt: 1700000000000,
@@ -104,23 +108,27 @@ describe('task round-trip', () => {
     }
     expect(rowToTask(taskToRow(task))).toMatchObject(task)
   })
-  it('handles standalone task (planId null, stepIndex null)', () => {
+  it('handles minimal task (only id + name)', () => {
     const task = {
       id: 'task-2',
+      name: 'Standalone',
+      description: '',
+      prompt: '',
+      categoryId: null,
+      icon: null,
       planId: null,
       stepIndex: null,
-      type: 'oneshot',
-      description: 'Standalone',
-      prompt: 'run',
-      agentId: 'a-1',
+      type: null,
+      cronExpr: null,
+      agentId: null,
       dependsOn: [],
       createdAt: 1700000000000,
       deletedAt: null,
     }
     const back = rowToTask(taskToRow(task))
-    expect(back.planId).toBeNull()
-    expect(back.stepIndex).toBeNull()
+    expect(back.name).toBe('Standalone')
     expect(back.dependsOn).toEqual([])
+    expect(back.planId).toBeNull()
   })
 })
 

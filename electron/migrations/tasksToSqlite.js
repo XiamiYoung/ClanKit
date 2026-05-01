@@ -81,12 +81,16 @@ function migrate(dataDir) {
       if (!t?.id) continue
       store.saveTask({
         id: t.id,
+        name: t.name || '',
+        description: t.description || null,
+        icon: t.icon || null,
+        prompt: t.prompt || null,
+        categoryId: t.categoryId || null,
+        // step-level legacy slots
         planId: t.planId || null,
         stepIndex: (t.stepIndex !== undefined && t.stepIndex !== null) ? t.stepIndex : null,
         type: t.type || null,
-        description: t.description || null,
         cronExpr: t.cronExpr || null,
-        prompt: t.prompt || null,
         agentId: t.agentId || null,
         dependsOn: Array.isArray(t.dependsOn) ? t.dependsOn : [],
         createdAt: _toMs(t.createdAt) || Date.now(),
@@ -145,11 +149,12 @@ function migrate(dataDir) {
         if (!existing) {
           store.saveTask({
             id: item.itemId,
+            name: item.description || '(deleted task)',
+            description: item.description || null,
+            type: item.type,
+            cronExpr: item.cronExpr || null,
             planId: planEntry.planId,
             stepIndex: null,
-            type: item.type,
-            description: item.description,
-            cronExpr: item.cronExpr || null,
             createdAt: _toMs(item.createdAt) || 0,
             deletedAt: itemDeletedAt,
             dependsOn: [],

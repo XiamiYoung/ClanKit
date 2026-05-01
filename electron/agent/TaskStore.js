@@ -43,12 +43,15 @@ CREATE INDEX IF NOT EXISTS idx_plans_enabled_sched ON plans(enabled, schedule) W
 
 CREATE TABLE IF NOT EXISTS tasks (
   id           TEXT PRIMARY KEY,
+  name         TEXT NOT NULL DEFAULT '',
+  description  TEXT,
+  icon         TEXT,
+  prompt       TEXT,
+  category_id  TEXT,
   plan_id      TEXT REFERENCES plans(id) ON DELETE SET NULL,
   step_index   INTEGER,
   type         TEXT,
-  description  TEXT,
   cron_expr    TEXT,
-  prompt       TEXT,
   agent_id     TEXT,
   depends_on   TEXT NOT NULL DEFAULT '[]',
   created_at   INTEGER NOT NULL,
@@ -169,12 +172,16 @@ function rowToTask(row) {
   if (!row) return null
   return {
     id:          row.id,
+    name:        row.name || '',
+    description: row.description || '',
+    icon:        row.icon || null,
+    prompt:      row.prompt || '',
+    categoryId:  row.category_id || null,
+    // step-level fields (legacy schema slots, kept for back-compat with task-scheduler):
     planId:      row.plan_id || null,
     stepIndex:   (row.step_index === null || row.step_index === undefined) ? null : row.step_index,
     type:        row.type || null,
-    description: row.description || '',
     cronExpr:    row.cron_expr || null,
-    prompt:      row.prompt || '',
     agentId:     row.agent_id || null,
     dependsOn:   deserializeJsonArray(row.depends_on),
     createdAt:   row.created_at || 0,
@@ -185,12 +192,15 @@ function rowToTask(row) {
 function taskToRow(t) {
   return {
     id:          t.id,
+    name:        t.name || '',
+    description: t.description || null,
+    icon:        t.icon || null,
+    prompt:      t.prompt || null,
+    category_id: t.categoryId || null,
     plan_id:     t.planId || null,
     step_index:  (t.stepIndex === null || t.stepIndex === undefined) ? null : t.stepIndex,
     type:        t.type || null,
-    description: t.description || null,
     cron_expr:   t.cronExpr || null,
-    prompt:      t.prompt || null,
     agent_id:    t.agentId || null,
     depends_on:  serializeJsonArray(t.dependsOn),
     created_at:  t.createdAt || Date.now(),
@@ -259,6 +269,14 @@ class TaskStore {
       }
     } catch (err) {
       logger.warn('[TaskStore] plans column-drift check failed:', err.message)
+    }
+    try {
+      const taskCols = db.prepare("PRAGMA table_info(tasks)").all().map(c => c.name)
+      if (!taskCols.includes('name'))        db.exec("ALTER TABLE tasks ADD COLUMN name TEXT NOT NULL DEFAULT ''")
+      if (!taskCols.includes('icon'))        db.exec("ALTER TABLE tasks ADD COLUMN icon TEXT")
+      if (!taskCols.includes('category_id')) db.exec("ALTER TABLE tasks ADD COLUMN category_id TEXT")
+    } catch (err) {
+      logger.warn('[TaskStore] tasks column-drift check failed:', err.message)
     }
     db.pragma(`user_version = ${SCHEMA_VERSION}`)
     this._db = db
@@ -360,16 +378,19 @@ class TaskStore {
     const r = taskToRow(task)
     db.prepare(`
       INSERT INTO tasks (
-        id, plan_id, step_index, type, description, cron_expr, prompt,
+        id, name, description, icon, prompt, category_id,
+        plan_id, step_index, type, cron_expr,
         agent_id, depends_on, created_at, deleted_at
       ) VALUES (
-        @id, @plan_id, @step_index, @type, @description, @cron_expr, @prompt,
+        @id, @name, @description, @icon, @prompt, @category_id,
+        @plan_id, @step_index, @type, @cron_expr,
         @agent_id, @depends_on, @created_at, @deleted_at
       )
       ON CONFLICT(id) DO UPDATE SET
+        name=excluded.name, description=excluded.description,
+        icon=excluded.icon, prompt=excluded.prompt, category_id=excluded.category_id,
         plan_id=excluded.plan_id, step_index=excluded.step_index,
-        type=excluded.type, description=excluded.description,
-        cron_expr=excluded.cron_expr, prompt=excluded.prompt,
+        type=excluded.type, cron_expr=excluded.cron_expr,
         agent_id=excluded.agent_id, depends_on=excluded.depends_on,
         deleted_at=excluded.deleted_at
     `).run(r)
