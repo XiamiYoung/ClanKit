@@ -60,6 +60,8 @@ scripts/*
 !scripts/update-models.js
 !scripts/prepare-embedding-model.js
 !scripts/recorder/
+!scripts/migrate-productivity-mode.js
+!scripts/__tests__/
 
 # Bundled embedding model — ~449 MB, fetched at build time via prepare-models
 electron/models/
