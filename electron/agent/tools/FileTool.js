@@ -3,12 +3,13 @@ const { truncateOutput } = require('./truncate')
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
+const picomatch = require('picomatch')
 
 class FileTool extends BaseTool {
   constructor() {
     super(
       'file_operation',
-      'Read, write, edit, list, append, search, or delete files on the local filesystem. Use "edit" for precise text replacement instead of overwriting the whole file.',
+      'Read, write, edit, list, append, search, glob, grep, or delete files on the local filesystem. Use "edit" for precise text replacement instead of overwriting the whole file. Use "glob" for filename pattern matching and "grep" for content search.',
       'file_operation'
     )
   }
@@ -19,17 +20,23 @@ class FileTool extends BaseTool {
       properties: {
         operation: {
           type: 'string',
-          enum: ['read', 'write', 'edit', 'append', 'list', 'delete', 'exists', 'search', 'mkdir'],
-          description: 'Operation to perform. Use "edit" (oldText+newText) for targeted changes instead of full "write".'
+          enum: ['read', 'write', 'edit', 'append', 'list', 'delete', 'exists', 'search', 'mkdir', 'glob', 'grep'],
+          description: 'Operation to perform.'
         },
-        path:     { type: 'string', description: 'File or directory path' },
-        content:  { type: 'string', description: 'Content to write/append (for write/append operations)' },
-        oldText:  { type: 'string', description: 'Exact text to find and replace (for edit operation)' },
-        newText:  { type: 'string', description: 'Replacement text (for edit operation)' },
-        pattern:  { type: 'string', description: 'Glob or text pattern (for search operation)' },
-        recursive: { type: 'boolean', description: 'Recursive listing/search (default false)' },
-        offset:   { type: 'number', description: 'Line number to start reading from, 1-indexed (for read operation)' },
-        limit:    { type: 'number', description: 'Maximum number of lines to read (for read operation)' }
+        path:     { type: 'string' },
+        content:  { type: 'string', description: 'Content to write/append.' },
+        oldText:  { type: 'string', description: 'Exact text to find (for edit).' },
+        newText:  { type: 'string', description: 'Replacement text (for edit).' },
+        occurrences: {
+          type: 'string',
+          enum: ['unique', 'first', 'all'],
+          description: 'edit: unique (default — error if 0 or 2+ matches), first (replace first), all (replace all).'
+        },
+        pattern:  { type: 'string', description: 'Substring (search), glob (glob), or regex (grep).' },
+        multiline: { type: 'boolean', description: 'grep: enable multiline regex (.matches \\n).' },
+        recursive: { type: 'boolean' },
+        offset:   { type: 'number' },
+        limit:    { type: 'number' }
       },
       required: ['operation', 'path']
     }
@@ -37,6 +44,22 @@ class FileTool extends BaseTool {
 
   _resolve(filePath) {
     return path.resolve(filePath.startsWith('~') ? filePath.replace('~', os.homedir()) : filePath)
+  }
+
+  /** Override to expose convenience fields used by tests and callers */
+  _ok(text, details = {}) {
+    const result = super._ok(text, details)
+    result.success = true
+    result.text = String(text)
+    return result
+  }
+
+  /** Override to expose convenience fields used by tests and callers */
+  _err(message, details = {}) {
+    const result = super._err(message, details)
+    result.success = false
+    result.error = message
+    return result
   }
 
   async execute(toolCallId, params, signal, onUpdate) {
@@ -72,23 +95,39 @@ class FileTool extends BaseTool {
             return this._err('edit operation requires oldText and newText')
           }
           if (!fs.existsSync(safePath)) return this._err('File not found')
-
           const original = fs.readFileSync(safePath, 'utf8')
-          if (!original.includes(oldText)) {
-            // Try normalising line endings before failing
-            const normalised = original.replace(/\r\n/g, '\n')
-            const normOld    = oldText.replace(/\r\n/g, '\n')
-            if (!normalised.includes(normOld)) {
-              return this._err('oldText not found in file. Check for exact whitespace/indentation match.')
-            }
-            const updated = normalised.replace(normOld, newText.replace(/\r\n/g, '\n'))
-            fs.writeFileSync(safePath, updated, 'utf8')
-            return this._ok(`Edited: ${safePath}`, { path: safePath, replaced: true })
+
+          // Try literal match first; fall back to LF-normalized comparison
+          let body = original
+          let needle = oldText
+          let replacement = newText
+          let matchCount = body.split(needle).length - 1
+          if (matchCount === 0) {
+            body = original.replace(/\r\n/g, '\n')
+            needle = oldText.replace(/\r\n/g, '\n')
+            replacement = newText.replace(/\r\n/g, '\n')
+            matchCount = body.split(needle).length - 1
           }
 
-          const updated = original.replace(oldText, newText)
+          const occurrences = params.occurrences || 'unique'
+          if (matchCount === 0) {
+            return this._err('oldText not found in file. Check for exact whitespace/indentation.')
+          }
+          if (occurrences === 'unique' && matchCount > 1) {
+            return this._err(`oldText matches ${matchCount} times; provide a longer unique substring or pass occurrences: "all".`)
+          }
+
+          let updated
+          if (occurrences === 'all') {
+            updated = body.split(needle).join(replacement)
+          } else {
+            updated = body.replace(needle, replacement)
+          }
           fs.writeFileSync(safePath, updated, 'utf8')
-          return this._ok(`Edited: ${safePath}`, { path: safePath, replaced: true })
+          return this._ok(`Edited: ${safePath}`, {
+            path: safePath,
+            replaced: occurrences === 'all' ? matchCount : 1
+          })
         }
 
         case 'append':
@@ -129,6 +168,40 @@ class FileTool extends BaseTool {
           return this._ok(text, { count: matches.length })
         }
 
+        case 'glob': {
+          if (!fs.existsSync(safePath)) return this._err('Directory not found')
+          if (!pattern) return this._err('glob operation requires pattern')
+          const matcher = picomatch(pattern, { dot: false })
+          const matches = []
+          this._globWalk(safePath, safePath, matcher, matches, 0)
+          const limited = matches.slice(0, 200)
+          const text = limited.join('\n') + (matches.length > 200 ? `\n[${matches.length - 200} more matches omitted]` : '')
+          return this._ok(text, { count: matches.length })
+        }
+
+        case 'grep': {
+          if (!pattern) return this._err('grep operation requires pattern')
+          if (!fs.existsSync(safePath)) return this._err('Path not found')
+          let regex
+          try {
+            const flags = params.multiline ? 'gms' : 'g'
+            regex = new RegExp(pattern, flags)
+          } catch (e) {
+            return this._err(`Invalid regex: ${e.message}`)
+          }
+          const stat = fs.statSync(safePath)
+          const hits = []
+          if (stat.isFile()) {
+            this._grepFile(safePath, safePath, regex, !!params.multiline, hits)
+          } else {
+            this._grepDir(safePath, safePath, regex, !!params.multiline, hits, 0)
+          }
+          if (hits.length === 0) return this._ok('(no matches)', { count: 0 })
+          const limited = hits.slice(0, 200)
+          const text = limited.join('\n') + (hits.length > 200 ? `\n[${hits.length - 200} more matches omitted]` : '')
+          return this._ok(text, { count: hits.length })
+        }
+
         default:
           return this._err(`Unknown operation: ${operation}`)
       }
@@ -149,6 +222,66 @@ class FileTool extends BaseTool {
       }
       if (entry.isDirectory() && recursive) {
         this._search(full, pattern, recursive, results, depth + 1)
+      }
+    }
+  }
+
+  _globWalk(rootDir, currentDir, matcher, results, depth) {
+    if (depth > 8 || results.length >= 250) return
+    let entries
+    try { entries = fs.readdirSync(currentDir, { withFileTypes: true }) } catch { return }
+    for (const e of entries) {
+      if (e.name.startsWith('.')) continue
+      if (['node_modules', '__pycache__', 'dist', 'build'].includes(e.name)) continue
+      const full = path.join(currentDir, e.name)
+      const rel = path.relative(rootDir, full).split(path.sep).join('/')
+      if (e.isDirectory()) {
+        this._globWalk(rootDir, full, matcher, results, depth + 1)
+      } else if (matcher(rel)) {
+        results.push(full)
+      }
+    }
+  }
+
+  _grepFile(rootPath, fullPath, regex, multiline, hits) {
+    let raw
+    try { raw = fs.readFileSync(fullPath, 'utf8') } catch { return }
+    const rel = rootPath === fullPath ? path.basename(fullPath) : path.relative(rootPath, fullPath).split(path.sep).join('/')
+    if (multiline) {
+      let m
+      while ((m = regex.exec(raw)) !== null) {
+        const upTo = raw.slice(0, m.index)
+        const lineNo = upTo.split('\n').length
+        const snippet = m[0].split('\n').slice(0, 3).join(' / ').slice(0, 120)
+        hits.push(`${rel}:${lineNo}: ${snippet}`)
+        if (hits.length >= 250) return
+        if (m[0].length === 0) regex.lastIndex += 1
+      }
+    } else {
+      const lines = raw.split('\n')
+      for (let i = 0; i < lines.length; i++) {
+        const lineRe = new RegExp(regex.source, regex.flags.replace('g', ''))
+        if (lineRe.test(lines[i])) {
+          hits.push(`${rel}:${i + 1}: ${lines[i].slice(0, 200)}`)
+          if (hits.length >= 250) return
+        }
+      }
+    }
+  }
+
+  _grepDir(rootPath, currentDir, regex, multiline, hits, depth) {
+    if (depth > 8 || hits.length >= 250) return
+    let entries
+    try { entries = fs.readdirSync(currentDir, { withFileTypes: true }) } catch { return }
+    for (const e of entries) {
+      if (e.name.startsWith('.')) continue
+      if (['node_modules', '__pycache__', 'dist', 'build'].includes(e.name)) continue
+      const full = path.join(currentDir, e.name)
+      if (e.isDirectory()) {
+        this._grepDir(rootPath, full, regex, multiline, hits, depth + 1)
+      } else {
+        if (/\.(png|jpg|jpeg|gif|webp|pdf|zip|exe|bin|so|dll|class)$/i.test(e.name)) continue
+        this._grepFile(rootPath, full, regex, multiline, hits)
       }
     }
   }

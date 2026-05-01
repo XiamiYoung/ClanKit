@@ -55,7 +55,9 @@
       {
         "from": "electron/models",
         "to": "models",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "win": {
@@ -147,6 +149,7 @@
     "nodemailer": "^8.0.1",
     "openai": "^6.24.0",
     "pdf-parse": "^1.1.1",
+    "picomatch": "^4.0.4",
     "pptxgenjs": "^4.0.1",
     "pptxtojson": "^1.12.1",
     "qrcode": "^1.5.4",
