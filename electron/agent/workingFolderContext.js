@@ -40,6 +40,7 @@ function _walkTree(rootDir, currentDir, depth, lines, counter) {
     }
     if (e.name.startsWith('.')) continue
     if (IGNORE_NAMES.has(e.name)) continue
+    if (e.isSymbolicLink()) continue
     const full = path.join(currentDir, e.name)
     const indent = '  '.repeat(depth)
     if (e.isDirectory()) {
@@ -63,6 +64,7 @@ function _collectRecent(rootDir, currentDir, depth, results, cutoffMs) {
   for (const e of entries) {
     if (e.name.startsWith('.')) continue
     if (IGNORE_NAMES.has(e.name)) continue
+    if (e.isSymbolicLink()) continue
     const full = path.join(currentDir, e.name)
     if (e.isDirectory()) {
       _collectRecent(rootDir, full, depth + 1, results, cutoffMs)
