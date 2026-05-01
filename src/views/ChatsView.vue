@@ -764,6 +764,7 @@
     :new-chat-user-search="newChatUserSearch"
     :new-chat-user-category-id="newChatUserCategoryId"
     :new-chat-folder-tree-expanded="newChatFolderTreeExpanded"
+    :new-chat-mode="newChatMode"
     :filtered-new-chat-agents="filteredNewChatAgents"
     :filtered-new-chat-users="filteredNewChatUsers"
     :active-new-chat-user-agent="activeNewChatUserAgent"
@@ -778,6 +779,7 @@
     @update:new-chat-folder-id="newChatFolderId = $event"
     @update:new-chat-agent-search="newChatAgentSearch = $event"
     @update:new-chat-user-search="newChatUserSearch = $event"
+    @update:new-chat-mode="newChatMode = $event"
     @update:show-new-chat-icon-picker="showNewChatIconPicker = $event"
     @select-new-chat-agent-category="selectNewChatAgentCategory($event)"
     @select-new-chat-user-category="selectNewChatUserCategory($event)"
@@ -1294,7 +1296,7 @@ const {
   showNewChatIconPicker, newChatFolderId, newChatNameInputRef,
   newChatAgentIds, newChatAgentSearch, newChatAgentCategoryId,
   newChatUserSearch, newChatUserCategoryId,
-  newChatFolderTreeExpanded,
+  newChatFolderTreeExpanded, newChatMode,
   filteredNewChatAgents, filteredNewChatUsers,
   activeNewChatUserAgent, effectiveNewChatUserAgentId, displayedSystemPersonaAgents,
   onNewChatIconSelect, selectNewChatUserAgent, isNewChatUserSelected,

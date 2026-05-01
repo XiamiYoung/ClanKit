@@ -33,6 +33,23 @@
           />
         </div>
 
+        <!-- ── Mode section ─────────────────────────────────────── -->
+        <section class="np-section">
+          <header class="np-section-header">
+            <h4 class="np-section-title">{{ t('chats.mode') }}</h4>
+          </header>
+          <div class="np-mode-radio-row">
+            <label class="np-mode-radio">
+              <input type="radio" :checked="newChatMode === 'chat'" @change="emit('update:newChatMode', 'chat')" />
+              <span>{{ t('chats.modeChat') }}</span>
+            </label>
+            <label class="np-mode-radio">
+              <input type="radio" :checked="newChatMode === 'productivity'" @change="emit('update:newChatMode', 'productivity')" />
+              <span>{{ t('chats.modeProductivity') }}</span>
+            </label>
+          </div>
+        </section>
+
         <!-- ── User Persona section ──────────────────────────────── -->
         <section class="np-section">
           <header class="np-section-header">
@@ -304,6 +321,7 @@ const props = defineProps({
   newChatUserSearch: { type: String, default: '' },
   newChatUserCategoryId: { type: String, default: '__all__' },
   newChatFolderTreeExpanded: { type: Object, default: () => new Set() },
+  newChatMode: { type: String, default: 'chat' },
   filteredNewChatAgents: { type: Array, default: () => [] },
   filteredNewChatUsers: { type: Array, default: () => [] },
   activeNewChatUserAgent: { type: Object, default: null },
@@ -330,6 +348,7 @@ const emit = defineEmits([
   'clear-new-chat-user-selection',
   'remove-new-chat-system-agent',
   'on-new-chat-icon-select',
+  'update:newChatMode',
 ])
 
 const newChatNameInputRef = ref(null)
@@ -788,5 +807,27 @@ const FolderTreeItem = defineComponent({
 .newchat-ftree-item[data-active] {
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #FFFFFF;
+}
+
+/* ── Mode radio ──────────────────────────────────────────────────────── */
+.np-mode-radio-row {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+.np-mode-radio {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: var(--radius-md, 0.5rem);
+  cursor: pointer;
+  font-size: var(--fs-secondary, 0.875rem);
+  transition: border-color 0.15s, background 0.15s;
+}
+.np-mode-radio:has(input:checked) {
+  border-color: #1A1A1A;
+  background: linear-gradient(135deg, rgba(15,15,15,0.05), rgba(55,65,81,0.05));
 }
 </style>

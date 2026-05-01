@@ -437,6 +437,7 @@ export function useChatTree({ mentionInputRef } = {}) {
   const newChatUserSearch = ref('')
   const newChatUserCategoryId = ref('__all__')
   const newChatFolderTreeExpanded = ref(new Set())
+  const newChatMode = ref('chat')
 
   const NEW_CHAT_ICON_POOL = ['💬', '✨', '🚀', '🎯', '🧠', '📌', '🌟', '🪄', '🗂️', '📝', '🎉', '🔥']
 
@@ -593,6 +594,8 @@ export function useChatTree({ mentionInputRef } = {}) {
 
   async function confirmNewChat() {
     showNewChatModal.value = false
+    const selectedMode = newChatMode.value
+    newChatMode.value = 'chat'
     const typedName = newChatName.value.trim()
     const title = typedName || t('chats.newChat')
     let selectedIds = newChatAgentIds.value
@@ -610,6 +613,7 @@ export function useChatTree({ mentionInputRef } = {}) {
         icon: chatIcon,
         userAgentId,
         autoTitleEligible: !typedName,
+        mode: selectedMode,
       })
     } catch (e) {
       if (_handlePreviewLimitError(e)) return
@@ -643,6 +647,7 @@ export function useChatTree({ mentionInputRef } = {}) {
     newChatAgentCategoryId.value = '__all__'
     newChatUserSearch.value = ''
     newChatUserCategoryId.value = '__all__'
+    newChatMode.value = 'chat'
   }
 
   // ── Delete Confirm ─────────────────────────────────────────────────────────
@@ -757,6 +762,7 @@ export function useChatTree({ mentionInputRef } = {}) {
     newChatUserSearch,
     newChatUserCategoryId,
     newChatFolderTreeExpanded,
+    newChatMode,
     filteredNewChatAgents,
     filteredNewChatUsers,
     activeNewChatUserAgent,

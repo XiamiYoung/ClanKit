@@ -85,6 +85,7 @@ function mountWindow(messages = [], extraProps = {}) {
 beforeEach(() => {
   setActivePinia(createPinia())
   mockChat.messages = []
+  mockChat.modeTransitions = []
   mockChat.isRunning = false
   mockChat.groupAgentIds = []
   mockChat.systemAgentId = null
@@ -150,5 +151,38 @@ describe('ChatWindow', () => {
       { id: 'e1', role: 'assistant', content: 'Error occurred', isError: true, streaming: false },
     ])
     expect(wrapper.find('.cw-msg-bubble-error').exists()).toBe(true)
+  })
+
+  // 7. Mode-transition dividers
+  describe('mode transition divider', () => {
+    it('renders divider after the message specified by afterMessageId', () => {
+      mockChat.modeTransitions = [{ from: 'chat', to: 'productivity', at: Date.now(), afterMessageId: 'm1' }]
+      const wrapper = mountWindow([
+        { id: 'm1', role: 'user', content: 'hi' },
+        { id: 'm2', role: 'assistant', content: 'hello', streaming: false },
+      ])
+      expect(wrapper.findAll('.cw-mode-divider').length).toBe(1)
+    })
+
+    it('renders multiple dividers for multiple transitions', () => {
+      mockChat.modeTransitions = [
+        { from: 'chat', to: 'productivity', at: 100, afterMessageId: 'm1' },
+        { from: 'productivity', to: 'chat', at: 200, afterMessageId: 'm2' },
+      ]
+      const wrapper = mountWindow([
+        { id: 'm1', role: 'user', content: 'a' },
+        { id: 'm2', role: 'assistant', content: 'b', streaming: false },
+        { id: 'm3', role: 'user', content: 'c' },
+      ])
+      expect(wrapper.findAll('.cw-mode-divider').length).toBe(2)
+    })
+
+    it('renders no divider when modeTransitions is empty', () => {
+      mockChat.modeTransitions = []
+      const wrapper = mountWindow([
+        { id: 'm1', role: 'user', content: 'hi' },
+      ])
+      expect(wrapper.findAll('.cw-mode-divider').length).toBe(0)
+    })
   })
 })
