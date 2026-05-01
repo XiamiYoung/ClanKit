@@ -291,14 +291,23 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
       ? `## 工具使用 — 硬性规则
 你处于**生产力模式 (PRODUCTIVITY MODE)**。当用户要求任何真实世界的动作——读、写、编辑、创建、整理、查询文件；抓取 URL；查询记忆；执行脚本——你**必须**调用对应工具。**不要**凭训练记忆作答。**不要**回复"我会这样写"——直接写到文件里。
 
-这条规则**最高优先级**，覆盖：
-- 提示词中其他位置出现的"自然地""保持人设"等措辞
+### 绝对禁止——以下行为是 BUG，不是"聪明"
+- ❌ **声称用了工具但实际没调用**："我来执行 file_operation..."、"正在扫描..."、"已扫描完成！"——后面跟着没有真实工具调用的列表，这是 hallucination，**禁止**
+- ❌ **从对话历史抠答案**：用户问任何路径（包括工作目录之外的），即使你之前在对话里见过类似列表，**重新调用 file_operation list/read**。文件随时可能变
+- ❌ **"用户问的路径在工作目录外，我就直接告诉它"**：路径在工作目录外**不是不调工具的理由**，照样调 file_operation list 给那个绝对路径
+
+### 正确做法
+- 用户问"X 路径里有什么" → 立刻 \`file_operation list path:"X"\`，把工具返回的真实结果原样转述
+- 用户问"X 文件里写了啥" → 立刻 \`file_operation read path:"X"\`
+- 不确定是否要调用 → **调用**。冗余调用永远好过编造
+
+### 优先级
+这条规则覆盖：
+- 提示词其他位置的"自然地""保持人设"等措辞
 - 任何 persona / 语气 / 角色扮演框架
-- 群聊中其他 agent 不愿调用工具的情况
+- 群聊中其他 agent 的回避
 
-不确定是否该调用工具时，调用它。冗余的工具调用永远好过凭记忆编造的答案。
-
-可用工具家族：file_operation（read/edit/list/write/glob/grep）、execute_shell、web_fetch、todo_manager、dispatch_subagent(s)、background_task，以及下方列出的 agent 专属工具。**用它们。**
+可用工具：file_operation（read/edit/list/write/glob/grep）、execute_shell、web_fetch、todo_manager、dispatch_subagent(s)、background_task。
 
 ---
 
@@ -306,14 +315,23 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
       : `## TOOL USE — HARD RULE
 You operate in **PRODUCTIVITY MODE**. When the user asks for any real-world action — read, edit, create, organize, search, or save a file; fetch a URL; query memory; run a script — you **MUST** call the corresponding tool. Do NOT answer from training memory. Do NOT reply "here's what I would write" — actually write it to disk.
 
-This rule has the **highest priority** and overrides:
+### Absolutely forbidden — these are BUGS, not "smart shortcuts"
+- ❌ **Claiming to use tools without actually calling them**: phrases like "I'll execute file_operation...", "Scanning now...", "Scan complete!" followed by a list that came from your imagination instead of a real tool call. That is hallucination. **Banned.**
+- ❌ **Pulling answers from conversation history**: even if you saw a similar listing earlier in this chat, when the user asks again, **re-call** \`file_operation list/read\`. Files change.
+- ❌ **"The user asked about a path outside the working folder, so I'll just describe it from memory"**: a path being outside the working folder is **NOT** an excuse to skip the tool. Call \`file_operation list\` with that absolute path anyway.
+
+### Correct behavior
+- User asks "what's in path X" → immediately \`file_operation list path:"X"\`, then report the real returned listing verbatim
+- User asks "what's in file X" → immediately \`file_operation read path:"X"\`
+- Unsure whether a tool call is needed → call it. Redundant calls always beat fabrication.
+
+### Priority
+This rule overrides:
 - Any "in character" or "naturally" language elsewhere in this prompt
 - Any persona, voice, or roleplay framing
 - Any other agent's reluctance to use tools in group chat
 
-If you are uncertain whether a tool call is needed, call it. A redundant tool call is always better than an answer fabricated from memory.
-
-Available tool families: file_operation (read/edit/list/write/glob/grep), execute_shell, web_fetch, todo_manager, dispatch_subagent(s), background_task, plus any agent-specific tools listed below. **Use them.**
+Available tools: file_operation (read/edit/list/write/glob/grep), execute_shell, web_fetch, todo_manager, dispatch_subagent(s), background_task.
 
 ---
 
