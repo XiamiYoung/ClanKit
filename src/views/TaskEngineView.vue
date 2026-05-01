@@ -511,12 +511,19 @@ async function onTaskSaved(task) {
 }
 
 function confirmDeleteTask(task) {
-  const usedCount = tasksStore.taskUsedByPlanCount(task.id)
-  if (usedCount > 0) {
+  const usingPlans = tasksStore.taskUsedByPlans(task.id)
+  if (usingPlans.length > 0) {
+    const planList = usingPlans.map(p => `• ${p.name}${p.stepCount > 1 ? ` (×${p.stepCount})` : ''}`).join('\n')
     confirmModal.value = {
       visible: true,
       title: t('tasks.deleteConfirm.cannotDeleteTask'),
-      message: t('tasks.deleteConfirm.taskUsedInPlans', { count: usedCount }),
+      message: t('tasks.deleteConfirm.taskUsedInPlansList', {
+        count: usingPlans.length,
+        plans: planList,
+        taskName: task.name || task.id.slice(0, 8),
+      }),
+      cancelText: t('common.ok'),
+      confirmText: '',
       onConfirm: () => {},
     }
     return
@@ -750,9 +757,11 @@ function relativeTime(iso) {
 // ── Tooltip helpers ───────────────────────────────────────────────────────────
 
 function getTaskDeleteTooltip(task) {
-  const usedCount = tasksStore.taskUsedByPlanCount(task.id)
-  if (usedCount > 0) {
-    return t('tasks.deleteConfirm.taskUsedInPlans', { count: usedCount })
+  const usingPlans = tasksStore.taskUsedByPlans(task.id)
+  if (usingPlans.length > 0) {
+    return t('tasks.deleteConfirm.taskUsedInPlansTooltip', {
+      plans: usingPlans.map(p => p.name).join(', '),
+    })
   }
   return t('tasks.actions.delete')
 }

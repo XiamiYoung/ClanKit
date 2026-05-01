@@ -262,6 +262,19 @@ export const useTasksStore = defineStore('tasks', () => {
     return taskUsageCount.value[taskId] || 0
   }
 
+  function taskUsedByPlans(taskId) {
+    if (!taskId) return []
+    const result = []
+    for (const plan of plans.value) {
+      const steps = plan.steps || []
+      const matchCount = steps.filter(s => s.taskId === taskId).length
+      if (matchCount > 0) {
+        result.push({ id: plan.id, name: plan.name || '(unnamed plan)', stepCount: matchCount })
+      }
+    }
+    return result
+  }
+
   function planHasRuns(planId) {
     return planRunSet.value.has(planId)
   }
@@ -710,6 +723,6 @@ export const useTasksStore = defineStore('tasks', () => {
     // Subscription
     subscribeToScheduledRuns, unsubscribeFromScheduledRuns,
     // Deletion protection
-    taskUsageCount, planRunSet, taskUsedByPlanCount, planHasRuns,
+    taskUsageCount, planRunSet, taskUsedByPlanCount, taskUsedByPlans, planHasRuns,
   }
 })

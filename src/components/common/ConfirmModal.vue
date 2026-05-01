@@ -188,6 +188,7 @@ onUnmounted(() => {
   color: #9CA3AF;
   line-height: 1.6;
   margin: 0;
+  white-space: pre-line;
 }
 
 .confirm-error {
