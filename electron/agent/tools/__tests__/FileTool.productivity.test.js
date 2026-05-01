@@ -64,6 +64,31 @@ describe('FileTool productivity additions', () => {
       expect(r.success).toBe(true)
       expect(fs.readFileSync(f, 'utf8')).toBe('X foo')
     })
+
+    it('preserves CRLF line endings when oldText was passed as LF and match succeeds via normalization', async () => {
+      const f = path.join(tmp, 'crlf.md')
+      // Write file with CRLF
+      fs.writeFileSync(f, '# Title\r\nhello world\r\nbye', 'utf8')
+      const tool = new FileTool()
+      // LLM passes oldText with LF only
+      const r = await tool.execute('id', { operation: 'edit', path: f, oldText: 'hello world', newText: 'HI THERE' })
+      expect(r.success).toBe(true)
+      const after = fs.readFileSync(f, 'utf8')
+      // CRLF preserved on unchanged lines AND on the edited region
+      expect(after).toContain('\r\n')
+      expect(after).toBe('# Title\r\nHI THERE\r\nbye')
+    })
+
+    it('does NOT introduce CRLF when original was pure LF', async () => {
+      const f = path.join(tmp, 'lf.md')
+      fs.writeFileSync(f, '# Title\nhello world\nbye', 'utf8')
+      const tool = new FileTool()
+      const r = await tool.execute('id', { operation: 'edit', path: f, oldText: 'hello world', newText: 'HI' })
+      expect(r.success).toBe(true)
+      const after = fs.readFileSync(f, 'utf8')
+      expect(after).toBe('# Title\nHI\nbye')
+      expect(after).not.toContain('\r\n')
+    })
   })
 
   // --- glob ---

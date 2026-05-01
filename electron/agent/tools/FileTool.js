@@ -123,6 +123,10 @@ class FileTool extends BaseTool {
           } else {
             updated = body.replace(needle, replacement)
           }
+          // If we normalized to LF but the original had CRLF, restore CRLF
+          if (body !== original && original.includes('\r\n')) {
+            updated = updated.replace(/\r?\n/g, '\r\n')
+          }
           fs.writeFileSync(safePath, updated, 'utf8')
           return this._ok(`Edited: ${safePath}`, {
             path: safePath,
