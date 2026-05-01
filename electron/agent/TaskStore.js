@@ -110,6 +110,23 @@ function _coerceDeletedAt(v) {
   return v
 }
 
+function _serializeSchedule(v) {
+  if (v == null) return null
+  if (typeof v === 'string') return v
+  return JSON.stringify(v)
+}
+
+function _deserializeSchedule(v) {
+  if (v == null) return null
+  if (typeof v !== 'string') return v
+  // If it looks like a JSON object/array, parse it; otherwise return as-is (legacy cron string)
+  const trimmed = v.trim()
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    try { return JSON.parse(trimmed) } catch {}
+  }
+  return v
+}
+
 function rowToPlan(row) {
   if (!row) return null
   return {
@@ -118,7 +135,7 @@ function rowToPlan(row) {
     description: row.description || '',
     prompt:      row.prompt || '',
     agentId:     row.agent_id || null,
-    schedule:    row.schedule || null,
+    schedule:    _deserializeSchedule(row.schedule),
     enabled:     Boolean(row.enabled),
     categoryId:  row.category_id || null,
     createdAt:   row.created_at || 0,
@@ -135,7 +152,7 @@ function planToRow(p) {
     description:  p.description || null,
     prompt:       p.prompt || null,
     agent_id:     p.agentId || null,
-    schedule:     p.schedule || null,
+    schedule:     _serializeSchedule(p.schedule),
     enabled:      p.enabled === false ? 0 : 1,
     category_id:  p.categoryId || null,
     created_at:   p.createdAt || Date.now(),

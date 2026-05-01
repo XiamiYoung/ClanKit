@@ -24,7 +24,7 @@ describe('serializeJsonArray / deserializeJsonArray', () => {
 })
 
 describe('plan round-trip', () => {
-  it('preserves all fields', () => {
+  it('preserves all fields with legacy string schedule', () => {
     const plan = {
       id: 'plan-1',
       name: 'Daily digest',
@@ -40,6 +40,29 @@ describe('plan round-trip', () => {
       deletedAt: null,
     }
     expect(rowToPlan(planToRow(plan))).toMatchObject(plan)
+  })
+  it('round-trips object schedule via JSON serialization', () => {
+    const plan = {
+      id: 'plan-2',
+      name: 'Cron plan',
+      schedule: { type: 'cron', cron: '0 * * * *', timezone: 'UTC', enabled: true },
+      enabled: true,
+      createdAt: 1700000000000,
+      updatedAt: 1700000000000,
+      deletedAt: null,
+    }
+    const back = rowToPlan(planToRow(plan))
+    expect(back.schedule).toEqual(plan.schedule)
+  })
+  it('planToRow serializes object schedule to JSON string', () => {
+    const sched = { type: 'once', runAt: '2026-06-01T09:00:00Z', enabled: true }
+    const row = planToRow({ id: 'p', name: 'X', schedule: sched, createdAt: 0, updatedAt: 0 })
+    expect(typeof row.schedule).toBe('string')
+    expect(JSON.parse(row.schedule)).toEqual(sched)
+  })
+  it('rowToPlan passes through legacy cron string schedule as-is', () => {
+    const row = { id: 'p', name: 'X', schedule: '0 9 * * *', enabled: 1, created_at: 0, updated_at: 0 }
+    expect(rowToPlan(row).schedule).toBe('0 9 * * *')
   })
   it('coerces enabled INTEGER to boolean', () => {
     expect(rowToPlan({ id: 'x', name: 'P', enabled: 1, created_at: 0, updated_at: 0 }).enabled).toBe(true)
