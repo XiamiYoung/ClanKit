@@ -755,7 +755,7 @@ app.whenReady().then(async () => {
             " script-src 'self';" +
             " style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;" +
             " font-src 'self' data: https://fonts.gstatic.com;" +
-            " img-src 'self' data: blob: https: vault-asset: personas:;" +
+            " img-src 'self' data: blob: https: vault-asset:;" +
             " connect-src 'self' https: http://localhost:* ws://localhost:*;" +
             " media-src 'self' data: blob:;" +
             " worker-src 'self' blob:;"
