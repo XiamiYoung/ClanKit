@@ -904,6 +904,34 @@ export const useChatsStore = defineStore('chats', () => {
     await persistIndex()
   }
 
+  async function setMode(chatId, newMode) {
+    if (newMode !== 'chat' && newMode !== 'productivity') {
+      throw new Error(`Invalid mode: ${newMode}`)
+    }
+    const chat = chats.value.find(c => c.id === chatId)
+    if (!chat) return
+    if (chat.mode === newMode) return
+    const from = chat.mode || 'chat'
+    const to = newMode
+    const at = Date.now()
+    const lastMsg = chat.messages?.[chat.messages.length - 1]
+    const afterMessageId = lastMsg?.id || null
+    chat.mode = to
+    chat.modeTransitions.push({ from, to, at, afterMessageId })
+    chat.modeTransitionPending = { from, to, at }
+    if (to === 'productivity') chat.productivityModeNoticeShown = true
+    chat.updatedAt = at
+    await persistChat(chatId)
+  }
+
+  function clearModeTransitionPending(chatId) {
+    const chat = chats.value.find(c => c.id === chatId)
+    if (!chat) return
+    chat.modeTransitionPending = null
+    // No persist call — this is a transient runtime field; it's OK to redo the
+    // marker on the next prompt build if a crash happens between consume and clear.
+  }
+
   async function setChatSettings(chatId, settings) {
     const chat = chats.value.find(c => c.id === chatId)
     if (!chat) return
@@ -1443,7 +1471,7 @@ export const useChatsStore = defineStore('chats', () => {
     unreadChatIds, completedChatIds, pendingPermissionChatIds,
     loadChats, createChat, createChatFromHistory, removeChat, renameChat,
     setActiveChat, clearActiveChat, revealActiveChat, addMessage, updateLastAssistantMessage, setChatAgent,
-    setChatProvider, setChatModel, setChatSettings, deleteMessage, clearChat, persist, ensureMessages,
+    setChatProvider, setChatModel, setChatSettings, setMode, clearModeTransitionPending, deleteMessage, clearChat, persist, ensureMessages,
     loadOlderSegments, hasOlderSegments,
     setGroupAgents, toggleGroupMode, setGroupAgentOverride,
     removeGroupAgent, addGroupAgent, reorderChats,
