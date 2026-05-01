@@ -668,32 +668,19 @@ app.whenReady().then(async () => {
 
   // ── Clean up stale 'running' run entries from a previous session ────────────
   try {
-    if (fs.existsSync(p().TASK_RUNS_INDEX)) {
-      const runIndex = JSON.parse(fs.readFileSync(p().TASK_RUNS_INDEX, 'utf8'))
-      const stoppedAt = new Date().toISOString()
-      let dirty = false
-      for (const entry of runIndex) {
-        if (entry.status === 'running') {
-          entry.status      = 'error'
-          entry.completedAt = stoppedAt
-          entry.error       = 'Interrupted by app restart'
-          dirty = true
-          // Also patch the run detail file if it exists
-          const detailFile = path.join(p().TASK_RUNS_DIR, `${entry.id}.json`)
-          if (fs.existsSync(detailFile)) {
-            try {
-              const detail = JSON.parse(fs.readFileSync(detailFile, 'utf8'))
-              if (detail.status === 'running') {
-                detail.status      = 'error'
-                detail.completedAt = stoppedAt
-                detail.error       = 'Interrupted by app restart'
-                fs.writeFileSync(detailFile, JSON.stringify(detail, null, 2), 'utf8')
-              }
-            } catch {}
-          }
-        }
-      }
-      if (dirty) fs.writeFileSync(p().TASK_RUNS_INDEX, JSON.stringify(runIndex, null, 2), 'utf8')
+    const { getInstance: getTaskStore } = require('./agent/TaskStore')
+    const taskStore = getTaskStore(p().DATA_DIR)
+    const stale = taskStore.listRuns({ limit: 1000 }).filter(r => r.status === 'running')
+    for (const run of stale) {
+      taskStore.saveRun({
+        ...run,
+        status: 'error',
+        completedAt: Date.now(),
+        error: 'Interrupted by app restart',
+      })
+    }
+    if (stale.length > 0) {
+      logger.info(`[main] cleaned up ${stale.length} stale 'running' run(s) from previous session`)
     }
   } catch (err) {
     logger.warn('Failed to clean up stale run entries:', err.message)
