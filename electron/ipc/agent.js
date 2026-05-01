@@ -2514,6 +2514,9 @@ ipcMain.handle('agent:send-message', async (event, {
       loopConfig.maxOutputTokens = targetChatMeta.maxOutputTokens || fullCfg.maxOutputTokens || null
       loopConfig._maxOutputTokensExplicit = !!targetChatMeta.maxOutputTokens
       loopConfig.smtpConfig = fullCfg.smtp || null
+      loopConfig.mode = targetChatMeta.mode || 'chat'
+      loopConfig.chatWorkingPath = targetChatMeta.chatWorkingPath || null
+      loopConfig.modeTransitionPending = targetChatMeta.modeTransitionPending || null
       loopConfig.dataPath     = ds.paths().DATA_DIR
       loopConfig.artifactPath = fullCfg.artifactPath || fullCfg.artyfactPath || ''
       loopConfig.skillsPath   = fullCfg.skillsPath   || ''
@@ -2933,6 +2936,9 @@ ipcMain.handle('agent:send-message', async (event, {
 
         if (!event.sender.isDestroyed()) {
           event.sender.send('agent:chunk', { chatId, chunk: { type: 'send_message_complete', stickyTargetIds: newStickyTargetIds } })
+          if (targetChatMeta.modeTransitionPending) {
+            event.sender.send('chat:clear-mode-transition-pending', { chatId })
+          }
         }
         _fireChatCompletionNotification(chatId, trackMessages, agentsById, fullCfg)
         return
@@ -3018,12 +3024,18 @@ ipcMain.handle('agent:send-message', async (event, {
 
       if (!event.sender.isDestroyed()) {
         event.sender.send('agent:chunk', { chatId, chunk: { type: 'send_message_complete', stickyTargetIds: newStickyTargetIds } })
+        if (targetChatMeta.modeTransitionPending) {
+          event.sender.send('chat:clear-mode-transition-pending', { chatId })
+        }
       }
       _fireChatCompletionNotification(chatId, trackMessages, agentsById, fullCfg)
     } catch (err) {
       logger.error('agent:send-message orchestration error', { chatId, error: err.message })
       if (!event.sender.isDestroyed()) {
         event.sender.send('agent:chunk', { chatId, chunk: { type: 'send_message_error', error: err.message } })
+        if (targetChatMeta.modeTransitionPending) {
+          event.sender.send('chat:clear-mode-transition-pending', { chatId })
+        }
       }
     }
   })()

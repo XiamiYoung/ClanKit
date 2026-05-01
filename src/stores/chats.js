@@ -1126,6 +1126,11 @@ export const useChatsStore = defineStore('chats', () => {
         unreadChatIds.value = s
       }
     })
+
+    // Subscribe to mode-transition clear from main process (one-shot per turn)
+    window.electronAPI?.onChatClearModeTransitionPending?.(({ chatId }) => {
+      clearModeTransitionPending(chatId)
+    })
   }
 
   function _applyChunk(chatId, chunk) {
@@ -1430,6 +1435,7 @@ export const useChatsStore = defineStore('chats', () => {
         maxAgentRounds: targetChat.maxAgentRounds ?? 10,
         mode: targetChat.mode || 'chat',
         chatWorkingPath: (targetChat.mode === 'productivity' && targetChat.workingPath) ? targetChat.workingPath : null,
+        modeTransitionPending: targetChat.modeTransitionPending || null,
         userAgentId: targetChat.userAgentId || null,
         systemAgentId: isGroup ? null : (groupIds[0] || null),
         groupAudienceMode: targetChat.groupAudienceMode || 'auto',

@@ -742,6 +742,17 @@ ${subfolderList}
     system += `\n\n---\n## YOU REMAIN ${effectiveName}\nYou are ${effectiveName}${effectiveDescription ? ` — ${effectiveDescription}` : ''}. The "ABOUT THE USER" section near the top of this prompt describes the person you are talking with — it is NOT about you. Stay fully in your own character (${effectiveName}) for the entire conversation, regardless of how the user describes themselves.`
   }
 
+  // ── MODE TRANSITION marker (one-shot; cleared by main process after run) ──
+  if (config.modeTransitionPending) {
+    const { from, to } = config.modeTransitionPending
+    const at = new Date(config.modeTransitionPending.at || Date.now()).toISOString()
+    system += `\n\n---\n## MODE TRANSITION
+The user just switched this chat from ${from} to ${to} mode at ${at}.
+From this turn on, ${to}-mode directives apply. Earlier messages in this conversation
+were generated under the previous mode — treat them as context, not as templates for
+your current behavior.`
+  }
+
   return system
 }
 

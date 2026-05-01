@@ -178,6 +178,63 @@ describe('Working on this task discipline section', () => {
   })
 })
 
+describe('MODE TRANSITION marker', () => {
+  it('appended when modeTransitionPending is set', () => {
+    const out = buildSystemPrompt(
+      {
+        ...baseConfig,
+        mode: 'productivity',
+        modeTransitionPending: { from: 'chat', to: 'productivity', at: 1700000000000 }
+      },
+      [], [], [], [], baseAgent
+    )
+    expect(out).toContain('MODE TRANSITION')
+    expect(out).toContain('switched this chat from chat to productivity')
+    // ISO date includes the year derived from the at timestamp
+    expect(out).toMatch(/2023-1[12]|2024-/)  // 1700000000000 → ~Nov 2023; loose to handle timezone
+  })
+
+  it('absent when modeTransitionPending is null', () => {
+    const out = buildSystemPrompt(
+      { ...baseConfig, mode: 'productivity', modeTransitionPending: null },
+      [], [], [], [], baseAgent
+    )
+    expect(out).not.toContain('MODE TRANSITION')
+  })
+
+  it('absent when modeTransitionPending is undefined (default)', () => {
+    const out = buildSystemPrompt(
+      { ...baseConfig, mode: 'productivity' },
+      [], [], [], [], baseAgent
+    )
+    expect(out).not.toContain('MODE TRANSITION')
+  })
+
+  it('also fires in chat mode (when transitioning back to chat)', () => {
+    const out = buildSystemPrompt(
+      {
+        ...baseConfig,
+        mode: 'chat',
+        modeTransitionPending: { from: 'productivity', to: 'chat', at: 1700000000000 }
+      },
+      [], [], [], [], baseAgent
+    )
+    expect(out).toContain('switched this chat from productivity to chat')
+  })
+
+  it('uses Date.now fallback when at is missing', () => {
+    const out = buildSystemPrompt(
+      {
+        ...baseConfig,
+        mode: 'productivity',
+        modeTransitionPending: { from: 'chat', to: 'productivity' }
+      },
+      [], [], [], [], baseAgent
+    )
+    expect(out).toContain('MODE TRANSITION')
+  })
+})
+
 describe('Coding mode block removed', () => {
   it('CODING PROJECT PATH is never present, regardless of mode or config', () => {
     const a = buildSystemPrompt({ ...baseConfig, mode: 'chat', codingMode: true, chatWorkingPath: '/x' }, [], [], [], [], baseAgent)

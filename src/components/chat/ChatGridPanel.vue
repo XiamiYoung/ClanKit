@@ -608,6 +608,7 @@ async function onMentionSend(text) {
         if (pModel) singleCfg.customModel = pModel
         singleCfg.mode = targetChat.mode || 'chat'
         singleCfg.chatWorkingPath = (targetChat.mode === 'productivity' && targetChat.workingPath) ? targetChat.workingPath : null
+        singleCfg.modeTransitionPending = targetChat.modeTransitionPending || null
 
         const usrAgent = targetChat.userAgentId ? agentsStore.getAgentById(targetChat.userAgentId) : agentsStore.defaultUserAgent
         const agentPrompts = { systemAgentId: agentId, userAgentId: usrAgent?.id || '__default_user__' }
@@ -706,6 +707,7 @@ async function onSend(text, pendingAttachments = [], longBlobs = {}) {
   if (targetChat.model) cfg.customModel = targetChat.model
   cfg.mode = targetChat.mode || 'chat'
   cfg.chatWorkingPath = (targetChat.mode === 'productivity' && targetChat.workingPath) ? targetChat.workingPath : null
+  cfg.modeTransitionPending = targetChat.modeTransitionPending || null
   const sysAgent = targetChat.systemAgentId ? agentsStore.getAgentById(targetChat.systemAgentId) : agentsStore.defaultSystemAgent
   const usrAgent = targetChat.userAgentId ? agentsStore.getAgentById(targetChat.userAgentId) : agentsStore.defaultUserAgent
   const agentPrompts = {}

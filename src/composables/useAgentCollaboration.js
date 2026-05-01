@@ -129,6 +129,7 @@ export function useAgentCollaboration({
       maxAgentRounds: targetChat.maxAgentRounds ?? 10,
       mode: targetChat.mode || 'chat',
       chatWorkingPath: (targetChat.mode === 'productivity' && targetChat.workingPath) ? targetChat.workingPath : null,
+      modeTransitionPending: targetChat.modeTransitionPending || null,
       userAgentId: targetChat.userAgentId || null,
       systemAgentId: agentIds[0] || null,
     }
