@@ -361,8 +361,10 @@ describe('chatsStore', () => {
       expect(chat.productivityModeNoticeShown).toBe(false)
       await store.setMode(chat.id, 'productivity')
       expect(chat.productivityModeNoticeShown).toBe(true)
-      // switching back and forth doesn't toggle it off
+      // switching back must NOT clear the flag
       await store.setMode(chat.id, 'chat')
+      expect(chat.productivityModeNoticeShown).toBe(true)
+      // switching back to productivity must leave it true
       await store.setMode(chat.id, 'productivity')
       expect(chat.productivityModeNoticeShown).toBe(true)
     })

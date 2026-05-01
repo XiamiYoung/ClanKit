@@ -914,6 +914,7 @@ export const useChatsStore = defineStore('chats', () => {
     const from = chat.mode || 'chat'
     const to = newMode
     const at = Date.now()
+    // chat.messages may be null/empty (lazy-loaded); afterMessageId=null is valid (Task 18 divider handles it)
     const lastMsg = chat.messages?.[chat.messages.length - 1]
     const afterMessageId = lastMsg?.id || null
     chat.mode = to
@@ -922,6 +923,7 @@ export const useChatsStore = defineStore('chats', () => {
     if (to === 'productivity') chat.productivityModeNoticeShown = true
     chat.updatedAt = at
     await persistChat(chatId)
+    await persistIndex()
   }
 
   function clearModeTransitionPending(chatId) {
