@@ -108,24 +108,12 @@ describe('ChatSettingsModal', () => {
   })
 })
 
-describe('mode + working folder UI', () => {
-  it('shows mode radio with chat selected for chat-mode chats', () => {
+describe('working folder UI (mode is configured via the chat header dropdown)', () => {
+  it('mode radio is gone (moved to ChatHeader dropdown)', () => {
     const wrapper = mountModal()
-    const chatRadio = wrapper.find('input[type="radio"][value="chat"]')
-    expect(chatRadio.element.checked).toBe(true)
-  })
-
-  it('shows mode radio with productivity selected for productivity-mode chats', async () => {
-    // Mount with visible=false so watcher can fire on visible=true transition
-    const wrapper = shallowMount(ChatSettingsModal, {
-      props: { visible: false, chatId: 'c2' },
-      global: { stubs: { Teleport: true } },
-    })
-    // Trigger the watcher: change visible from false to true
-    await wrapper.setProps({ visible: true })
-    await wrapper.vm.$nextTick()
-    const productivityRadio = wrapper.find('input[type="radio"][value="productivity"]')
-    expect(productivityRadio.element.checked).toBe(true)
+    expect(wrapper.find('input[type="radio"][value="chat"]').exists()).toBe(false)
+    expect(wrapper.find('input[type="radio"][value="productivity"]').exists()).toBe(false)
+    expect(wrapper.find('.ccm-mode-radio').exists()).toBe(false)
   })
 
   it('coding-mode UI is gone', () => {
@@ -143,25 +131,14 @@ describe('mode + working folder UI', () => {
 
   it('artifactDirectory badge is gone', () => {
     const wrapper = mountModal()
-    // The working folder section no longer has the artifact directory badge
-    // (other .ccm-dark-badge elements may exist in the permissions tab, but
-    //  the one in the general tab working folder section is removed)
-    const generalSection = wrapper.find('.ccm-tab-content')
-    // Check that the artifact directory label is gone
     expect(wrapper.html()).not.toContain('chats.artifactDirectory')
   })
 
-  it('selecting productivity mode and saving calls chatsStore.setMode', async () => {
+  it('saving does NOT call chatsStore.setMode (mode set via header)', async () => {
     const wrapper = mountModal()
-    // Set draftMode to 'productivity' via the radio input
-    const productivityRadio = wrapper.find('input[type="radio"][value="productivity"]')
-    productivityRadio.element.checked = true
-    productivityRadio.element.dispatchEvent(new Event('change'))
-    await wrapper.vm.$nextTick()
-    // Trigger save using native click (consistent with existing test patterns)
     const saveBtn = wrapper.find('.ccm-save-btn')
     saveBtn.element.click()
     await wrapper.vm.$nextTick()
-    expect(mockSetMode).toHaveBeenCalledWith('c1', 'productivity')
+    expect(mockSetMode).not.toHaveBeenCalled()
   })
 })

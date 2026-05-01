@@ -11,20 +11,39 @@
       @start-call="cId => $emit('start-call', cId)"
     >
       <template #actions>
-        <!-- Mode toggle switch (chat ↔ professional) -->
-        <button
-          v-if="showModeChip"
-          class="gp-mode-switch"
-          v-tooltip="modeLabel"
-          :aria-label="modeLabel"
-          role="switch"
-          :aria-checked="isProductivity ? 'true' : 'false'"
-          @click.stop="onModeChipClick"
-        >
-          <span class="gp-mode-switch-track" :class="{ on: isProductivity }">
-            <span class="gp-mode-switch-thumb"></span>
-          </span>
-        </button>
+        <!-- Mode dropdown (chat ↔ professional) -->
+        <div v-if="showModeChip" class="gp-mode-dd-wrap" ref="modeDropdownWrapEl">
+          <button
+            class="gp-mode-dd-btn"
+            :aria-label="isProductivity ? t('chats.modeProductivity') : t('chats.modeChat')"
+            :aria-haspopup="true"
+            :aria-expanded="modeDropdownOpen ? 'true' : 'false'"
+            @click.stop="modeDropdownOpen = !modeDropdownOpen"
+          >
+            <svg v-if="isProductivity" style="width:11px;height:11px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+            <svg v-else style="width:11px;height:11px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span class="gp-mode-dd-label">{{ isProductivity ? t('chats.modeProductivity') : t('chats.modeChat') }}</span>
+            <svg class="gp-mode-dd-chevron" :class="{ open: modeDropdownOpen }" style="width:10px;height:10px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div v-if="modeDropdownOpen" class="gp-mode-dd-menu" role="menu">
+            <button class="gp-mode-dd-item" :class="{ active: !isProductivity }" role="menuitem" @click.stop="selectMode('chat')">
+              <div class="gp-mode-dd-item-head">
+                <svg style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <span class="gp-mode-dd-item-title">{{ t('chats.modeChat') }}</span>
+                <svg v-if="!isProductivity" class="gp-mode-dd-check" style="width:12px;height:12px;flex-shrink:0;margin-left:auto;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+              <div class="gp-mode-dd-item-desc">{{ t('chats.modeChatDesc') }}</div>
+            </button>
+            <button class="gp-mode-dd-item" :class="{ active: isProductivity }" role="menuitem" @click.stop="selectMode('productivity')">
+              <div class="gp-mode-dd-item-head">
+                <svg style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                <span class="gp-mode-dd-item-title">{{ t('chats.modeProductivity') }}</span>
+                <svg v-if="isProductivity" class="gp-mode-dd-check" style="width:12px;height:12px;flex-shrink:0;margin-left:auto;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+              <div class="gp-mode-dd-item-desc">{{ t('chats.modeProductivityDesc') }}</div>
+            </button>
+          </div>
+        </div>
         <!-- Call -->
         <button class="gp-maximize-btn" @click.stop="$emit('start-call', chatId)" v-tooltip="t('chats.voiceCall')">
           <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -416,21 +435,33 @@ const isProductivity = computed(() => chat.value?.mode === 'productivity')
 const showModeChip = computed(() => chat.value && chat.value.type !== 'analysis')
 const modeLabel = computed(() => isProductivity.value ? t('chats.modeProductivityTooltip') : t('chats.modeChatTooltip'))
 
-// ── Mode toggle ──
+// ── Mode dropdown ──
 const showProductivityConfirm = ref(false)
-function onModeChipClick() {
+const modeDropdownOpen = ref(false)
+const modeDropdownWrapEl = ref(null)
+
+function selectMode(target) {
+  modeDropdownOpen.value = false
   if (!chat.value) return
-  if (!isProductivity.value && !chat.value.productivityModeNoticeShown) {
+  if ((target === 'productivity') === isProductivity.value) return // no-op when picking current mode
+  if (target === 'productivity' && !chat.value.productivityModeNoticeShown) {
     showProductivityConfirm.value = true
     return
   }
-  const target = isProductivity.value ? 'chat' : 'productivity'
   chatsStore.setMode(chat.value.id, target)
 }
 function confirmProductivitySwitch() {
   showProductivityConfirm.value = false
   if (chat.value) chatsStore.setMode(chat.value.id, 'productivity')
 }
+function _onModeDropdownDocClick(e) {
+  if (!modeDropdownOpen.value) return
+  if (modeDropdownWrapEl.value && !modeDropdownWrapEl.value.contains(e.target)) {
+    modeDropdownOpen.value = false
+  }
+}
+onMounted(() => document.addEventListener('click', _onModeDropdownDocClick))
+onUnmounted(() => document.removeEventListener('click', _onModeDropdownDocClick))
 
 // ── Swap ──
 const collapsedFolders = ref(new Set())
@@ -1109,55 +1140,96 @@ function deleteMessage(msg) {
 
 .gp-swap-wrap { position: relative; }
 
-/* ── Mode toggle switch (clickable) ── */
-.gp-mode-switch {
+/* ── Mode dropdown (matches ChatHeader, smaller) ── */
+.gp-mode-dd-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+.gp-mode-dd-btn {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  /* Reset <button> defaults */
-  padding: 0.25rem 0.375rem;
+  gap: 0.3125rem;
+  height: 1.625rem;
+  padding: 0 0.5rem;
+  border-radius: 0.4375rem;
+  border: 1px solid #1A1A1A;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  transition: all 0.15s ease;
+}
+.gp-mode-dd-btn:hover {
+  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
+  border-color: #2D2D2D;
+}
+.gp-mode-dd-label {
+  pointer-events: none;
+}
+.gp-mode-dd-chevron {
+  transition: transform 0.18s ease;
+}
+.gp-mode-dd-chevron.open {
+  transform: rotate(180deg);
+}
+.gp-mode-dd-menu {
+  position: absolute;
+  top: calc(100% + 0.3125rem);
+  right: 0;
+  min-width: 14rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1875rem;
+  padding: 0.3125rem;
+  background: #FFFFFF;
+  border: 1px solid #E5E5EA;
+  border-radius: 0.5625rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14), 0 2px 6px rgba(0, 0, 0, 0.06);
+  z-index: 1000;
+}
+.gp-mode-dd-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: 0.4375rem 0.5625rem;
   border: none;
   background: transparent;
+  border-radius: 0.375rem;
   cursor: pointer;
-  border-radius: 0.25rem;
-  outline: none;
-  transition: background 0.15s;
+  text-align: left;
+  font-family: 'Inter', sans-serif;
+  transition: background 0.12s;
 }
-.gp-mode-switch:hover {
-  background: rgba(0, 0, 0, 0.06);
+.gp-mode-dd-item:hover {
+  background: #F5F5F7;
 }
-.gp-mode-switch:focus-visible {
-  box-shadow: 0 0 0 2px rgba(15, 15, 15, 0.18);
+.gp-mode-dd-item.active {
+  background: linear-gradient(135deg, rgba(15, 15, 15, 0.04), rgba(55, 65, 81, 0.04));
+  border: 1px solid rgba(26, 26, 26, 0.18);
 }
-.gp-mode-switch-track {
-  position: relative;
-  width: 1.625rem;
-  height: 0.875rem;
-  border-radius: 9999px;
-  background: #D1D5DB;
-  transition: background 0.2s;
-  flex-shrink: 0;
-  /* Decorative children — ensure click lands on outer <button> */
-  pointer-events: none;
+.gp-mode-dd-item-head {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: #1A1A1A;
 }
-.gp-mode-switch-track.on {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+.gp-mode-dd-item-title {
+  font-size: 0.78rem;
+  font-weight: 600;
 }
-.gp-mode-switch-thumb {
-  position: absolute;
-  top: 0.125rem;
-  left: 0.125rem;
-  width: 0.625rem;
-  height: 0.625rem;
-  border-radius: 9999px;
-  background: #FFFFFF;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  pointer-events: none;
+.gp-mode-dd-check {
+  color: #0F766E;
 }
-.gp-mode-switch-track.on .gp-mode-switch-thumb {
-  transform: translateX(0.75rem);
+.gp-mode-dd-item-desc {
+  margin-left: 1.25rem;
+  font-size: 0.65rem;
+  font-weight: 400;
+  color: #6B7280;
+  line-height: 1.4;
 }
 </style>
 

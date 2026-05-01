@@ -21,7 +21,6 @@ const ccmActiveTab = ref('general')
 // ── General tab draft state ──
 const draftMaxAgentRounds = ref(10)
 const draftWorkingPath = ref('')
-const draftMode = ref('chat')
 
 // ── Permissions tab draft state ──
 const draftPermissionMode = ref('inherit')
@@ -63,7 +62,6 @@ watch(() => props.visible, (open) => {
   // Snapshot for cancel
   _draftSnapshot = {
     workingPath: draftWorkingPath.value,
-    mode: draftMode.value,
     maxAgentRounds: draftMaxAgentRounds.value,
     permissionMode: draftPermissionMode.value,
     chatAllowList: JSON.parse(JSON.stringify(draftChatAllowList.value)),
@@ -76,10 +74,7 @@ function saveChatSettings() {
   if (!chatId) return
   const rawRounds = Number(draftMaxAgentRounds.value)
   const clampedRounds = Number.isFinite(rawRounds) ? Math.min(100, Math.max(1, rawRounds)) : 10
-  const chat = chatsStore.chats.find(c => c.id === chatId)
-  if (chat && draftMode.value !== chat.mode) {
-    chatsStore.setMode(chatId, draftMode.value)
-  }
+  // Mode is configured via the ChatHeader dropdown — not here. Skip setMode.
   chatsStore.setChatSettings(chatId, {
     workingPath: draftWorkingPath.value || null,
     maxAgentRounds: clampedRounds,
@@ -104,7 +99,6 @@ function cancelChatSettings() {
   // Revert draft to snapshot
   if (_draftSnapshot) {
     draftWorkingPath.value = _draftSnapshot.workingPath
-    draftMode.value = _draftSnapshot.mode ?? 'chat'
     draftMaxAgentRounds.value = _draftSnapshot.maxAgentRounds
     draftPermissionMode.value = _draftSnapshot.permissionMode
     draftChatAllowList.value = _draftSnapshot.chatAllowList
@@ -126,7 +120,6 @@ function _loadDraftFromChat() {
   if (!chat) return
   // Working path
   draftWorkingPath.value = chat.workingPath || ''
-  draftMode.value = chat.mode || 'chat'
   // Max agent rounds (null in JSON = use default 10)
   draftMaxAgentRounds.value = chat.maxAgentRounds ?? 10
   // Permissions
@@ -183,26 +176,6 @@ function _loadDraftFromChat() {
           </div>
 
           <!-- Mode radio -->
-          <div class="ccm-dark-section">
-            <div class="ccm-dark-section-label">{{ t('chats.mode') }}</div>
-            <div class="ccm-mode-radio-row">
-              <label class="ccm-mode-radio">
-                <input type="radio" v-model="draftMode" value="chat" />
-                <div class="ccm-mode-radio-content">
-                  <span class="ccm-mode-radio-title">{{ t('chats.modeChat') }}</span>
-                  <small class="ccm-mode-radio-desc">{{ t('chats.modeChatDesc') }}</small>
-                </div>
-              </label>
-              <label class="ccm-mode-radio">
-                <input type="radio" v-model="draftMode" value="productivity" />
-                <div class="ccm-mode-radio-content">
-                  <span class="ccm-mode-radio-title">{{ t('chats.modeProductivity') }}</span>
-                  <small class="ccm-mode-radio-desc">{{ t('chats.modeProductivityDesc') }}</small>
-                </div>
-              </label>
-            </div>
-          </div>
-
           <div class="ccm-dark-section">
             <div class="ccm-dark-section-label">
               {{ t('chats.maxAgentChatRounds') }}
@@ -453,46 +426,6 @@ function _loadDraftFromChat() {
 }
 .ccm-dark-badge.badge-on { background: #064E3B; color: #6EE7B7; }
 .ccm-dark-badge.badge-off { background: #451A1A; color: #FCA5A5; }
-
-/* ── Mode radio ───────────────────────────────────────────────────────── */
-.ccm-mode-radio-row {
-  display: flex;
-  flex-direction: column;
-  gap: 0.625rem;
-}
-.ccm-mode-radio {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.625rem;
-  padding: 0.625rem;
-  border-radius: var(--radius-md, 0.5rem);
-  border: 1px solid #2A2A2A;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
-}
-.ccm-mode-radio:has(input:checked) {
-  border-color: #4B5563;
-  background: linear-gradient(135deg, rgba(15,15,15,0.05), rgba(55,65,81,0.05));
-}
-.ccm-mode-radio input[type="radio"] {
-  margin-top: 0.125rem;
-  flex-shrink: 0;
-}
-.ccm-mode-radio-content {
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
-}
-.ccm-mode-radio-title {
-  font-size: var(--fs-secondary, 0.875rem);
-  font-weight: 500;
-  color: #FFFFFF;
-}
-.ccm-mode-radio-desc {
-  font-size: 0.75rem;
-  color: #6B7280;
-  line-height: 1.35;
-}
 
 /* Provider buttons (dark) — used in Permissions tab */
 .ccm-provider-btns {

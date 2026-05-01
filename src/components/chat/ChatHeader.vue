@@ -1817,31 +1817,25 @@ function confirmProductivitySwitch() {
   height: 1.875rem;
   padding: 0 0.625rem;
   border-radius: 0.5rem;
-  border: 1px solid var(--border, #E5E5EA);
-  background: var(--bg-card, #FFFFFF);
-  color: #4B5563;
+  border: 1px solid #1A1A1A;
+  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
+  color: #FFFFFF;
   cursor: pointer;
   font-family: 'Inter', sans-serif;
   font-size: var(--fs-small, 0.75rem);
   font-weight: 600;
   white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08);
   transition: all 0.15s ease;
 }
 .ch-mode-dd-btn:hover {
-  border-color: #1A1A1A;
-  color: #1A1A1A;
-}
-.ch-mode-dd-btn--productivity {
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  border-color: #1A1A1A;
-  color: #FFFFFF;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08);
-}
-.ch-mode-dd-btn--productivity:hover {
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
   border-color: #2D2D2D;
-  color: #FFFFFF;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18), 0 1px 3px rgba(0, 0, 0, 0.10);
 }
+/* Modifier kept for tests/aria — visual style same as base now (both use black gradient).
+   Differentiation between modes is the icon + label text, not the button color. */
+.ch-mode-dd-btn--productivity {}
 .ch-mode-dd-label {
   pointer-events: none;
 }
