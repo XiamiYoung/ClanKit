@@ -64,6 +64,7 @@
             <button
               class="ch-mode-dd-btn"
               :class="{ 'ch-mode-dd-btn--productivity': isProductivity, 'ch-mode-dd-flash': flashMode }"
+              :style="flashMode ? { '--flash-rgb': flashRgb } : null"
               :aria-label="isProductivity ? t('chats.modeProductivity') : t('chats.modeChat')"
               :aria-haspopup="true"
               :aria-expanded="modeDropdownOpen ? 'true' : 'false'"
@@ -949,9 +950,31 @@ const isProductivity = computed(() => chat.value?.mode === 'productivity')
 const modeDropdownOpen = ref(false)
 const modeDropdownWrapEl = ref(null)
 
-// Flash the mode dropdown for 1s when the user enters a freshly-created chat,
-// so they notice which mode (Roleplay vs Professional) the new chat starts in.
+// Flash the mode dropdown for 3s on entry to a freshly-created chat.
+// Uses the same per-chat color palette as the chat-tree active row, so the
+// flash visually echoes "this is the chat you just selected" rather than a
+// generic accent color.
+const CHAT_FLASH_RGB = [
+  '37, 99, 235',   // blue   #2563EB
+  '124, 58, 237',  // purple #7C3AED
+  '5, 150, 105',   // green  #059669
+  '217, 119, 6',   // orange #D97706
+  '220, 38, 38',   // red    #DC2626
+  '8, 145, 178',   // cyan   #0891B2
+  '202, 138, 4',   // yellow #CA8A04
+  '190, 24, 93',   // pink   #BE185D
+]
+function _flashRgbForChat(node) {
+  if (!node) return CHAT_FLASH_RGB[0]
+  if (typeof node.createdAt === 'number') return CHAT_FLASH_RGB[node.createdAt % CHAT_FLASH_RGB.length]
+  const id = node.id || ''
+  if (!id) return CHAT_FLASH_RGB[0]
+  let hash = 0
+  for (let i = 0; i < id.length; i++) hash = ((hash << 5) - hash + id.charCodeAt(i)) | 0
+  return CHAT_FLASH_RGB[Math.abs(hash) % CHAT_FLASH_RGB.length]
+}
 const flashMode = ref(false)
+const flashRgb = ref(CHAT_FLASH_RGB[0])
 let _flashTimer = null
 watch(
   () => chat.value?.id,
@@ -960,8 +983,9 @@ watch(
     flashMode.value = false
     const createdAt = chat.value?.createdAt
     if (chat.value?.id && createdAt && Date.now() - createdAt < 2000) {
+      flashRgb.value = _flashRgbForChat(chat.value)
       flashMode.value = true
-      _flashTimer = setTimeout(() => { flashMode.value = false; _flashTimer = null }, 1000)
+      _flashTimer = setTimeout(() => { flashMode.value = false; _flashTimer = null }, 3000)
     }
   },
   { immediate: true }
@@ -1907,13 +1931,18 @@ function confirmProductivitySwitch() {
   line-height: 1.4;
 }
 
-/* New-chat mode-dropdown attention flash — fires once for ~1s on entry to a freshly created chat */
+/* New-chat mode-dropdown attention flash — 3 pulses over 3s, color matches the
+   chat tree active-row palette (set per-chat via --flash-rgb inline style). */
 @keyframes ch-mode-dd-flash-anim {
-  0%   { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.7), 0 0 0 0 rgba(251, 191, 36, 0.4); transform: scale(1); }
-  30%  { box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.5), 0 0 14px 6px rgba(251, 191, 36, 0.35); transform: scale(1.04); }
-  100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); transform: scale(1); }
+  0%   { box-shadow: 0 0 0 0 rgba(var(--flash-rgb), 0); transform: scale(1); }
+  10%  { box-shadow: 0 0 0 6px rgba(var(--flash-rgb), 0.75), 0 0 20px 10px rgba(var(--flash-rgb), 0.55); transform: scale(1.06); }
+  33%  { box-shadow: 0 0 0 0 rgba(var(--flash-rgb), 0); transform: scale(1); }
+  43%  { box-shadow: 0 0 0 6px rgba(var(--flash-rgb), 0.75), 0 0 20px 10px rgba(var(--flash-rgb), 0.55); transform: scale(1.06); }
+  66%  { box-shadow: 0 0 0 0 rgba(var(--flash-rgb), 0); transform: scale(1); }
+  76%  { box-shadow: 0 0 0 6px rgba(var(--flash-rgb), 0.75), 0 0 20px 10px rgba(var(--flash-rgb), 0.55); transform: scale(1.06); }
+  100% { box-shadow: 0 0 0 0 rgba(var(--flash-rgb), 0); transform: scale(1); }
 }
 .ch-mode-dd-flash {
-  animation: ch-mode-dd-flash-anim 1s ease-out 1;
+  animation: ch-mode-dd-flash-anim 3s ease-out 1;
 }
 </style>
