@@ -24,6 +24,7 @@ function resolveVenvPath() {
 /** @deprecated resolvePreferredPython removed — no longer needed. */
 
 const memoryStore = require('../memory/memoryStore')
+const { accumulateUsage } = require('./store')
 
 /** Read agent memory as markdown via the SQLite-backed MemoryStore. Returns null when missing. */
 function readMemoryFileSync(agentId, agentType) {
@@ -34,38 +35,6 @@ function readMemoryFileSync(agentId, agentType) {
   } catch (err) {
     logger.error('readMemoryFileSync error', err.message)
     return null
-  }
-}
-
-/** Accumulate usage metrics into chat.usage and save atomically. */
-async function accumulateUsage(chatId, metrics, provider, model) {
-  if (!chatId || !metrics) return
-  const file = path.join(ds.paths().CHATS_DIR, `${chatId}.json`)
-  let chat
-  try {
-    chat = await ds.readJSONAsync(file, null)
-  } catch { return }
-  if (!chat) return
-
-  const u = chat.usage || {}
-  chat.usage = {
-    inputTokens:         (u.inputTokens         || 0) + (metrics.inputTokens         || 0),
-    outputTokens:        (u.outputTokens        || 0) + (metrics.outputTokens        || 0),
-    cacheCreationTokens: (u.cacheCreationTokens || 0) + (metrics.cacheCreationTokens || 0),
-    cacheReadTokens:     (u.cacheReadTokens     || 0) + (metrics.cacheReadTokens     || 0),
-    voiceInputTokens:    (u.voiceInputTokens    || 0) + (metrics.voiceInputTokens    || 0),
-    voiceOutputTokens:   (u.voiceOutputTokens   || 0) + (metrics.voiceOutputTokens   || 0),
-    whisperCalls:        (u.whisperCalls        || 0) + (metrics.whisperCalls        || 0),
-    whisperSecs:         (u.whisperSecs         || 0) + (metrics.whisperSecs         || 0),
-    ttsChars:            (u.ttsChars            || 0) + (metrics.ttsChars            || 0),
-  }
-  // Stamp provider/model for cost attribution if not already set
-  if (provider && !chat.provider) chat.provider = provider
-  if (model     && !chat.model)   chat.model     = model
-  try {
-    await ds.writeJSONAtomic(file, chat)
-  } catch (err) {
-    logger.warn('accumulateUsage write failed', err.message)
   }
 }
 

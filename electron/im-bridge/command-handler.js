@@ -1,24 +1,21 @@
 // electron/im-bridge/command-handler.js
 'use strict'
-const fs      = require('fs')
-const path    = require('path')
 const { v4: uuidv4 } = require('uuid')
 
 const ds = require('../lib/dataStore')
 const { normalizeAgents } = require('../agent/dataNormalizers')
+const { getInstance: getChatStore } = require('../chat/ChatStore')
 const PAGE_SIZE   = 20
 
+function _chatStore() { return getChatStore(ds.paths().DATA_DIR) }
+
 function readIndex() {
-  try { return JSON.parse(fs.readFileSync(ds.paths().CHATS_INDEX_FILE, 'utf8')) } catch { return [] }
+  return _chatStore().listChatIndex()
 }
 
 function readAgents() {
   // Schema-agnostic flat list sourced from AgentStore (agents.db).
   return normalizeAgents(ds.readAgentsCompat())
-}
-
-function readJSON(file, fallback) {
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')) } catch { return fallback }
 }
 
 function getDefaultSystemAgentId() {
@@ -59,13 +56,6 @@ function numberChats(items) {
 function findChatByNumber(n) {
   const items = numberChats(buildDisplayList(readIndex()))
   return items.find(item => item.type === 'chat' && item.n === n) || null
-}
-
-function writeAtomic(filePath, data) {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true })
-  const tmp = filePath + '.tmp'
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2))
-  fs.renameSync(tmp, filePath)
 }
 
 function formatList(page) {
@@ -178,10 +168,10 @@ function formatAgentDetail(agent) {
 const HISTORY_SIZE = 10
 
 function formatHistory(chatId, count) {
-  const chatPath = path.join(ds.paths().CHATS_DIR, `${chatId}.json`)
-  const chat = readJSON(chatPath, null)
+  const store = _chatStore()
+  const chat = store.getChatMeta(chatId)
   if (!chat) return { reply: 'Chat not found.' }
-  const msgs = chat.messages || []
+  const msgs = store.getMessages(chatId)
   if (!msgs.length) return { reply: 'No messages in this chat yet.' }
 
   const recent = msgs.slice(-count)
@@ -255,7 +245,6 @@ function handle(command, sessionStore, platform, channelId, notifyRenderer) {
       type: 'chat',
       id: chatId,
       title,
-      messages: [],
       createdAt: now,
       updatedAt: now,
       systemAgentId: systemAgentId || null,
@@ -266,45 +255,14 @@ function handle(command, sessionStore, platform, channelId, notifyRenderer) {
       groupAgentIds: [],
       groupAgentOverrides: {},
       workingPath: null,
-      enabledToolIds: null,
-      enabledMcpIds: null,
       permissionMode: 'inherit',
       chatAllowList: [],
       chatDangerOverrides: [],
       maxAgentRounds: null,
       mode: 'chat',
-      maxOutputTokens: null,
     }
 
-    // Index entry mirrors persisted metadata (no messages/runtime fields)
-    const indexEntry = {
-      type: 'chat',
-      id: chatId,
-      title,
-      createdAt: now,
-      updatedAt: now,
-      systemAgentId: chat.systemAgentId,
-      userAgentId: chat.userAgentId,
-      provider: null,
-      model: null,
-      isGroupChat: false,
-      groupAgentIds: [],
-      groupAgentOverrides: {},
-      workingPath: null,
-      enabledToolIds: null,
-      enabledMcpIds: null,
-      permissionMode: 'inherit',
-      chatAllowList: [],
-      chatDangerOverrides: [],
-      maxAgentRounds: null,
-      mode: 'chat',
-      maxOutputTokens: null,
-    }
-
-    writeAtomic(path.join(ds.paths().CHATS_DIR, `${chatId}.json`), chat)
-    const index = readIndex()
-    index.unshift(indexEntry)
-    writeAtomic(ds.paths().CHATS_INDEX_FILE, index)
+    _chatStore().saveChatMeta(chat)
     sessionStore.setActiveChatId(platform, channelId, chatId, '@' + channelId)
     notifyRenderer()
     return { reply: `Created and switched to: ${title}`, newChatId: chatId }

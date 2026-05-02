@@ -1,7 +1,5 @@
 // electron/im-bridge/message-router.js
 'use strict'
-const fs      = require('fs')
-const path    = require('path')
 const { v4: uuidv4 } = require('uuid')
 const { AgentLoop } = require('../agent/agentLoop')
 
@@ -16,59 +14,30 @@ function readJSON(file, fallback) {
   return ds.readJSON(file, fallback)
 }
 
-function writeAtomic(filePath, data) {
-  fs.mkdirSync(path.dirname(filePath), { recursive: true })
-  const tmp = filePath + '.tmp'
-  fs.writeFileSync(tmp, JSON.stringify(data, null, 2))
-  fs.renameSync(tmp, filePath)
-}
-
-function chatFile(chatId) {
-  return path.join(ds.paths().CHATS_DIR, `${chatId}.json`)
-}
+const { getInstance: getChatStore } = require('../chat/ChatStore')
+function _chatStore() { return getChatStore(ds.paths().DATA_DIR) }
 
 function loadMessages(chatId) {
-  const all = readJSON(chatFile(chatId), { messages: [] }).messages || []
-  return all
+  const msgs = _chatStore().getMessages(chatId)
+  return msgs
     .filter(m => m.role === 'user' || (m.role === 'assistant' && !m.streaming && m.content))
     .map(m => ({ role: m.role, content: m.content || '[Image]' }))
 }
 
 function appendMessage(chatId, msg) {
-  const chat = readJSON(chatFile(chatId), { id: chatId, messages: [] })
-  chat.messages = [...(chat.messages || []), msg]
-  chat.updatedAt = Date.now()
-  writeAtomic(chatFile(chatId), chat)
-
-  try {
-    const index = readJSON(ds.paths().CHATS_INDEX_FILE, [])
-    function touch(nodes) {
-      for (const n of nodes) {
-        if (n.id === chatId) { n.updatedAt = chat.updatedAt; return true }
-        if (n.children && touch(n.children)) return true
-      }
-      return false
-    }
-    touch(index)
-    writeAtomic(ds.paths().CHATS_INDEX_FILE, index)
-  } catch { /* non-fatal */ }
+  _chatStore().appendMessage(chatId, msg)
 }
 
 function finalizeMessage(chatId, msgId, updates) {
-  const chat = readJSON(chatFile(chatId), { id: chatId, messages: [] })
-  const msg = (chat.messages || []).find(m => m.id === msgId)
-  if (msg) {
-    Object.assign(msg, updates)
-    chat.updatedAt = Date.now()
-    writeAtomic(chatFile(chatId), chat)
-  }
+  const store = _chatStore()
+  const all = store.getMessages(chatId)
+  const existing = all.find(m => m.id === msgId)
+  if (!existing) return
+  store.appendMessage(chatId, { ...existing, ...updates })
 }
 
 function removeMessage(chatId, msgId) {
-  const chat = readJSON(chatFile(chatId), { id: chatId, messages: [] })
-  chat.messages = (chat.messages || []).filter(m => m.id !== msgId)
-  chat.updatedAt = Date.now()
-  writeAtomic(chatFile(chatId), chat)
+  _chatStore().removeMessage(chatId, msgId)
 }
 
 function readAgents() {
@@ -136,7 +105,7 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
   ipcAgent.clearChatCancelled(chatId)
   try {
   const config   = readJSON(ds.paths().CONFIG_FILE, {})
-  const chat     = readJSON(chatFile(chatId), { id: chatId, messages: [] })
+  const chat     = _chatStore().getChatMeta(chatId) || { id: chatId }
   const agents = readAgents()
 
   const agentById = {}

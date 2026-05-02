@@ -26,6 +26,7 @@ const { MemoryExtractor } = require('../agent/core/MemoryExtractor')
 
 const { HistoryIndex } = require('../memory/HistoryIndex')
 const { accumulateUsage } = require('./store')
+const { getInstance: getChatStore } = require('../chat/ChatStore')
 const { queryRAG } = require('./knowledge')
 const { createChunkAccumulator } = require('../agent/chunkAccumulator')
 const { normalizeAgents, normalizeTools, normalizeMcpServers } = require('../agent/dataNormalizers')
@@ -309,9 +310,8 @@ async function runMemoryExtraction(event, chatId, messages, config, agentPrompts
 
 async function _runStartupIndexRecovery() {
   try {
-    const indexFile = ds.paths().CHATS_INDEX_FILE
-    if (!fs.existsSync(indexFile)) return
-    const chatsIndex = JSON.parse(fs.readFileSync(indexFile, 'utf8'))
+    const chatStore = getChatStore(ds.paths().DATA_DIR)
+    const chatsIndex = chatStore.listChatIndex()
     if (!Array.isArray(chatsIndex)) return
 
     logger.debug('[Startup] checking for unindexed chats', { total: chatsIndex.length })
@@ -328,11 +328,9 @@ async function _runStartupIndexRecovery() {
       await new Promise(resolve => setImmediate(resolve))
 
       try {
-        const chatFile = path.join(ds.paths().CHATS_DIR, `${meta.id}.json`)
-        if (!fs.existsSync(chatFile)) continue
-        const chat = JSON.parse(fs.readFileSync(chatFile, 'utf8'))
-        if (chat.messages && chat.messages.length > 0) {
-          chatIndexer.indexChat(meta.id, chat.messages, agentId)
+        const messages = chatStore.getMessages(meta.id)
+        if (messages && messages.length > 0) {
+          chatIndexer.indexChat(meta.id, messages, agentId)
         }
       } catch (err) {
         logger.error('[Startup] failed to index chat', { chatId: meta.id, error: err.message })
@@ -1113,15 +1111,14 @@ ipcMain.handle('agent:permission-response', (event, chatId, { blockId, decision,
   // Persist allow_chat -> chat's chatAllowList in its JSON file
   if (decision === 'allow_chat' && pattern) {
     try {
-      const chatFile = path.join(ds.paths().CHATS_DIR, `${chatId}.json`)
-      const chat = ds.readJSON(chatFile, null)
+      const chatStore = getChatStore(ds.paths().DATA_DIR)
+      const chat = chatStore.getChatMeta(chatId)
       if (chat) {
-        if (!Array.isArray(chat.chatAllowList)) chat.chatAllowList = []
-        const exists = chat.chatAllowList.some(e => e.pattern === pattern)
+        const allowList = Array.isArray(chat.chatAllowList) ? chat.chatAllowList : []
+        const exists = allowList.some(e => e.pattern === pattern)
         if (!exists) {
           const newEntry = { id: require('crypto').randomUUID(), pattern, description: 'Auto-added from chat approval' }
-          chat.chatAllowList.push(newEntry)
-          ds.writeJSON(chatFile, chat)
+          chatStore.patchChatMeta(chatId, { chatAllowList: [...allowList, newEntry] })
           return { success: true, newChatAllowEntry: newEntry }
         }
       }
