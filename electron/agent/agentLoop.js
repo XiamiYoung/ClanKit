@@ -2479,5 +2479,4 @@ class AgentLoop {
   }
 }
 
-module.exports = { AgentLoop }
-module.exports._maybeInjectReplyBank = _maybeInjectReplyBank
+module.exports = { AgentLoop, _maybeInjectReplyBank }
