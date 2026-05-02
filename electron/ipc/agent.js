@@ -287,7 +287,7 @@ async function runMemoryExtraction(event, chatId, messages, config, agentPrompts
       // Also write to new memory files (USER.md / MEMORY.md)
       const userAgentIdForMemory = userAgentId
       for (const item of autoSave) {
-        appendMemoryEntry(
+        memHelpers.appendMemoryEntry(
           item.agentId,
           userAgentIdForMemory,
           item.target,

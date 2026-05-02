@@ -23,10 +23,10 @@ function _hasPlaintextSensitiveFields(rawCfg) {
 }
 
 // -- Usage accumulation (exported for use by ipc/agent.js) --------------------
-// Sync wrapper around ChatStore.accumulateUsage. Kept exported for IPC
-// callers. The atomic increment + provider/model first-write semantics live
-// inside ChatStore.
-function accumulateUsage(chatId, metrics, provider, model) {
+// Async wrapper around ChatStore.accumulateUsage so existing callers that do
+// `.catch()` on the return value keep working (ChatStore.accumulateUsage is
+// itself synchronous; this wrapper is async only for the Promise contract).
+async function accumulateUsage(chatId, metrics, provider, model) {
   if (!chatId || !metrics) return
   try {
     const { getInstance } = require('../chat/ChatStore')
