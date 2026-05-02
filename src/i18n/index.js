@@ -1133,6 +1133,7 @@ Always reply in the same language as the user's most recent message.`,
   },
   chats: {
     longInputChip: '{preview}... ({count} chars)',
+    longInputDialogTitle: 'Long input ({count} chars)',
     newChat: 'New Chat',
     chatWithAgentTitle: 'Chat with {name}',
     noUserAgent: 'User Agent Required',
@@ -3813,6 +3814,7 @@ export const zh = {
   },
   chats: {
     longInputChip: '{preview}…（{count} 字）',
+    longInputDialogTitle: '长文本内容（{count} 字）',
     newChat: '新建对话',
     chatWithAgentTitle: '与 {name} 的对话',
     noUserAgent: '需要用户画像',

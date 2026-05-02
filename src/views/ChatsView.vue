@@ -3534,7 +3534,7 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   color: #FFF8F0;
   border-radius: 1.125rem;
   box-shadow: 0 4px 16px rgba(0,0,0,0.28), 0 2px 6px rgba(0,0,0,0.18), 0 1px 3px rgba(0,0,0,0.08);
-  width: min(90vw, 700px);
+  width: min(90vw, 1400px);
   max-height: 80vh;
   display: flex;
   flex-direction: column;

@@ -16,8 +16,12 @@ export function useI18n() {
       value = value?.[k]
     }
     if (value === undefined) {
-      console.log('[i18n] MISSING key:', key, 'locale:', locale.value)
-      return args[0] || key
+      console.warn('[i18n] MISSING key:', key, 'locale:', locale.value)
+      // Return the key itself, NOT args[0] — args[0] is often the params
+      // object for interpolation (e.g. { count: 42 }), and silently
+      // stringifying it gives the user `[object Object]`. Returning the
+      // raw key surfaces the missing translation visibly in the UI.
+      return key
     }
     const firstArg = args[0]
     const params = typeof firstArg === 'object' ? firstArg : args[1]

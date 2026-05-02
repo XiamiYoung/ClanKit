@@ -485,7 +485,15 @@ const props = defineProps({
 
 const emit = defineEmits(['quote-image', 'delete-message', 'view-blob'])
 
-// Split message.content into text/blob segments using {{BLOB:id}} markers
+// Split message.content into text/blob segments using {{BLOB:id}} markers.
+// Skip text fragments that are nothing but whitespace + ZWSP — the input
+// editor leaves zero-width spaces around inserted chips so the cursor has a
+// real text node to land in, but those should NOT render as their own
+// markdown paragraph (which adds visible vertical padding to the bubble).
+// Match: regular whitespace plus ZWSP / ZWNJ / ZWJ / BOM via explicit \u
+// escapes so editors don't silently drop the invisibles in source.
+const _BLANK_RE = new RegExp('[\\s\\u200B\\u200C\\u200D\\uFEFF]+', 'g')
+const _isBlankFragment = (s) => !s || !s.replace(_BLANK_RE, '')
 const contentSegments = computed(() => {
   const content = props.message.content || ''
   const blobs = props.message.longBlobs
@@ -496,7 +504,7 @@ const contentSegments = computed(() => {
     const m = part.match(/^\{\{BLOB:([a-z0-9-]+)\}\}$/)
     if (m && blobs[m[1]]) {
       segments.push({ type: 'blob', id: m[1], content: blobs[m[1]] })
-    } else if (part) {
+    } else if (!_isBlankFragment(part)) {
       segments.push({ type: 'text', value: part })
     }
   }

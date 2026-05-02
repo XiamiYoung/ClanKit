@@ -1701,9 +1701,9 @@ defineExpose({ scrollToBottom })
   justify-content: center;
 }
 .long-input-dialog {
-  width: 70vw;
-  max-width: 900px;
-  height: 70vh;
+  width: 90vw;
+  max-width: 1400px;
+  height: 80vh;
   background: #0F0F0F;
   border-radius: 1.125rem;
   display: flex;
