@@ -570,12 +570,19 @@ This is the local data folder for the ClanKit desktop application. Its structure
   ├── config.json          — App settings (API keys, models, providers, paths)
   ├── mcp-servers.json     — MCP server definitions
   ├── tools.json           — HTTP tool definitions
-  ├── agents.json          — AI agent definitions
   ├── knowledge.json       — RAG knowledge config
-  ├── chats/               — Per-chat message history
-  ├── memory/              — Persistent memory store (memory.db, memory-vec/)
+  ├── agents.db            — SQLite: AI agent definitions (kind, prompt, skills, etc.)
+  ├── tasks.db             — SQLite: plans, tasks, runs, categories
+  ├── chats.db             — SQLite: chat metadata + messages + FTS5 full-text index
+  ├── memory/              — Long-term memory store (memory.db, memory-vec/)
   ├── clankit_doc/         — AI Doc folder (readable documents)
   └── artifact/            — AI-generated non-document output
+
+NOTE on the .db files: agents, tasks, and chats are stored in SQLite, NOT in JSON files.
+Do NOT try to read agents.json / tasks.json / chats/{id}.json — those files no longer
+exist. To inspect or query agent / task / chat data, use the appropriate skill
+(e.g. clankit-config-admin) or the dedicated tools — never attempt direct file I/O
+against these database files.
 
 AI DOC PATH (primary directory for readable documents): ${aidocPath}
 This is where ALL readable documents live — Markdown (.md), Word (.docx), PDF (.pdf), PowerPoint (.pptx), plain text (.txt), Excel (.xlsx/.csv), HTML (.html), and similar human-readable formats. When the user asks you to create a document, report, note, summary, or any readable file, ALWAYS write it here (or a subfolder).
