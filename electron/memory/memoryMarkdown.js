@@ -15,7 +15,7 @@
  *     agentType:  'system' | 'users'
  *     section:    string        // e.g. 'Preferences', 'Mental Models'
  *     content:    string        // raw text (without leading "- ")
- *     source:     string        // 'tool' | 'extractor-auto' | 'extractor-confirm' | 'import-nuwa' | 'user' | 'unknown'
+ *     source:     string        // 'tool' | 'extractor-auto' | 'extractor-confirm' | 'import-persona' | 'user' | 'unknown'
  *     confidence: number|null   // 0..1, null when unknown
  *     createdAt:  number        // ms since epoch
  *     updatedAt:  number        // ms since epoch
@@ -28,7 +28,7 @@ const crypto = require('crypto')
 // reorder sections every save.
 const SECTIONS = [
   'Identity',
-  // Nuwa-methodology sections (chatImport pipeline)
+  // Persona-methodology sections (chatImport pipeline)
   'Mental Models',
   'Decision Heuristics',
   'Values & Anti-Patterns',

@@ -5,7 +5,7 @@
  *
  *   1. Markdown blob contract (`memory:read/write/exists/list-agents/delete-agent/delete-agent-data`)
  *      Returns full markdown blobs reconstructed from the SQLite store. Used
- *      by chat-import nuwa pipeline, the wholesale-replace textarea editor,
+ *      by chat-import persona pipeline, the wholesale-replace textarea editor,
  *      and any consumer that wants a single string instead of structured rows.
  *
  *   2. Structured CRUD (`memory:list-entries/add-entry/update-entry/delete-entry/search/reindex`)

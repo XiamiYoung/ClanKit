@@ -1,13 +1,13 @@
 'use strict'
 
 /**
- * synthesizer.js — Phase 3 of the Nuwa pipeline.
+ * synthesizer.js — Phase 3 of the Persona pipeline.
  *
- * Takes verified claims from the critic and assembles them into the 8 Nuwa
+ * Takes verified claims from the critic and assembles them into the 8 Persona
  * output sections, written as a structured object with markdown bullet lists
  * per section. The IPC layer then writes these into the agent's memory store.
  *
- * 8 Nuwa categories (Phase 3):
+ * 8 Persona categories (Phase 3):
  *   1. Mental Models       — verified=mental_model, dimensions: any
  *   2. Decision Heuristics — verified=heuristic, dimension: decisions/improvised
  *   3. Expression DNA      — handled separately by speechDnaExtractor (Phase A)
@@ -24,7 +24,7 @@ const { logger } = require('../../logger')
 const { parseJsonResponse } = require('./claims')
 
 /**
- * Group verified claims into the 8 Nuwa sections.
+ * Group verified claims into the 8 Persona sections.
  * Returns plain text bullet lists (one per section) plus the underlying claim ids
  * for the evidence index.
  */
@@ -77,7 +77,7 @@ function groupClaimsBySection(verified) {
 
 /**
  * Detect contradictions within verified claims via LLM.
- * Used to populate "Core Tensions" (Nuwa requires ≥2 internal tensions).
+ * Used to populate "Core Tensions" (Persona requires ≥2 internal tensions).
  */
 async function findCoreTensions(verified, name, config, language) {
   if (verified.length < 4) return []
@@ -209,11 +209,11 @@ function formatClaimList(claims) {
 }
 
 /**
- * Main entry — synthesize all 8 Nuwa sections from verified claims.
+ * Main entry — synthesize all 8 Persona sections from verified claims.
  *
  * Returns an object that the caller writes into the agent's memory store.
  */
-async function synthesizeNuwaSections(verified, profile, chatBlock, config, language) {
+async function synthesizePersonaSections(verified, profile, chatBlock, config, language) {
   const name = profile?.name || 'Them'
   const grouped = groupClaimsBySection(verified)
 
@@ -272,6 +272,6 @@ async function synthesizeNuwaSections(verified, profile, chatBlock, config, lang
 }
 
 module.exports = {
-  synthesizeNuwaSections,
+  synthesizePersonaSections,
   groupClaimsBySection,
 }

@@ -8,7 +8,7 @@
  * Storage: SQLite-backed MemoryStore at {DATA_DIR}/memory/memory.db.
  *
  * Compat helpers (`createTemplate`, `parseMarkdown`, `serializeMarkdown`,
- * `SECTIONS`) are exported because the chat-import nuwa pipeline (Phase B)
+ * `SECTIONS`) are exported because the chat-import persona pipeline (Phase B)
  * builds memory markdown directly from chat-derived sections, then writes it
  * via `memory:write` — that path lands in the store via the markdown adapter.
  */
@@ -53,7 +53,7 @@ function createTemplate(agentName, agentType) {
 
 /**
  * Compat: parse memory markdown into { headerLines, sections: Map<name, lines[]> }.
- * Used by the chat-import nuwa pipeline.
+ * Used by the chat-import persona pipeline.
  */
 function parseMarkdown(content) {
   const lines = content.split('\n')
@@ -117,7 +117,7 @@ class MemoryUpdateTool extends BaseTool {
       properties: {
         agent_id:   { type: 'string', description: 'ID of the agent whose memory to update' },
         agent_type: { type: 'string', enum: ['system', 'users'], description: 'Whether this is a system or user agent' },
-        section:    { type: 'string', description: 'Section name. Free-form sections (use these for runtime memory updates): Preferences, Communication, Technical, Projects, Personal, Interaction Notes. Nuwa-methodology sections (populated by chat import, do not modify casually): Mental Models, Decision Heuristics, Values & Anti-Patterns, Relational Genealogy, Honest Boundaries, Core Tensions, Relationship Timeline.' },
+        section:    { type: 'string', description: 'Section name. Free-form sections (use these for runtime memory updates): Preferences, Communication, Technical, Projects, Personal, Interaction Notes. Persona-methodology sections (populated by chat import, do not modify casually): Mental Models, Decision Heuristics, Values & Anti-Patterns, Relational Genealogy, Honest Boundaries, Core Tensions, Relationship Timeline.' },
         action:     { type: 'string', enum: ['add', 'update', 'remove'], description: 'What to do' },
         entry:      { type: 'string', description: 'The memory entry to add/update/remove' },
         old_entry:  { type: 'string', description: 'For update action: the existing entry text to replace' },

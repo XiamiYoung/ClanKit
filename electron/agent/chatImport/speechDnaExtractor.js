@@ -14,7 +14,7 @@
  *
  * At runtime, systemPromptBuilder.js reads this file and injects it as a
  * hard-constraint block at the top of the system prompt — this is the
- * "Expression DNA" layer of the Nuwa methodology, applied to private chat data.
+ * "Expression DNA" layer of the Persona methodology, applied to private chat data.
  */
 
 const { logger } = require('../../logger')
@@ -308,10 +308,15 @@ function parseJsonResponse(raw) {
  */
 async function extractSpeechDna(classified, profile, config, language, analyzeTarget = 'other') {
   try {
+    const { scrubOneTimeIds } = require('./chatParser')
     const isSelf = analyzeTarget === 'self'
     const targetSender = isSelf ? 'me' : 'them'
     const all = classified?.all_messages || []
-    const targetMessages = all.filter(m => m.sender === targetSender && m.content && m.content.trim())
+    // Scrub tracking IDs / wxids / order numbers BEFORE analysis so they are not
+    // candidates for catchphrase ngrams.
+    const targetMessages = all
+      .filter(m => m.sender === targetSender && m.content && m.content.trim())
+      .map(m => ({ ...m, content: scrubOneTimeIds(m.content) }))
 
     if (targetMessages.length < 10) {
       logger.warn(`[speechDnaExtractor] too few messages (${targetMessages.length}), skipping`)

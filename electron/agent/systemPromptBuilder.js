@@ -10,9 +10,9 @@ const { logger } = require('../logger')
 
 // ── Memory Helpers ───────────────────────────────────────────────────────────
 // Sections preserved when truncating large memory blobs. Includes both the old
-// free-form sections AND the new Nuwa-methodology sections from chat import.
+// free-form sections AND the new Persona-methodology sections from chat import.
 const MEMORY_KEY_SECTIONS = [
-  // Nuwa-methodology sections (from chat import)
+  // Persona-methodology sections (from chat import)
   'Mental Models',
   'Decision Heuristics',
   'Values & Anti-Patterns',
@@ -487,7 +487,7 @@ ${analysisIntro}
 ### Tool: analyze_agent_history
 This is your primary tool. It has four actions:
 - **action="stats"** — Call this FIRST. Returns: total message count, date range, monthly activity heat map, sender breakdown, and suggested file paths.
-- **action="read_import_artifacts"** — Call this SECOND (optional but recommended). Returns pre-computed Speech DNA, Nuwa persona sections, evidence index, Reply Bank stats, and validation harness scores from the import pipeline. If the agent was created manually (not imported from chat), this gracefully returns {imported: false} with no error. Use these artifacts as reference/comparison when writing your independent analysis.
+- **action="read_import_artifacts"** — Call this SECOND (optional but recommended). Returns pre-computed Speech DNA, Persona persona sections, evidence index, Reply Bank stats, and validation harness scores from the import pipeline. If the agent was created manually (not imported from chat), this gracefully returns {imported: false} with no error. Use these artifacts as reference/comparison when writing your independent analysis.
 - **action="analyze_all"** — Call this THIRD. Performs parallel chunked analysis of all messages and returns partial analyses. Much faster than reading pages one by one.
 - **action="messages", page=N** — (Fallback) Read messages page by page (150 per page). Only use if analyze_all fails.
 

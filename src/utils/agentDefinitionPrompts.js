@@ -109,14 +109,10 @@ export function getCharacterPromptSections(lang) {
 - 对方隔了很久回来
 
 ## 示例对话
-3 组对话，每组 2+ 来回，必须体现 决策本能 + 语言 DNA + 一次核心张力浮现的场景。用 \`> blockquote\` 格式。
+3 组对话，每组 2+ 来回，必须体现 决策本能 + 语言 DNA + 一次核心张力浮现的场景。用 \`> blockquote\` 格式。**verbatim 引用聊天原文是合理的 —— 这是本文档中唯二允许 verbatim 的章节之一。**
 
-## 漂移自检
-LLM 演这个角色时容易漂到哪里？6 条具体信号 + 自救动作：
-- 如果你发现自己开始 X → 漂了，立刻 Y
-
-## 铁律
-"永远 [做什么]。哪怕 [极端情况]，也绝不例外。"
+## 核心倾向
+从证据中提炼这个角色一以贯之的核心特征。用倾向性表述（如："倾向于用事务性短句替代情绪表达"），不要用"必须 / 绝不 / 永远"这类绝对指令。
 
 ## 记忆使用（运行时行为）
 - 何时调用 search_chat_history
@@ -201,14 +197,10 @@ How they treat different relationship types (not only the user):
 - User returns after long absence
 
 ## Example Dialogue
-3 exchanges, 2+ turns each, must demonstrate Decision Heuristics + Speech DNA + a moment when a Core Tension surfaces. Use \`> blockquote\` formatting.
+3 exchanges, 2+ turns each, must demonstrate Decision Heuristics + Speech DNA + a moment when a Core Tension surfaces. Use \`> blockquote\` formatting. **Verbatim quoting is appropriate here — this is one of the two sections where verbatim is allowed.**
 
-## Drift Self-Check
-What does the LLM playing this character drift toward? 6 concrete signals + recovery moves:
-- If you find yourself X → drifted; immediately Y
-
-## The One Rule
-"Always [do what]. Even if [extreme situation], no exceptions."
+## Core Tendencies
+Distill from evidence the most consistent traits of this character. Use tendency-language (e.g. "tends to substitute task-oriented short replies for emotional expression"); avoid absolutes like "always / never / must".
 
 ## Memory Use (runtime behavior)
 - When to call search_chat_history
@@ -303,13 +295,10 @@ export function getProfessionalPromptSections(lang) {
 - 用户隔了很久回来
 
 ## 示例对话
-3 组对话，每组 2+ 来回，用 \`> blockquote\` 格式，必须体现 决策本能 + 语言 DNA + 一次核心张力浮现的场景。
+3 组对话，每组 2+ 来回，用 \`> blockquote\` 格式，必须体现 决策本能 + 语言 DNA + 一次核心张力浮现的场景。**verbatim 引用是合理的 —— 这是本文档中唯二允许 verbatim 的章节之一。**
 
-## 漂移自检
-LLM 演这个角色时容易漂到哪里？6 条具体信号 + 自救动作。
-
-## 铁律
-"永远 [做什么]。哪怕 [极端情况]，也绝不例外。"
+## 核心倾向
+从证据中提炼这个专业角色一以贯之的核心特征。用倾向性表述，避免"必须 / 绝不 / 永远"这类绝对指令。
 
 ## 记忆使用（运行时行为）
 - 何时调用 search_chat_history
@@ -402,13 +391,10 @@ Structural templates for the 2-3 most common deliverables (e.g., PR description 
 - User returns after long absence
 
 ## Example Dialogue
-3 exchanges, 2+ turns each, in \`> blockquote\` formatting. Must demonstrate Decision Heuristics + Speech DNA + one Core Tension scene.
+3 exchanges, 2+ turns each, in \`> blockquote\` formatting. Must demonstrate Decision Heuristics + Speech DNA + one Core Tension scene. **Verbatim quoting is appropriate here — this is one of the two sections where verbatim is allowed.**
 
-## Drift Self-Check
-What does the LLM drift toward when playing this character? 6 concrete signals + recovery moves.
-
-## The One Rule
-"Always [do what]. Even if [extreme situation], no exceptions."
+## Core Tendencies
+Distill from evidence the most consistent traits of this professional character. Use tendency-language; avoid absolutes like "always / never / must".
 
 ## Memory Use (runtime behavior)
 - When to call search_chat_history
@@ -546,8 +532,10 @@ This persona must read like a memoir + working spec, not a job description:
 - **Decision Heuristics must be IF→THEN, not abstract principles**: "When X happens, do Y" — concrete enough that an LLM can pattern-match in conversation.
 - **Speech DNA must be executable rules with actual words**: not "speaks warmly" but "Common phrases: 'Mm', 'I'm here'; never says 'great question!'"
 - **Example Dialogue uses \`> blockquote\` format**, 3 exchanges, 2+ turns each, demonstrating the patterns above in real conversation.
-- **Drift Self-Check is the modern essential**: name 6 concrete failure modes the LLM will fall into when playing this character + the recovery move for each.
+- **Core Tendencies should use tendency-language**: not absolute imperatives. Distill consistent traits, not "must / never / always" rules.
 - **Named sections only, NEVER "Layer N" numbering**.
+- **Strictly follow the section list given by the structure templates below**. Do NOT add deprecated sections like \`## Drift Self-Check\` / \`## The One Rule\` / \`## 漂移自检\` / \`## 铁律\` (these have been replaced by \`## Core Tendencies\`).
+- **Global verbatim rule**: Verbatim phrases, IDs, numbers, links, or contact identifiers MAY ONLY appear in \`## Speech DNA\` and \`## Example Dialogue\`. All other sections must use abstract behavior descriptions, not original phrases.
 
 Anti-patterns — do NOT:
 - ❌ Stack adjectives ("kind, warm, gentle, caring") — replace with one concrete behavior
@@ -668,9 +656,9 @@ Rules:
 - Core Tensions must be genuinely contradictory
 - Speech DNA must be executable rules with actual phrases
 - Example Dialogue uses \`> blockquote\` format
-- Drift Self-Check must name concrete failure modes + recovery moves
+- Core Tendencies should use tendency-language, not absolute imperatives
 - Use named sections only — NEVER "Layer N" numbering
-- Do NOT add sections from the wrong type
+- Do NOT add sections from the wrong type, and do NOT add deprecated sections like \`## Drift Self-Check\` / \`## The One Rule\` / \`## 漂移自检\` / \`## 铁律\` (replaced by \`## Core Tendencies\`)
 - Return ONLY the enhanced definition text, nothing else
 
 ## Professional sections (TYPE A):

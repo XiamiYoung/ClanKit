@@ -283,10 +283,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     analyze:         (params) => ipcRenderer.invoke('agent:import-analyze', params),
     writeMemories:   (params) => ipcRenderer.invoke('agent:import-write-memories', params),
     writeSpeechDna:  (params) => ipcRenderer.invoke('agent:import-write-speech-dna', params),
-    writeNuwaSections: (params) => ipcRenderer.invoke('agent:import-write-nuwa-sections', params),
+    writePersonaSections: (params) => ipcRenderer.invoke('agent:import-write-persona-sections', params),
     validateHarness: (params) => ipcRenderer.invoke('agent:import-validate-harness', params),
     writeHarness:    (params) => ipcRenderer.invoke('agent:import-write-harness', params),
     saveHistory:     (params) => ipcRenderer.invoke('agent:import-save-history', params),
+    recommendVoice:  (params) => ipcRenderer.invoke('agent:recommend-voice', params),
     cleanup:         ()       => ipcRenderer.invoke('agent:import-cleanup'),
     onProgress:      (cb)     => {
       ipcRenderer.on('agent:import-progress', (_e, data) => cb(data))

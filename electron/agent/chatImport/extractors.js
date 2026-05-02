@@ -1,13 +1,13 @@
 'use strict'
 
 /**
- * extractors.js — Phase 1 of the Nuwa pipeline.
+ * extractors.js — Phase 1 of the Persona pipeline.
  *
  * 5 parallel dimension extractors that read tagged chat messages and emit
  * structured claims with evidence. Each extractor is a focused LLM call with
  * a strict JSON output contract. They run in parallel via Promise.all.
  *
- * Maps onto Nuwa's 6 research agents:
+ * Maps onto Persona's 6 research agents:
  *   1. Considered Thoughts    ← "Writings" dimension (long messages, thought-out)
  *   2. Improvised Reactions   ← "Conversations" dimension (rapid back-and-forth)
  *   3. (Speech DNA, handled by speechDnaExtractor.js as Phase A)
@@ -408,7 +408,7 @@ async function runExtractors(chatBlock, lookup, name, config, language, onProgre
     list.map(async (ex) => {
       try {
         const prompt = ex.buildPrompt(name, chatBlock, language)
-        const raw = await _callLLM(prompt, config, 3072, { jsonMode: true })
+        const raw = await _callLLM(prompt, config, 6144, { jsonMode: true })
         const parsed = parseJsonResponse(raw)
         const rawClaims = Array.isArray(parsed?.claims) ? parsed.claims : []
 

@@ -627,7 +627,7 @@ function createNew(type) {
 
 async function onBodyViewerUpdate(updates) {
   if (!bodyViewerAgent.value) return
-  // Strip the Nuwa seed payload before persisting — memory/speech belong in
+  // Strip the Persona seed payload before persisting — memory/speech belong in
   // the memory store and agent-artifacts/, not in agents.json.
   const { _memorySeed, _speechSeed, ...agentUpdates } = updates
   const updated = { ...bodyViewerAgent.value }
@@ -637,7 +637,7 @@ async function onBodyViewerUpdate(updates) {
   await agentsStore.saveAgent(updated)
 
   // After save the agent has a stable id (existing or freshly minted by the
-  // store). If the AI generation step produced Nuwa-style seed data, write it
+  // store). If the AI generation step produced Persona-style seed data, write it
   // to the memory store + speech file now. Best-effort — failures don't block save.
   if (_memorySeed || _speechSeed) {
     try {
@@ -647,7 +647,7 @@ async function onBodyViewerUpdate(updates) {
       if (_memorySeed) {
         const sections = templateMemoryToSections(_memorySeed)
         if (sections) {
-          await window.electronAPI.agentImport.writeNuwaSections({
+          await window.electronAPI.agentImport.writePersonaSections({
             agentId:    persisted.id,
             agentName:  persisted.name,
             agentType,
@@ -667,7 +667,7 @@ async function onBodyViewerUpdate(updates) {
         }
       }
     } catch (err) {
-      console.warn('[AgentsView] failed to write Nuwa seed for', updated.name, err)
+      console.warn('[AgentsView] failed to write Persona seed for', updated.name, err)
     }
   }
 }

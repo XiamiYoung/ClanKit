@@ -767,7 +767,12 @@ async function generateAgentWithAI() {
 2. Choose the best voice from: [${voiceList}]. CRITICAL: match the voice gender to the persona's gender (Male voice for male, Female voice for female). Match locale to language. Add a "voiceId" field.`
 
     const config = JSON.parse(JSON.stringify(configStore.config))
-    const res = await window.electronAPI.enhancePrompt({ prompt: basePrompt, config })
+    const res = await window.electronAPI.enhancePrompt({
+      prompt: basePrompt,
+      config,
+      agentName: profileName.value.trim() || '',
+      language: lang === 'Chinese' ? 'zh' : 'en',
+    })
     if (res.success && res.text) {
       const extracted = extractJsonPayload(res.text)
       let data = null

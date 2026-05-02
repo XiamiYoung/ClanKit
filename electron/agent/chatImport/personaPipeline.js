@@ -1,12 +1,12 @@
 'use strict'
 
 /**
- * nuwaPipeline.js — orchestrator for the 4-phase Nuwa-aligned extraction.
+ * personaPipeline.js — orchestrator for the 4-phase Persona-aligned extraction.
  *
  * Pipeline:
  *   Phase 1 (extractors.js)  — parallel dimension extractors emit raw claims
  *   Phase 2 (critic.js)      — Triple Verification filters claims
- *   Phase 3 (synthesizer.js) — assemble verified claims into 8 Nuwa sections
+ *   Phase 3 (synthesizer.js) — assemble verified claims into 8 Persona sections
  *   Phase 4 — handled by validator UI in the wizard (Code Phase D)
  *
  * Adaptive strategy based on chat size:
@@ -14,7 +14,7 @@
  *   80-499         → LITE mode: 2 merged extractors (behavioral + relationship)
  *   500+           → FULL mode: 5 focused extractors
  *
- * Speech DNA (Phase A / dimension #3 in Nuwa) is a separate pipeline in
+ * Speech DNA (Phase A / dimension #3 in Persona) is a separate pipeline in
  * speechDnaExtractor.js — runs in parallel from the IPC handler, not here.
  */
 
@@ -22,12 +22,12 @@ const { logger } = require('../../logger')
 const { tagMessagesWithIds, formatTaggedChatBlock } = require('./claims')
 const { runExtractors, EXTRACTORS_FULL, EXTRACTORS_LITE } = require('./extractors')
 const { verifyClaims } = require('./critic')
-const { synthesizeNuwaSections } = require('./synthesizer')
+const { synthesizePersonaSections } = require('./synthesizer')
 
 // ── Thresholds ─────────────────────────────────────────────────────────────
 
-// Below this: skip Nuwa pipeline entirely.
-const MIN_MESSAGES_FOR_NUWA = 80
+// Below this: skip Persona pipeline entirely.
+const MIN_MESSAGES_FOR_PERSONA = 80
 
 // Below this: use LITE (2-dim merged) extractors. At or above: use FULL (5-dim).
 const FULL_MODE_THRESHOLD = 500
@@ -45,7 +45,7 @@ const MAX_MESSAGES_FOR_PROMPT = 400
  */
 function getAccuracyTier(count, language) {
   const zh = language === 'zh'
-  if (count < MIN_MESSAGES_FOR_NUWA) {
+  if (count < MIN_MESSAGES_FOR_PERSONA) {
     return {
       tier: 'skip',
       mode: 'none',
@@ -130,7 +130,7 @@ function buildExtractionMessages(classified) {
  * @param {function} [onProgress] - ({ phase, message, progress }) => void
  * @returns {Promise<object|null>} { sections, evidenceIndex, counts, accuracyTier } or null
  */
-async function extractNuwaSections(classified, profile, config, language, analyzeTarget, onProgress) {
+async function extractPersonaSections(classified, profile, config, language, analyzeTarget, onProgress) {
   const emit = (phase, progress, message) => {
     onProgress && onProgress({ phase, progress, message })
   }
@@ -140,7 +140,7 @@ async function extractNuwaSections(classified, profile, config, language, analyz
     const accuracy = getAccuracyTier(all.length, language)
 
     if (accuracy.tier === 'skip') {
-      logger.info(`[nuwaPipeline] skipping — ${all.length} messages, tier=${accuracy.tier}`)
+      logger.info(`[personaPipeline] skipping — ${all.length} messages, tier=${accuracy.tier}`)
       return { accuracyTier: accuracy }
     }
 
@@ -154,33 +154,33 @@ async function extractNuwaSections(classified, profile, config, language, analyz
     if (tagged.length === 0) return { accuracyTier: accuracy }
     const chatBlock = formatTaggedChatBlock(tagged, name)
 
-    logger.info(`[nuwaPipeline] starting ${accuracy.mode} mode (${dimLabel}-dim) with ${tagged.length} tagged messages`)
+    logger.info(`[personaPipeline] starting ${accuracy.mode} mode (${dimLabel}-dim) with ${tagged.length} tagged messages`)
 
     // ── Phase 1: parallel extractors ──────────────────────────────────────
     const zh = language === 'zh'
     emit('extract', 10, zh ? `阶段 1/4：${dimLabel} 维并行抽取...` : `Phase 1/4: ${dimLabel}-dim parallel extraction...`)
     const { allClaims, perDimension } = await runExtractors(chatBlock, lookup, name, config, language, (dim, count) => {
-      logger.debug(`[nuwaPipeline] dimension ${dim} produced ${count} claims`)
+      logger.debug(`[personaPipeline] dimension ${dim} produced ${count} claims`)
     }, extractorList)
 
     if (allClaims.length === 0) {
-      logger.warn('[nuwaPipeline] all extractors returned 0 claims, aborting')
+      logger.warn('[personaPipeline] all extractors returned 0 claims, aborting')
       return { accuracyTier: accuracy }
     }
-    logger.info(`[nuwaPipeline] Phase 1 complete: ${allClaims.length} raw claims across ${Object.keys(perDimension).length} dimensions`)
+    logger.info(`[personaPipeline] Phase 1 complete: ${allClaims.length} raw claims across ${Object.keys(perDimension).length} dimensions`)
 
     // ── Phase 2: Triple Verification ──────────────────────────────────────
     emit('verify', 50, zh ? '阶段 2/4：三重验证...' : 'Phase 2/4: triple verification...')
     const { verified, rejected } = await verifyClaims(allClaims, name, config, language)
     if (verified.length === 0) {
-      logger.warn('[nuwaPipeline] critic rejected all claims, aborting')
+      logger.warn('[personaPipeline] critic rejected all claims, aborting')
       return { accuracyTier: accuracy }
     }
-    logger.info(`[nuwaPipeline] Phase 2 complete: ${verified.length} verified, ${rejected.length} rejected`)
+    logger.info(`[personaPipeline] Phase 2 complete: ${verified.length} verified, ${rejected.length} rejected`)
 
     // ── Phase 3: Synthesis ───────────────────────────────────────────────
-    emit('synthesize', 80, zh ? '阶段 3/4：合成 8 个 nuwa section...' : 'Phase 3/4: synthesizing 8 sections...')
-    const synth = await synthesizeNuwaSections(verified, profile, chatBlock, config, language)
+    emit('synthesize', 80, zh ? '阶段 3/4：合成 8 个 persona section...' : 'Phase 3/4: synthesizing 8 sections...')
+    const synth = await synthesizePersonaSections(verified, profile, chatBlock, config, language)
     if (synth?.evidenceIndex) {
       synth.evidenceIndex.rejectedCount = rejected.length
       synth.evidenceIndex.mode = accuracy.mode
@@ -188,21 +188,21 @@ async function extractNuwaSections(classified, profile, config, language, analyz
     }
 
     emit('done', 100, zh ? '抽取完成' : 'Extraction complete')
-    logger.info(`[nuwaPipeline] complete (${accuracy.mode}). Counts: ${JSON.stringify(synth.counts)}`)
+    logger.info(`[personaPipeline] complete (${accuracy.mode}). Counts: ${JSON.stringify(synth.counts)}`)
 
     return {
       ...synth,
       accuracyTier: accuracy,
     }
   } catch (err) {
-    logger.error('[nuwaPipeline] extractNuwaSections error:', err.message)
+    logger.error('[personaPipeline] extractPersonaSections error:', err.message)
     return null
   }
 }
 
 module.exports = {
-  extractNuwaSections,
+  extractPersonaSections,
   getAccuracyTier,
-  MIN_MESSAGES_FOR_NUWA,
+  MIN_MESSAGES_FOR_PERSONA,
   FULL_MODE_THRESHOLD,
 }

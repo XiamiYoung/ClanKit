@@ -6,7 +6,7 @@
  * system prompt gets augmented with 3 semantically most-similar real past
  * replies whenever the user sends a new message.
  *
- * This is the killer-feature layer that Nuwa and public-info competitors
+ * This is the killer-feature layer that Persona and public-info competitors
  * cannot replicate: they have no access to private conversational data.
  *
  * Storage:

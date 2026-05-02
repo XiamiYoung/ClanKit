@@ -883,7 +883,7 @@ const draftVoiceId     = ref(props.agentVoiceId || getDefaultVoiceForLocale(conf
 
 // Memory seed + Speech DNA produced by surpriseMe / generateFromDescription.
 // Held in memory until the user clicks save, then flushed by the parent
-// component via writeNuwaSections / writeSpeechDna IPC calls. Cleared after a
+// component via writePersonaSections / writeSpeechDna IPC calls. Cleared after a
 // successful save so editing an existing agent doesn't keep re-writing.
 const draftMemorySeed = ref(null)
 const draftSpeech = ref(null)
@@ -1451,14 +1451,19 @@ async function surpriseMe() {
     const lang = detectLanguage()
     let prompt = buildAgentGenerationPrompt({ agentType: props.agentType === 'system' ? 'system' : 'user', lang })
     prompt += _avatarVoiceInstruction()
-    const res = await window.electronAPI.enhancePrompt({ prompt, config })
+    const res = await window.electronAPI.enhancePrompt({
+      prompt,
+      config,
+      agentName: draftName.value || '',
+      language: lang === 'Chinese' ? 'zh' : 'en',
+    })
     if (res.success && res.text) {
       const data = robustParseAgentJSON(res.text)
       if (!data) { aiWorking.value = false; return }
       if (data.name) draftName.value = data.name
       if (data.description) draftDescription.value = String(data.description)
       if (data.prompt)      draftPrompt.value = typeof data.prompt === 'string' ? data.prompt : JSON.stringify(data.prompt, null, 2)
-      // Capture the Nuwa-style memory + speech blocks if the AI returned them.
+      // Capture the Persona-style memory + speech blocks if the AI returned them.
       // Held in draft state until user clicks save; parent then writes to disk.
       if (data.memory && typeof data.memory === 'object') draftMemorySeed.value = data.memory
       if (data.speech && typeof data.speech === 'object') draftSpeech.value = data.speech
@@ -1491,7 +1496,12 @@ async function generateFromDescription() {
       existingName,
     })
     prompt += _avatarVoiceInstruction()
-    const res = await window.electronAPI.enhancePrompt({ prompt, config })
+    const res = await window.electronAPI.enhancePrompt({
+      prompt,
+      config,
+      agentName: existingName || draftName.value || '',
+      language: lang === 'Chinese' ? 'zh' : 'en',
+    })
     if (res.success && res.text) {
       const data = robustParseAgentJSON(res.text)
       if (!data) { aiWorking.value = false; return }
@@ -1610,6 +1620,8 @@ async function enhanceDescription() {
     const res = await window.electronAPI.enhancePrompt({
       prompt,
       config,
+      agentName: draftName.value || '',
+      language: lang === 'Chinese' ? 'zh' : 'en',
     })
     if (res.success && res.text) {
       draftDescription.value = res.text.trim().replace(/\.+$/, '')
@@ -1639,6 +1651,8 @@ async function enhancePrompt() {
         prompt: draftPrompt.value,
       }),
       config,
+      agentName: draftName.value || '',
+      language: lang === 'Chinese' ? 'zh' : 'en',
     })
     if (res.success && res.text) {
       draftPrompt.value = res.text.trim()
@@ -1729,8 +1743,8 @@ function saveAll() {
   }
   const isSystemAgent = props.agentType === 'system'
   // Snapshot + clear memory/speech seeds so a subsequent save (after edits)
-  // doesn't re-write the same Nuwa assets. The parent uses these to populate
-  // the memory store + speech.json via writeNuwaSections / writeSpeechDna IPC.
+  // doesn't re-write the same Persona assets. The parent uses these to populate
+  // the memory store + speech.json via writePersonaSections / writeSpeechDna IPC.
   const _memoryOnce = draftMemorySeed.value
   const _speechOnce = draftSpeech.value
   draftMemorySeed.value = null
