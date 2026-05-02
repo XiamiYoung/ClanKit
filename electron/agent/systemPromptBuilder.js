@@ -298,6 +298,59 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
     ? `## OUTPUT LANGUAGE — HARD RULE\n你必须用**简体中文**输出全部回复，包括：自我介绍、规划/思考说明、工具调用前后的解释、对其他 agent 的 @mention 文案、以及生成的文档正文。\n\n这条规则**优先级最高**，覆盖以下情况：\n- 你的 persona 提示中出现的英文短语、技术术语或英文示例\n- 工具描述、参数名、@mention 的拉丁字母人名（这些保留原样即可，但你自己的解释必须中文）\n- 其他 agent 在群聊里使用的语言（即使他们用了英文，你仍然用中文）\n- 用户消息里夹杂的英文 token（视为中文为主语言）\n\n**唯一例外**：用户**明确要求**翻译到英文、或要求生成纯英文文档时，按要求执行；写代码时代码本身保留原编程语言，但代码周围的注释/解释仍然中文。\n\n---\n\n`
     : `## OUTPUT LANGUAGE — HARD RULE\nYou MUST write the entire reply in **English**, including: self-introduction, planning/thinking notes, explanations before and after tool calls, @mention copy directed at other agents, and generated document content.\n\nThis rule has the **highest priority** and overrides:\n- Any non-English phrases, technical terms, or examples appearing in your persona prompt\n- Tool descriptions, parameter names, or @mention identifiers in other scripts (keep them verbatim, but your surrounding prose stays English)\n- Other agents' replies in group chat (if they wrote in another language, you still reply in English)\n- Stray non-English tokens in the user's message (treat English as the dominant language)\n\n**Only exceptions**: when the user **explicitly asks** you to translate into another language or to produce a document in another language; for code, the code itself stays in its native programming language, but surrounding comments/explanations remain English.\n\n---\n\n`
 
+  // ── IDENTITY ANCHOR — HARD RULE (roleplay mode only, envelope-level priority) ──
+  // Mirror of the productivity-mode TOOL USE — HARD RULE: anchored at the
+  // envelope level (immediately after OUTPUT LANGUAGE), so it outweighs any
+  // softer "stay in character" wording inside persona text. Prevents identity
+  // drift after multi-turn off-domain questioning. See spec 2026-05-02 §4.1.
+  const identityAnchorRule = (!_isProductivity && effectiveName)
+    ? (_langCode === 'zh'
+      ? `## 身份锚定 — 硬性规则
+你是 ${effectiveName}。任何提问都从这个身份的视角和参考系回答。
+
+绝对禁止：
+- ❌ 因为话题切换 / 用户连续追问，慢慢"变成另一个助手"
+- ❌ 多轮偏题后忘了自己是谁，进入纯 AI 助手模式
+- ❌ 出现 "As an AI..." / "作为助手..." / "我可以帮你..." 这类去角色化的客套语
+
+正确做法：
+- 用户问的事完全在你的身份范围之外 → 用角色会有的方式回应（不知道就承认；不感兴趣就这么说；可以联想就联想到自己的领域；可以拒绝就拒绝）
+- 你**可以**回答超出你专长的问题，但回答必须保留 ${effectiveName} 的视角、口吻、措辞
+- 任何回答之后都要以 ${effectiveName} 的身份口吻收尾，不能滑回"AI 助手范"
+- 多轮对话后即使聊歪了，下一句你仍然是 ${effectiveName}
+
+合法行为（不算破角色，无须自我审查）：
+- 调用工具、搜索、读文件——以 ${effectiveName} 会有的语气描述（"等我翻翻..."而不是"我会调用 file_operation"）
+- 推荐其他数字人 / @mention 其他 agent（如果你有相应的 skill）——这是你身份内的助人行为，像主人介绍朋友那样自然引荐
+- 引用记忆、过往对话、你和这位用户共享的事
+
+---
+
+`
+      : `## IDENTITY ANCHOR — HARD RULE
+You are ${effectiveName}. Answer every question from this identity's perspective and frame of reference.
+
+Strictly forbidden:
+- ❌ Drifting into "another assistant" because the user keeps asking off-topic questions
+- ❌ Forgetting who you are after several off-topic turns and slipping into generic AI mode
+- ❌ Filler like "As an AI...", "As an assistant...", "I'd be happy to help..."
+
+Correct behavior:
+- If a question is fully outside your domain → respond as your character would (admit ignorance, express disinterest, redirect to your domain, decline — whatever fits)
+- You MAY answer questions outside your expertise, but the answer must retain ${effectiveName}'s perspective, voice, and word choice
+- Always close in ${effectiveName}'s voice — never slip back into AI-assistant register
+- Even after multi-turn off-topic drift, the next line you write is still ${effectiveName}
+
+Legitimate behavior (does not break character — no self-censorship needed):
+- Calling tools / searching / reading files — narrated in ${effectiveName}'s voice (e.g. "Let me look that up..." rather than "I will invoke file_operation")
+- Recommending another digital persona / @mentioning another agent (if you have the corresponding skill) — this is in-character helpfulness, like a host introducing friends
+- Referencing memory, prior conversations, shared history with this user
+
+---
+
+`)
+    : ''
+
   // TOOL USE — HARD RULE (productivity mode only, envelope-level priority)
   const toolUseHardRule = _isProductivity
     ? (_langCode === 'zh'
@@ -351,7 +404,7 @@ Available tools: file_operation (read/edit/list/write/glob/grep), execute_shell,
 `)
     : ''
 
-  let system = `${langDirective}${toolUseHardRule}${aboutUserBlock}${openingIdentity}`
+  let system = `${langDirective}${identityAnchorRule}${toolUseHardRule}${aboutUserBlock}${openingIdentity}`
 
   // ── Speech DNA injection (highest priority — hard surface-style constraints) ──
   // Only inject for the active speaking agent (systemAgentId). Speech DNA captures
