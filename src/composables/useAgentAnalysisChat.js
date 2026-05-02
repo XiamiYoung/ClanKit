@@ -52,6 +52,7 @@ export function useAgentAnalysisChat() {
       chatType: 'analysis',
       analysisTargetAgentId: agent.id,
       autoTitleEligible: false,
+      mode: 'productivity',
     })
 
     if (!chat) return false
