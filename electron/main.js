@@ -554,21 +554,6 @@ app.whenReady().then(async () => {
     logger.error('[main] chats.db migration failed:', err.message, err.stack)
   }
 
-  // ── DIAG (temporary): list non-builtin system agents the recommender sees ──
-  // Remove after verifying agent-recommendation tool returns the expected list.
-  try {
-    const { getInstance: getAgentStore } = require('./agent/AgentStore')
-    const store = getAgentStore(ds.paths().DATA_DIR)
-    const sys = store.getByKind('system')
-    const recommendable = sys.filter(a => a && a.id && a.type === 'system' && !a.isBuiltin)
-    logger.info(`[diag] system agents total=${sys.length} recommendable=${recommendable.length}`)
-    logger.info(`[diag] ALL recommendable names: ${recommendable.map(a => a.name).join(' | ')}`)
-    const builtins = sys.filter(a => a.isBuiltin)
-    logger.info(`[diag] builtin system agents (${builtins.length}): ${builtins.map(a => a.name).join(' | ')}`)
-  } catch (err) {
-    logger.warn('[diag] agents recommendable list failed:', err.message)
-  }
-
   createWindow()
 
   // ── Lazy local file server for HTML preview (started on first use) ──
