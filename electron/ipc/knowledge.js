@@ -255,7 +255,6 @@ function register() {
   ipcMain.handle('knowledge:get-config', async () => {
     const saved = ds.readJSON(p().KNOWLEDGE_FILE, {})
     return {
-      ragEnabled: saved.ragEnabled !== undefined ? saved.ragEnabled : true,
       knowledgeBases: saved.knowledgeBases || {},
     }
   })
@@ -263,8 +262,9 @@ function register() {
   ipcMain.handle('knowledge:save-config', async (_, config) => {
     try {
       const saved = ds.readJSON(p().KNOWLEDGE_FILE, {})
-      if (config.ragEnabled !== undefined) saved.ragEnabled = config.ragEnabled
       if (config.knowledgeBases !== undefined) saved.knowledgeBases = config.knowledgeBases
+      // Strip the legacy ragEnabled field if present so it stops appearing on disk.
+      if ('ragEnabled' in saved) delete saved.ragEnabled
       ds.writeJSON(p().KNOWLEDGE_FILE, saved)
       return { success: true }
     } catch (err) {

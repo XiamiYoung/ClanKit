@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS messages (
   plan_data       TEXT,
   plan_state      TEXT,
   token_usage     TEXT,
+  long_blobs      TEXT,
   text_for_search TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_messages_chat_ts ON messages(chat_id, ts);
@@ -244,6 +245,7 @@ function rowToMessage(row) {
     planData: deserializeJsonField(row.plan_data, null),
     planState: row.plan_state || null,
     tokenUsage: deserializeJsonField(row.token_usage, null),
+    longBlobs: deserializeJsonField(row.long_blobs, null),
   }
 }
 
@@ -268,6 +270,9 @@ function messageToRow(msg, chatId) {
     plan_data: serializeJsonField(msg.planData),
     plan_state: msg.planState || null,
     token_usage: serializeJsonField(msg.tokenUsage),
+    long_blobs: (msg.longBlobs && Object.keys(msg.longBlobs).length > 0)
+      ? serializeJsonField(msg.longBlobs)
+      : null,
     text_for_search: extractSearchText(msg.segments),
   }
 }
@@ -288,6 +293,13 @@ class ChatStore {
     db.pragma('journal_mode = WAL')
     db.pragma('foreign_keys = ON')
     db.exec(SCHEMA)
+    // Self-healing migration: CREATE TABLE IF NOT EXISTS does NOT add columns
+    // to an existing table. Add `long_blobs` for users who created the DB
+    // before this column was introduced.
+    const cols = db.prepare("PRAGMA table_info(messages)").all().map(c => c.name)
+    if (!cols.includes('long_blobs')) {
+      db.exec('ALTER TABLE messages ADD COLUMN long_blobs TEXT')
+    }
     db.pragma(`user_version = ${SCHEMA_VERSION}`)
     this._db = db
     return db
@@ -489,11 +501,11 @@ class ChatStore {
       INSERT INTO messages (
         id, chat_id, role, content, segments, ts, created_at, duration_ms,
         user_agent_id, agent_id, agent_name, is_error, error_detail, error_code,
-        plan_data, plan_state, token_usage, text_for_search
+        plan_data, plan_state, token_usage, long_blobs, text_for_search
       ) VALUES (
         @id, @chat_id, @role, @content, @segments, @ts, @created_at, @duration_ms,
         @user_agent_id, @agent_id, @agent_name, @is_error, @error_detail, @error_code,
-        @plan_data, @plan_state, @token_usage, @text_for_search
+        @plan_data, @plan_state, @token_usage, @long_blobs, @text_for_search
       )
       ON CONFLICT(id) DO UPDATE SET
         role=excluded.role, content=excluded.content, segments=excluded.segments,
@@ -503,6 +515,7 @@ class ChatStore {
         error_detail=excluded.error_detail, error_code=excluded.error_code,
         plan_data=excluded.plan_data, plan_state=excluded.plan_state,
         token_usage=excluded.token_usage,
+        long_blobs=excluded.long_blobs,
         text_for_search=excluded.text_for_search
     `).run(r)
     db.prepare('UPDATE chats SET last_message_at = ?, updated_at = ? WHERE id = ?')
@@ -520,11 +533,11 @@ class ChatStore {
       INSERT INTO messages (
         id, chat_id, role, content, segments, ts, created_at, duration_ms,
         user_agent_id, agent_id, agent_name, is_error, error_detail, error_code,
-        plan_data, plan_state, token_usage, text_for_search
+        plan_data, plan_state, token_usage, long_blobs, text_for_search
       ) VALUES (
         @id, @chat_id, @role, @content, @segments, @ts, @created_at, @duration_ms,
         @user_agent_id, @agent_id, @agent_name, @is_error, @error_detail, @error_code,
-        @plan_data, @plan_state, @token_usage, @text_for_search
+        @plan_data, @plan_state, @token_usage, @long_blobs, @text_for_search
       )
       ON CONFLICT(id) DO UPDATE SET
         role=excluded.role, content=excluded.content, segments=excluded.segments,
@@ -534,6 +547,7 @@ class ChatStore {
         error_detail=excluded.error_detail, error_code=excluded.error_code,
         plan_data=excluded.plan_data, plan_state=excluded.plan_state,
         token_usage=excluded.token_usage,
+        long_blobs=excluded.long_blobs,
         text_for_search=excluded.text_for_search
     `)
     let maxTs = 0

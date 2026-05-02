@@ -1164,7 +1164,6 @@ async function sendAiDoc(userText) {
     mcpServers: JSON.parse(JSON.stringify(filterById(mcpStore.servers || [], reqMcp))),
     httpTools: JSON.parse(JSON.stringify(filterById(toolsStore.tools || [], reqTools))),
     knowledgeConfig: {
-      ragEnabled: knowledgeStore.ragEnabled,
       knowledgeBases: JSON.parse(JSON.stringify(knowledgeStore.kbConfigs || {})),
     },
     permissionMode: aiDocPermissionMode.value,

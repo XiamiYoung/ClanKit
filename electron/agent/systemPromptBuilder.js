@@ -565,24 +565,42 @@ Loading a skill is cheap (returns a markdown guide); skipping it when relevant c
   // const utilityProvider = utilityModel.provider || ''
   // const utilityModelId  = utilityModel.model    || ''
   system += `\n\nCLANKIT DATA DIRECTORY: ${dataPath}
-This is the local data folder for the ClanKit desktop application. Its structure:
+This is the local data folder for the ClanKit desktop application. Visible structure:
   ${dataPath}/
   ├── config.json          — App settings (API keys, models, providers, paths)
-  ├── mcp-servers.json     — MCP server definitions
-  ├── tools.json           — HTTP tool definitions
-  ├── knowledge.json       — RAG knowledge config
-  ├── agents.db            — SQLite: AI agent definitions (kind, prompt, skills, etc.)
-  ├── tasks.db             — SQLite: plans, tasks, runs, categories
-  ├── chats.db             — SQLite: chat metadata + messages + FTS5 full-text index
-  ├── memory/              — Long-term memory store (memory.db, memory-vec/)
+  ├── memory/              — Long-term memory store (SQLite + vector index)
   ├── clankit_doc/         — AI Doc folder (readable documents)
   └── artifact/            — AI-generated non-document output
 
-NOTE on the .db files: agents, tasks, and chats are stored in SQLite, NOT in JSON files.
-Do NOT try to read agents.json / tasks.json / chats/{id}.json — those files no longer
-exist. To inspect or query agent / task / chat data, use the appropriate skill
-(e.g. clankit-config-admin) or the dedicated tools — never attempt direct file I/O
-against these database files.
+CLANKIT CONFIG MANAGEMENT — every config object (agents, tasks, plans, tools,
+MCP servers, knowledge bases, their categories) is managed via the
+clankit-config-admin skill, which bundles 5 dedicated tools:
+  • manage_agents     — agents + agent categories
+  • manage_tasks      — tasks + plans + their categories
+  • manage_tools      — HTTP / code / prompt / SMTP tools
+  • manage_mcp        — MCP server definitions
+  • manage_knowledge  — knowledge base creation/deletion (KB-level only;
+                        document-level operations stay on knowledge_manage)
+
+These are the ONLY way to read/modify ClanKit config. Do NOT use
+file_operation / execute_shell / sqlite3 against the config files
+(agents.db, tasks.db, tools.json, mcp-servers.json, knowledge.json).
+Load the clankit-config-admin skill before calling any of them — it
+contains the action schemas, defaults, and terminology you need.
+
+AGENT TERMINOLOGY (used by manage_agents tool):
+  • "数字人 / 系统数字人 / 系统智能体" → agent.type = "system".
+    An AI persona the user chats with or @-mentions: translators, code
+    reviewers, travel guides, news bots, any specialist. This is the
+    DEFAULT meaning of "智能体 / agent / assistant" in user requests.
+  • "用户画像 / 用户智能体 / user persona" → agent.type = "user".
+    An entity representing the human user themselves (for roleplay /
+    standing in for the user). Only used when the user explicitly says
+    "用户画像", "用户智能体", "user persona", "a persona for me",
+    "represent me", "代表我".
+  • When the user just says "智能体" / "agent" / "assistant" with no
+    qualifier → it means 数字人 → use type="system".
+  • type is immutable after creation; mistakes require delete + recreate.
 
 AI DOC PATH (primary directory for readable documents): ${aidocPath}
 This is where ALL readable documents live — Markdown (.md), Word (.docx), PDF (.pdf), PowerPoint (.pptx), plain text (.txt), Excel (.xlsx/.csv), HTML (.html), and similar human-readable formats. When the user asks you to create a document, report, note, summary, or any readable file, ALWAYS write it here (or a subfolder).

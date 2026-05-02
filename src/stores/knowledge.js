@@ -13,9 +13,6 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   const isUploading = ref(false)
   const uploadProgress = ref(null)       // { stage, current, total, documentName }
 
-  // RAG toggle
-  const ragEnabled = ref(true)
-
   // Per-KB configs: { [kbId]: { enabled } }
   const kbConfigs = ref({})
 
@@ -44,7 +41,6 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     if (!window.electronAPI?.knowledge?.getConfig) return
     try {
       const config = await window.electronAPI.knowledge.getConfig()
-      ragEnabled.value = config.ragEnabled !== false
       kbConfigs.value = config.knowledgeBases || {}
     } catch (err) {
       console.error('Failed to load knowledge config:', err)
@@ -57,7 +53,6 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
     if (!window.electronAPI?.knowledge?.saveConfig) return
     try {
       await window.electronAPI.knowledge.saveConfig({
-        ragEnabled: ragEnabled.value,
         knowledgeBases: JSON.parse(JSON.stringify(kbConfigs.value))
       })
     } catch (err) {
@@ -289,7 +284,7 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
   return {
     knowledgeBases, selectedKbId, isLoading,
     documents, isLoadingDocs, isUploading, uploadProgress,
-    ragEnabled, kbConfigs, enabledKnowledgeBases,
+    kbConfigs, enabledKnowledgeBases,
     modelReady, modelChecking, modelSetupProgress, modelSetupError, modelInfo,
     loadConfig, saveConfig,
     loadKnowledgeBases, createKnowledgeBase, deleteKnowledgeBase,

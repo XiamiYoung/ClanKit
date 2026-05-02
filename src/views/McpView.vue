@@ -334,7 +334,7 @@
     <!-- Confirm Delete Modal -->
     <ConfirmModal
       v-if="showConfirmDelete && editingServer"
-      :visible="showConfirmDelete && editingServer"
+      :visible="!!(showConfirmDelete && editingServer)"
       :title="t('mcp.deleteServer')"
       :message="t('mcp.deleteServerConfirm', { name: editingServer.name })"
       confirm-text="Delete"

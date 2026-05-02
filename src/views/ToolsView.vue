@@ -386,7 +386,7 @@
     <!-- Confirm Delete Modal -->
     <ConfirmModal
       v-if="showConfirmDelete && editingTool"
-      :visible="showConfirmDelete && editingTool"
+      :visible="!!(showConfirmDelete && editingTool)"
       :title="t('tools.deleteTool')"
       :message="t('tools.deleteToolConfirm', { name: editingTool.name })"
       :confirm-text="t('common.delete')"

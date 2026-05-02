@@ -1,6 +1,18 @@
 ---
 name: ClanKit Config Admin
-description: Create or edit ClanKit app configuration files — tools, MCP servers, agents, knowledge bases, tasks, and plans. Load this skill whenever the user asks you to add, modify, or remove any of these.
+description: |
+  You MUST load_skill this BEFORE calling manage_agents / manage_tasks / manage_tools /
+  manage_mcp / manage_knowledge. It teaches you:
+  (1) The 数字人 (digital persona, type=system) vs 用户画像 (user persona, type=user)
+      terminology map — defaults to system when ambiguous;
+  (2) For create_agent you do NOT need to read config.json — omit providerId / modelId
+      and the tool auto-fills them from config.utilityModel defaults;
+  (3) Current task/plan schema (no agentInputs, no step.label, schedule is an object);
+  (4) Action shapes for manage_tools / manage_mcp / manage_knowledge (no longer
+      file_operation on the JSON files).
+  Trigger words (any one match → MUST load): user asks to "create/add/modify/delete/list"
+  any agent / 智能体 / 数字人 / 用户画像 / task / 任务 / plan / 计划 / category / 分类 /
+  tool / MCP / knowledge base. Acting without loading is an error.
 ---
 
 # ClanKit Config Admin
@@ -13,27 +25,36 @@ All configuration files live in the ClanKit data directory. The absolute path ap
 
 ## Standard workflow
 
-For every change, follow this sequence:
+Every ClanKit config type is managed through a dedicated `manage_*` tool. **Never use `file_operation` to read or write any config JSON / DB file directly.**
 
-1. **Read the target JSON file first** via `file_operation` so you understand the existing content.
-2. **Modify in place**, preserving all existing entries — never overwrite blindly.
-3. **Write back** the complete updated JSON (pretty-printed, 2-space indentation).
-4. **Notify the user** to click Refresh on the relevant page in the app so the changes are picked up.
+| Type | Tool to use |
+|---|---|
+| Digital persona / user persona | `manage_agents` |
+| Tasks / plans | `manage_tasks` |
+| Tools (HTTP / code / prompt / SMTP) | `manage_tools` |
+| MCP servers | `manage_mcp` |
+| Knowledge bases (KB create / delete / rename) | `manage_knowledge` |
+| Documents inside a KB (add / remove / search) | `knowledge_manage` (a separate always-on tool, not part of this skill) |
 
-If the file does not exist yet, create it with an empty root (`[]` for arrays, `{}` for objects) and then proceed.
+**What you must NOT do:**
+- ❌ `file_operation` on `agents.json` / `tasks.json` / `plans.json` (replaced by SQLite — the files no longer exist)
+- ❌ `file_operation` on `tools.json` / `mcp-servers.json` / `knowledge.json` (use the matching `manage_*` tool instead)
+- ❌ `execute_shell` calling sqlite3 / cat / direct fs operations against ClanKit config
 
-Generate new UUIDs for every new entry. Preserve existing `id` fields — never rewrite them.
+UUIDs for new entries are generated automatically by the tools. Existing ids must be preserved. After any `manage_*` write the UI refreshes itself — you do not need to ask the user to click Refresh.
 
-## 1. Tools — `<DATA_DIR>/tools.json`
+## 1. Tools — use the `manage_tools` tool
 
 Triggered by: "add a tool", "create a tool", "edit this tool", etc.
 
 Tools come in four types: `http`, `code`, `prompt`, `smtp`. If the user doesn't specify the type, ask them which type they want.
 
-**Schema (flat dictionary — tool id as key):**
+### Create a tool — `action: "create_tool"`
+
 ```json
 {
-  "<tool-id>": {
+  "action": "create_tool",
+  "tool": {
     "name": "Weather API",
     "description": "Fetch current weather for a city",
     "category": "APIs",
@@ -46,188 +67,314 @@ Tools come in four types: `http`, `code`, `prompt`, `smtp`. If the user doesn't 
 }
 ```
 
-Tool id: use the name lowercased with non-alphanumeric chars replaced by hyphens (e.g. `"Weather API"` → `"weather-api"`).
+`id` is normally auto-derived from `name` (lowercased, non-alphanumeric → hyphens — e.g. `"Weather API"` → `"weather-api"`). If the name has no ASCII letters at all (CJK-only names like `"天气查询"`), the tool auto-generates a `tool-xxxxxxxx` fallback id. **You may also pass an explicit `tool.id` to override** (e.g. `"id": "weather-cn"` with `"name": "天气查询"`). A duplicate id will return an error.
 
-### Type-specific fields
+For GET / HEAD / DELETE requests, omit `bodyTemplate` — the tool fills `"{}"` automatically. POST / PUT / PATCH must provide their own JSON template.
 
-**`http`** (default):
-- `method`: one of `GET`, `POST`, `PUT`, `PATCH`, `DELETE`.
-- `endpoint`: URL. Use `{placeholder}` for parameters the LLM fills at runtime.
-- `headers`: object of key-value pairs.
-- `bodyTemplate`: JSON string with `{placeholder}` patterns. Use `"{}"` for GET.
+### Type-specific required fields
 
-**`code`** (code snippet):
-- `language`: `"javascript"`, `"python"`, or `"bash"`.
-- `code`: the code string to execute.
+**`http`**: `method` (GET/POST/PUT/PATCH/DELETE), `endpoint` (URL — use `{placeholder}` for parameters), `headers`, `bodyTemplate` (use `"{}"` for GET).
 
-**`prompt`** (prompt template):
-- `promptText`: the prompt template string.
+**`code`**: `language` (`"javascript"` / `"python"` / `"bash"`), `code`.
 
-**`smtp`** (email):
-- No extra fields — uses the app's email credentials from Config.
+**`prompt`**: `promptText`.
 
-### Common fields (all types)
-- `name` (required): display name.
-- `description`: what the tool does.
-- `category`: grouping label (optional).
-- `type` (required): one of `http`, `code`, `prompt`, `smtp`.
+**`smtp`**: no extra fields (uses the app's email credentials from Config).
 
-Rules:
-- The file is a flat JSON object, NOT an array and NOT nested under `categories`.
-- Do not touch the `__deletedBuiltins` key if present — it tracks user deletions of built-in tools.
+### Common fields
+- `name` (required)
+- `type` (required)
+- `description`, `category` (optional)
 
-After writing: tell the user to click Refresh on the **Tools** page.
+### Update / delete / lookup
 
-## 2. MCP Servers — `<DATA_DIR>/mcp-servers.json`
+```json
+{ "action": "update_tool", "tool": { "id": "weather-api", "description": "new description" } }
+{ "action": "delete_tool", "id": "weather-api" }
+{ "action": "list_tools" }
+{ "action": "list_tools", "type": "http" }       // filter by type
+{ "action": "list_tools", "category": "APIs" }   // filter by category
+{ "action": "get_tool", "id": "weather-api" }
+```
+
+`__deletedBuiltins` is an internal field used to track built-in tool deletions; the tool guards it for you so you cannot accidentally edit it.
+
+## 2. MCP Servers — use the `manage_mcp` tool
 
 Triggered by: "add an MCP server", "install an MCP", "configure MCP X", etc.
 
-**Schema (array at root):**
+### Create an MCP server — `action: "create_server"`
+
 ```json
-[
-  {
-    "id": "<uuid>",
+{
+  "action": "create_server",
+  "server": {
     "name": "Filesystem",
     "command": "npx",
     "args": ["-y", "@modelcontextprotocol/server-filesystem", "/some/path"],
     "env": {},
     "description": "Read and write files on the local filesystem"
   }
-]
-```
-
-Rules:
-- Put API keys and secrets in `env` as key→value pairs, **not** in `args`.
-- `command` is the executable; `args` is the argument list passed to it.
-
-After writing: tell the user to click Refresh on the **MCP** page.
-
-## 3. Agents — `<DATA_DIR>/agents.json`
-
-Triggered by: "create an agent", "add a new assistant", "make an agent that does X", etc.
-
-**Schema:**
-```json
-{
-  "categories": [
-    { "id": "<uuid>", "name": "Assistants", "type": "system" }
-  ],
-  "agents": [
-    {
-      "id": "<uuid>",
-      "type": "system",
-      "name": "Code Reviewer",
-      "avatar": "a1",
-      "description": "Reviews code for bugs and style issues",
-      "prompt": "You are a senior engineer who reviews code for bugs, security, and style.",
-      "providerId": null,
-      "modelId": null,
-      "requiredToolIds": null,
-      "requiredSkillIds": null,
-      "requiredMcpServerIds": null,
-      "requiredKnowledgeBaseIds": null,
-      "voiceId": null,
-      "categoryIds": [],
-      "createdAt": 1234567890,
-      "updatedAt": 1234567890
-    }
-  ]
 }
 ```
 
 Rules:
-- `type`: `"system"` for AI assistants the user chats with; `"user"` for user-persona agents that represent the user.
-- **Provider & model for new agents:** before creating the entry, read `<DATA_DIR>/config.json` and find `utilityModel.provider` and `utilityModel.model`. Copy those values into the new agent's `providerId` and `modelId`. Do this unless the user explicitly asks for a different provider or model.
-- The four `required*Ids` fields are each either `null` (inherit defaults) or an array of ids. Use `null` when the user has not specified.
-- `createdAt` and `updatedAt` are Unix millisecond timestamps — use `Date.now()` equivalent values.
-- `avatar`: accepts ids like `a1`, `a2`, ... — pick any if the user does not specify.
+- `command` is the executable; `args` is the argument list passed to it.
+- **Put API keys and other secrets in `env`, not in `args`.**
+- `id` is auto-generated (UUID).
 
-After writing: tell the user to click Refresh on the **Agents** page.
+### Update / delete / lookup
 
-## 4. Knowledge Bases — `<DATA_DIR>/knowledge.json`
-
-Triggered by: "add a knowledge base", "create a RAG index", "import these docs for search", etc.
-
-This file's schema varies by version — **always read the existing file first** and add your new entry in the shape already present. Do not invent a layout.
-
-After writing: tell the user to click Refresh on the **Knowledge** page.
-
-## 5. Tasks — `<DATA_DIR>/tasks.json`
-
-Triggered by: "create a task", "add a task template", "save this as a task I can rerun", etc.
-
-**Schema (array at root):**
 ```json
-[
-  {
-    "id": "<uuid>",
-    "name": "Summarize article",
-    "description": "Summarize an article in 3 bullet points",
-    "icon": "📋",
-    "prompt": "@writer summarize this article: {input}",
-    "agentInputs": [
-      { "name": "writer", "description": "The agent that writes the summary" }
-    ]
+{ "action": "update_server", "server": { "id": "<uuid>", "args": ["new", "args"] } }
+{ "action": "delete_server", "id": "<uuid>" }
+{ "action": "list_servers" }
+{ "action": "get_server", "id": "<uuid> or name string" }   // accepts id or name
+```
+
+## 3. Digital persona / User persona — use the `manage_agents` tool
+
+ClanKit terminology:
+- **数字人 (digital persona)** = `type: "system"`: an AI persona the user chats with or @-mentions (translators, code reviewers, travel guides — every "specialist agent" belongs here).
+- **用户画像 (user persona)** = `type: "user"`: an entity representing the human user themselves (for roleplay or to stand in for the user).
+
+Triggers:
+- "create an agent" / "add a new assistant" / "make a bot that does X" / "新建数字人" / "创建一个智能体" → **defaults to digital persona, `type: "system"`**
+- "create a user persona" / "用户画像" / "a persona for me" / "代表我" → only then `type: "user"`
+
+When the user does not explicitly say "user persona", always treat it as a digital persona (system).
+
+Stored in SQLite (`agents.db`), no longer in `agents.json`. Use the `manage_agents` tool.
+
+### Create an agent — `action: "create_agent"`
+
+```json
+{
+  "action": "create_agent",
+  "agent": {
+    "type": "system",
+    "name": "Code Reviewer",
+    "description": "Reviews code for bugs and style issues",
+    "prompt": "You are a senior engineer who reviews code for bugs, security, and style.",
+    "providerId": "<provider-id>",
+    "modelId": "<model-id>",
+    "requiredToolIds": [],
+    "requiredSkillIds": [],
+    "requiredMcpServerIds": [],
+    "requiredKnowledgeBaseIds": [],
+    "categoryIds": []
   }
-]
+}
 ```
 
 Rules:
-- Use `@slotName` tokens inside `prompt` to reference agent input slots.
-- Slot names must be alphanumeric/underscore only — no spaces, no CJK.
-- Every `@slotName` used in `prompt` must have a matching entry in `agentInputs`.
-- If the task needs no agent slot, set `agentInputs: []`.
-- `icon` is a single emoji.
+- **`type` defaults to `"system"`** (digital persona). Use `"user"` only when the user explicitly says "user persona / 用户画像 / 用户智能体 / a persona for me / represent me / 代表我".
+- **Provider & model:** if the user did not specify a provider/model, simply OMIT `providerId` and `modelId` from the payload — the tool auto-fills them from `config.utilityModel`. Do NOT read `config.json` yourself; the tool handles it internally. Only pass these fields when the user explicitly chose a different provider/model.
+- The four `required*Ids` arrays default to `[]` if the user didn't specify (an empty array means "inherit defaults").
+- `id`, `createdAt`, `updatedAt`, `isBuiltin` are auto-generated — do NOT pass them.
+- `type` is **immutable** after creation. If the wrong type was chosen, you must `delete_agent` and `create_agent` again.
 
-After writing: tell the user to click Refresh on the **Tasks** page.
+### Update an agent — `action: "update_agent"`
 
-## 6. Plans — `<DATA_DIR>/plans.json`
+Pass `agent.id` plus only the fields you want changed. Other fields are preserved:
+```json
+{
+  "action": "update_agent",
+  "agent": { "id": "<agent-id>", "prompt": "new prompt content" }
+}
+```
+
+`type`, `createdAt`, and `isBuiltin` are immutable. Built-in agents (Clank, DocMaster, Analyst) can be edited but not deleted.
+
+### Delete an agent — `action: "delete_agent"`
+
+```json
+{ "action": "delete_agent", "id": "<agent-id>" }
+```
+
+Built-in agents cannot be deleted — the tool returns an error.
+
+### Lookup — `list_agents` / `get_agent`
+
+```json
+{ "action": "list_agents", "kind": "system" }   // kind optional: system|user; omit for both
+{ "action": "get_agent", "id": "<agent-id>" }
+```
+
+To find an id by name, call `list_agents` first then match.
+
+### Categories — `create_category` / `update_category` / `delete_category` / `list_categories`
+
+```json
+{ "action": "create_category", "category": { "type": "system", "name": "Assistants", "emoji": "🤖" } }
+{ "action": "list_categories", "kind": "system" }
+```
+
+After: tell the user the **Agents** page auto-refreshes (no manual refresh needed — SQLite is persisted in real time).
+
+## 4. Knowledge Bases — use the `manage_knowledge` tool
+
+Triggered by: "create a knowledge base", "add a RAG index", "delete this KB", "list knowledge bases", etc.
+
+⚠️ **Scope limit**: this tool handles **KB-level operations only** — creating, deleting, renaming, and querying the KB itself. To **add or remove documents inside a KB, or to search content**, use the separate always-on `knowledge_manage` tool (not part of this skill).
+
+### Create a KB — `action: "create_kb"`
+
+```json
+{
+  "action": "create_kb",
+  "kb": {
+    "name": "AWS Glossary",
+    "description": "AWS service names, product aliases, and official-doc terminology"
+  }
+}
+```
+
+The tool will:
+1. Call `localVectorStore.createKnowledgeBase` to create the empty vector index.
+2. Register the KB in `knowledge.json` with `enabled: true`.
+3. Return the KB object including the auto-generated UUID.
+
+### Update / delete / lookup
+
+```json
+{ "action": "update_kb", "kb": { "id": "<kbId>", "name": "new name", "description": "new description" } }
+{ "action": "delete_kb", "id": "<kbId>" }   // also drops the vector index and the knowledge.json registration
+{ "action": "list_kbs" }
+{ "action": "get_kb", "id": "<kbId>" }
+```
+
+## 5. Tasks — use the `manage_tasks` tool
+
+Triggered by: "create a task", "add a task template", "save this as a task I can rerun", etc.
+
+Tasks live in SQLite (`tasks.db`), **no longer in `tasks.json`**. Use the `manage_tasks` tool.
+
+### Create a task — `action: "create_task"`
+
+```json
+{
+  "action": "create_task",
+  "task": {
+    "name": "Summarize article",
+    "description": "Summarize an article in 3 bullet points",
+    "icon": "📋",
+    "prompt": "Summarize this article: {input}",
+    "categoryId": null
+  }
+}
+```
+
+Rules:
+- `name` is required (max 80 chars).
+- `prompt` is required: the instruction template the task runs. You can use `{placeholder}` for runtime parameters.
+- `description` / `icon` / `categoryId` are optional. `icon` defaults to ✍️.
+- **Tasks no longer have an `agentInputs` field**. Distributing work across agents is configured at the plan-step level via `defaultAgentIds` (see section 6).
+- `categoryId` references a task category id. Call `list_task_categories` first to find an existing one, or `create_task_category` to make a new one.
+
+### Update / delete / lookup
+
+```json
+{ "action": "update_task", "task": { "id": "<task-id>", "prompt": "new prompt" } }
+{ "action": "delete_task", "id": "<task-id>" }
+{ "action": "list_tasks" }
+{ "action": "get_task", "id": "<task-id>" }
+```
+
+`update_task` is a merge — pass only the fields you want to change. `delete_task` is a soft delete (sets `deleted_at`; data is not physically removed).
+
+### Task categories — `create_task_category` / `delete_task_category` / `list_task_categories`
+
+```json
+{ "action": "create_task_category", "category": { "name": "News", "emoji": "📰" } }
+{ "action": "list_task_categories" }
+```
+
+After: the **Tasks** page auto-refreshes.
+
+## 6. Plans — also `manage_tasks`
 
 Triggered by: "create a plan", "schedule this to run daily", "chain these tasks together", etc.
 
-**Schema (array at root):**
+Plans live in SQLite (`tasks.db`).
+
+### Create a plan — `action: "create_plan"`
+
 ```json
-[
-  {
-    "id": "<uuid>",
+{
+  "action": "create_plan",
+  "plan": {
     "name": "Daily news digest",
     "description": "Fetch and summarize news every morning",
+    "icon": "📰",
+    "categoryId": null,
     "steps": [
       {
-        "id": "<uuid>",
         "taskId": "<task-id>",
-        "label": "Fetch news",
-        "agentAssignments": { "writer": "<agent-id>" },
-        "defaultAgentIds": [],
+        "defaultAgentIds": ["<agent-id>"],
+        "promptOverride": "",
         "dependsOn": [],
         "runCondition": "always"
       }
     ],
-    "schedule": "0 8 * * *",
-    "createdAt": "2026-04-15T00:00:00Z",
-    "updatedAt": "2026-04-15T00:00:00Z"
+    "permissionMode": "all_permissions",
+    "allowList": [],
+    "schedule": {
+      "type": "cron",
+      "cron": "0 8 * * *",
+      "timezone": "America/Los_Angeles",
+      "enabled": true
+    },
+    "enabled": true
   }
-]
+}
 ```
 
 Rules:
-- Each step references a task by its `taskId` — first read `<DATA_DIR>/tasks.json` to find the task id by name.
-- If the task has `agentInputs`, fill `agentAssignments` as `{ slotName: agentId }`. If the task has no inputs, leave `agentAssignments: {}` and list agent ids in `defaultAgentIds`.
-- To find agent ids: read `<DATA_DIR>/agents.json` and match by name.
-- `dependsOn: []` for parallel steps; `dependsOn: ["<stepId>"]` to sequence them.
-- `schedule`: `null` for manual runs, or a cron string (e.g. `"0 8 * * *"` for daily 8 AM local time).
-- `createdAt` and `updatedAt` are ISO 8601 strings for plans (unlike agents/tasks which use numeric timestamps — check the existing file format if unsure).
+- **Every step requires `taskId` and `defaultAgentIds`** (at least 1 agent).
+- Steps NO LONGER have `label` or `agentAssignments` fields — those were removed. Multi-agent dispatch goes through `defaultAgentIds`.
+- `promptOverride`: optional. Override the task's prompt for this step; leave empty string if unused.
+- `dependsOn: []` runs the step in parallel with peers; `["<otherStepId>"]` waits on that step.
+- `runCondition`: one of `"always"`, `"on_success"`, `"on_failure"`.
+- To find `taskId` / agent ids: use `manage_tasks list_tasks` and `manage_agents list_agents`.
+- `permissionMode`: `"all_permissions"` (default — all tools), `"inherit"` (use the agent's defaults), `"chat_only"` (no tools).
+- `allowList`: only used when `permissionMode != "all_permissions"`. Each entry is `{pattern, description}`.
 
-After writing: tell the user to click Refresh on the **Plans** page.
+### Schedule field
+
+`schedule` is an **object**, not a string:
+- `type: "manual"` — manual trigger (default). Other fields ignored.
+- `type: "once"` — one-shot. Requires `runAt` (ISO 8601, e.g. `"2026-05-10T08:00:00Z"`) and `timezone`.
+- `type: "cron"` — recurring. Requires `cron` expression and `timezone`.
+
+`enabled: true/false` controls whether the schedule actually fires (a configured schedule with `enabled: false` does not auto-run).
+
+You can also pass a bare cron string as `schedule`; the tool wraps it as `{type: "cron", cron, enabled: true}` automatically.
+
+### Update / delete / lookup
+
+```json
+{ "action": "update_plan", "plan": { "id": "<plan-id>", "schedule": {"type":"manual"} } }
+{ "action": "delete_plan", "id": "<plan-id>" }
+{ "action": "list_plans" }
+{ "action": "get_plan", "id": "<plan-id>" }
+```
+
+### Plan categories — `create_plan_category` / `delete_plan_category` / `list_plan_categories`
+
+Same pattern as task categories.
+
+After: the **Plans** page auto-refreshes.
 
 ## Finalizing every operation
 
-After a successful write, confirm what you did in one sentence and tell the user which page to refresh. Example:
-> "Added the Weather API tool under the 'APIs' category. Click Refresh on the Tools page to load it."
+After a successful tool call, confirm what you did in one sentence. The UI auto-refreshes — you do not need to ask the user to click Refresh. Example:
+> "Added the Weather API tool under the 'APIs' category."
 
 ## What to never do
 
-- Never touch `<DATA_DIR>/config.json` unless the user explicitly asks to change app settings — it contains API keys.
-- Never delete entries without explicit user confirmation.
-- Never overwrite the whole file with only your new entry — always preserve existing content.
-- Never guess `id` values for references (taskId, agentId) — look them up from the source file.
+- Do not touch `<DATA_DIR>/config.json` unless the user explicitly asks to change app settings — it contains API keys (and they are encrypted at rest). **In particular: when creating a digital persona you do NOT need to read `config.json` first to find a default provider/model — `manage_agents` auto-fills them from `utilityModel`.**
+- Do not delete any entry without explicit user confirmation.
+- **Do not `file_operation` on any ClanKit config file** (`tools.json` / `mcp-servers.json` / `knowledge.json` / `agents.json` / `tasks.json` / `plans.json`) — every type goes through the matching `manage_*` tool.
+- **Do not `execute_shell` to run sqlite3 / cat / fs utilities against ClanKit config** — same rule as above.
+- When referencing other entities (taskId, agentId, kbId, etc.) do not guess the id — look it up via the corresponding `list_*` action.

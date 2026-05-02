@@ -493,6 +493,13 @@ class AgentLoop {
         // the app's node_modules / source tree.
         let _agentStoreRef = null
         try { _agentStoreRef = require('./AgentStore').getInstance(this.config.dataPath || '') } catch {}
+        let _taskStoreRef = null
+        try { _taskStoreRef = require('./TaskStore').getInstance(this.config.dataPath || '') } catch {}
+        // localVectorStore is a flat-function module (not a class). Inject the
+        // module reference so manage-knowledge-tool can call its KB CRUD APIs
+        // without require()ing project modules from {DATA_DIR}/skills/.
+        let _localVectorStoreRef = null
+        try { _localVectorStoreRef = require('../lib/localVectorStore') } catch {}
         const skillCtx = {
           dataPath: this.config.dataPath || '',
           docPath:  this.config.DoCPath  || '',
@@ -503,6 +510,12 @@ class AgentLoop {
           agentType: agentPrompts?.analysisTargetAgentType || 'system',
           language:  this.config.language || 'en',
           agentStore: _agentStoreRef,
+          taskStore:  _taskStoreRef,
+          localVectorStore: _localVectorStoreRef,
+          // Skill tools cannot require() project's dataStore from {DATA_DIR}/skills/
+          // so we hand them a closure over the current loop's config. Used by
+          // manage-agents-tool to auto-fill provider/model from utilityModel.
+          getConfig: () => this.config,
         }
         const skillResult = loadSkillTools(enabledSkills, skillCtx, this.toolRegistry)
         // Forward any modelHints declared in skill manifests to the analysis tool

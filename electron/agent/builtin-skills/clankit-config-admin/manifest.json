@@ -1,6 +1,13 @@
 {
   "id": "clankit-config-admin",
-  "version": 2,
+  "version": 11,
   "builtin": true,
-  "description": "Built-in skill for managing ClanKit app configuration files"
+  "description": "Built-in skill for managing ClanKit app configuration files",
+  "tools": [
+    { "id": "manage_agents",    "file": "manage-agents-tool.js",      "class": "ManageAgentsTool" },
+    { "id": "manage_tasks",     "file": "manage-tasks-tool.js",       "class": "ManageTasksTool" },
+    { "id": "manage_tools",     "file": "manage-tools-json-tool.js",  "class": "ManageToolsJsonTool" },
+    { "id": "manage_mcp",       "file": "manage-mcp-tool.js",         "class": "ManageMcpTool" },
+    { "id": "manage_knowledge", "file": "manage-knowledge-tool.js",   "class": "ManageKnowledgeTool" }
+  ]
 }

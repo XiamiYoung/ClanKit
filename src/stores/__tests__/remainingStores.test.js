@@ -189,9 +189,8 @@ describe('knowledgeStore', () => {
     useKnowledgeStore = mod.useKnowledgeStore
   })
 
-  it('loadConfig sets ragEnabled and kbConfigs', async () => {
+  it('loadConfig sets kbConfigs and loads KB list', async () => {
     window.electronAPI.knowledge.getConfig.mockResolvedValue({
-      ragEnabled: false,
       knowledgeBases: { kb1: { enabled: true } },
     })
     window.electronAPI.knowledge.listKnowledgeBases.mockResolvedValue({
@@ -200,7 +199,6 @@ describe('knowledgeStore', () => {
     })
     const store = useKnowledgeStore()
     await store.loadConfig()
-    expect(store.ragEnabled).toBe(false)
     expect(store.kbConfigs).toEqual({ kb1: { enabled: true } })
     expect(store.knowledgeBases.length).toBe(1)
   })

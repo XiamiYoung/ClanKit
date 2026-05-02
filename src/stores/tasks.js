@@ -322,7 +322,7 @@ export const useTasksStore = defineStore('tasks', () => {
       chatPermissionMode: permissionMode,
       chatAllowList: JSON.parse(JSON.stringify(allowList)),
       chatDangerOverrides: [],
-      knowledgeConfig: { ragEnabled: false },
+      knowledgeConfig: { knowledgeBases: {} },
     })
 
     // Wait for send_message_complete chunk to arrive (IPC channels have no ordering guarantee)

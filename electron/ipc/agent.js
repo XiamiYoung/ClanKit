@@ -367,6 +367,82 @@ function _filterByRequired(items, requiredIds) {
   return (items || []).filter(item => requiredIds.includes(item.id))
 }
 
+// Skills that ship with every agent regardless of agent.requiredSkillIds.
+// These are docs/prompt-only skills that teach the LLM how to use always-on
+// core tools (manage_agents / manage_tasks etc). Adding the SKILL.md content
+// to the system prompt lets the LLM execute the right workflow on the first
+// try instead of trial-and-erroring through tool validation.
+const ALWAYS_ON_SKILL_IDS = ['clankit-config-admin']
+
+// Cache disk-loaded skill objects so repeated agent runs don't hit fs every time.
+// Keyed by skillId; cleared if mtime advances (handles ensureBuiltinSkills upgrades).
+const _alwaysOnSkillCache = new Map()  // id → { mtimeMs, skill }
+
+/**
+ * Load an always-on skill from `<DATA_DIR>/skills/<id>/{SKILL.md,manifest.json}`
+ * and return a {id, name, description, systemPrompt} object suitable for the
+ * agentLoop's enabledSkills array. Returns null if the skill folder is missing.
+ */
+function _loadAlwaysOnSkillFromDisk(dataPath, skillId) {
+  if (!dataPath || !skillId) return null
+  const path = require('path')
+  const fs = require('fs')
+  const skillDir = path.join(dataPath, 'skills', skillId)
+  const skillFile = path.join(skillDir, 'SKILL.md')
+  if (!fs.existsSync(skillFile)) return null
+  try {
+    const stat = fs.statSync(skillFile)
+    const cached = _alwaysOnSkillCache.get(skillId)
+    if (cached && cached.mtimeMs === stat.mtimeMs) return cached.skill
+    const content = fs.readFileSync(skillFile, 'utf8')
+    // Parse minimal frontmatter for name/description; fall back to id if absent.
+    let name = skillId
+    let description = ''
+    const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---/m)
+    if (fmMatch) {
+      const fm = fmMatch[1]
+      const nameLine = fm.match(/^name:\s*(.+)$/m)
+      const descLine = fm.match(/^description:\s*(.+)$/m)
+      if (nameLine) name = nameLine[1].trim()
+      if (descLine) description = descLine[1].trim()
+    }
+    const skill = { id: skillId, name, description, systemPrompt: content }
+    _alwaysOnSkillCache.set(skillId, { mtimeMs: stat.mtimeMs, skill })
+    return skill
+  } catch (err) {
+    logger.warn('[alwaysOnSkill] failed to load', skillId, err.message)
+    return null
+  }
+}
+
+/**
+ * Force-include the always-on skills in this agent's skill list. If the
+ * renderer's enabledSkills array already contains them, reuse those objects
+ * (which carry the latest SKILL.md content). Otherwise, load from disk.
+ */
+function _injectAlwaysOnSkills(agentSkills, enabledSkills, dataPath) {
+  const presentIds = new Set((agentSkills || []).map(s => s?.id).filter(Boolean))
+  const result = [...(agentSkills || [])]
+  for (const id of ALWAYS_ON_SKILL_IDS) {
+    if (presentIds.has(id)) continue
+    const fromRenderer = (enabledSkills || []).find(s => s?.id === id && s.systemPrompt)
+    if (fromRenderer) {
+      result.push(fromRenderer)
+      continue
+    }
+    const fromDisk = _loadAlwaysOnSkillFromDisk(dataPath, id)
+    if (fromDisk) result.push(fromDisk)
+  }
+  return result
+}
+
+/**
+ * Build the per-agent knowledge config for RAG injection.
+ *
+ * Auto-RAG fires whenever the agent has at least one KB in
+ * `requiredKnowledgeBaseIds`. There is no longer a global on/off switch —
+ * assignment is the gate. Built-in default Clank gets all KBs by convention.
+ */
 function _buildAgentKnowledgeConfig(agent, knowledgeCfg) {
   const requiredIds = agent?.requiredKnowledgeBaseIds ?? []
   const includeAll = agent?.id === '__default_system__' && agent?.isBuiltin
@@ -376,7 +452,7 @@ function _buildAgentKnowledgeConfig(agent, knowledgeCfg) {
     if ((includeAll || requiredIds.includes(kbId)) && cfg.enabled !== false) enabledKbs[kbId] = { ...cfg }
   }
   if (Object.keys(enabledKbs).length === 0) return null
-  return { ragEnabled: true, knowledgeBases: enabledKbs }
+  return { knowledgeBases: enabledKbs }
 }
 
 function _buildUserAgentPrompt(usrAgent) {
@@ -481,7 +557,11 @@ function _buildAgentRuns(respondingIds, groupIds, baseCfg, rawMessages, targetCh
       } : {}),
     }
 
-    const agentSkills    = _filterByRequired(enabledSkills,  agent.requiredSkillIds      ?? [])
+    const agentSkills    = _injectAlwaysOnSkills(
+      _filterByRequired(enabledSkills,  agent.requiredSkillIds      ?? []),
+      enabledSkills,
+      ds.paths().DATA_DIR
+    )
     const agentMcp       = _filterByRequired(mcpServers,     agent.requiredMcpServerIds  ?? [])
     const agentTools     = _filterByRequired(tools,          agent.requiredToolIds        ?? [])
     const agentKnowledge = _buildAgentKnowledgeConfig(agent, knowledgeCfg || {})
@@ -600,9 +680,6 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
     if (!kCfg.knowledgeBases || Object.keys(kCfg.knowledgeBases).length === 0) {
       kCfg.knowledgeBases = fileCfg.knowledgeBases || {}
     }
-    if (kCfg.ragEnabled === undefined) kCfg.ragEnabled = fileCfg.ragEnabled !== false
-
-    if (!kCfg.ragEnabled) return null
 
     try {
       const lastUserMsg = [...msgs].reverse().find(m => m.role === 'user')
@@ -993,8 +1070,6 @@ ipcMain.handle('agent:run-additional', async (event, {
             const kCfg = { ...run.knowledgeConfig }
             const fileCfg = ds.readJSON(ds.paths().KNOWLEDGE_FILE, {})
             if (!kCfg.knowledgeBases || Object.keys(kCfg.knowledgeBases).length === 0) kCfg.knowledgeBases = fileCfg.knowledgeBases || {}
-            if (kCfg.ragEnabled === undefined) kCfg.ragEnabled = fileCfg.ragEnabled !== false
-            if (!kCfg.ragEnabled) return null
             const lastUserMsg = [...baseMessages].reverse().find(m => m.role === 'user')
             const queryText = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content
               : (Array.isArray(lastUserMsg?.content) ? lastUserMsg.content.filter(b => b.type === 'text').map(b => b.text).join(' ') : '')
@@ -1651,9 +1726,8 @@ If you use tools to read other files, use absolute paths. The current file's pat
       if (!knowledgeConfig.knowledgeBases || Object.keys(knowledgeConfig.knowledgeBases).length === 0) {
         knowledgeConfig.knowledgeBases = fileCfg.knowledgeBases || {}
       }
-      if (knowledgeConfig.ragEnabled === undefined) knowledgeConfig.ragEnabled = fileCfg.ragEnabled !== false
     }
-    if (knowledgeConfig?.ragEnabled) {
+    if (knowledgeConfig?.knowledgeBases && Object.keys(knowledgeConfig.knowledgeBases).length > 0) {
       try {
         const lastUserMsg = [...chatMessages].reverse().find(m => m.role === 'user')
         const queryText = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : ''
@@ -2564,8 +2638,6 @@ ipcMain.handle('agent:send-message', async (event, {
               const kCfg = { ...run.knowledgeConfig }
               const fileCfg = ds.readJSON(ds.paths().KNOWLEDGE_FILE, {})
               if (!kCfg.knowledgeBases || Object.keys(kCfg.knowledgeBases).length === 0) kCfg.knowledgeBases = fileCfg.knowledgeBases || {}
-              if (kCfg.ragEnabled === undefined) kCfg.ragEnabled = fileCfg.ragEnabled !== false
-              if (!kCfg.ragEnabled) return null
               const lastUserMsg = [...baseMessages].reverse().find(m => m.role === 'user')
               const queryText = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content
                 : (Array.isArray(lastUserMsg?.content) ? lastUserMsg.content.filter(b => b.type === 'text').map(b => b.text).join(' ') : '')

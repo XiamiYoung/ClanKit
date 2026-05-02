@@ -3794,7 +3794,6 @@ const form = reactive({
   },
   skillsPath:  '',
   DoCPath:             '',
-  ragEnabled:          true,
   dataPath:            '',
   artifactPath:        '',
   voiceCall: {

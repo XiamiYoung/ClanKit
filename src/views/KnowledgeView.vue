@@ -37,20 +37,6 @@
     <div class="knowledge-content">
       <div class="knowledge-content-inner">
 
-        <!-- RAG toggle + Create button row -->
-        <div class="config-card top-bar-card">
-          <div class="top-bar-row">
-            <div class="embedding-rag-left">
-              <span class="switch-title">RAG</span>
-              <button class="switch-track" :class="{ active: knowledgeStore.ragEnabled }" @click="toggleRag">
-                <span class="switch-thumb"></span>
-              </button>
-              <span class="switch-label-text">{{ knowledgeStore.ragEnabled ? t('knowledge.on') : t('knowledge.off') }}</span>
-              <span v-if="saveMsg" class="save-msg" :class="saveMsg.ok ? 'save-ok' : 'save-err'">{{ saveMsg.text }}</span>
-            </div>
-          </div>
-        </div>
-
         <!-- Main two-panel layout. Embedding model is now bundled with the
              installer — no gating required. The empty-state model-download
              prompt was removed in the bundled-model cutover. -->
@@ -494,7 +480,6 @@ onMounted(async () => {
 
 // ── Local state ──
 const isRefreshing = ref(false)
-const saveMsg = ref(null)
 const uploadResult = ref(null)
 const refreshToast = ref('')
 let refreshToastTimer = null
@@ -557,19 +542,6 @@ const uploadProgressLabel = computed(() => {
   if (p.documentName) return `${p.stage || ''} ${p.documentName} (${p.current}/${p.total})`.trim()
   return t('knowledge.uploadProgress', { current: p.current || 0, total: p.total || 0 })
 })
-
-// ── RAG toggle ──
-async function toggleRag() {
-  knowledgeStore.ragEnabled = !knowledgeStore.ragEnabled
-  saveMsg.value = null
-  try {
-    await knowledgeStore.saveConfig()
-    saveMsg.value = { ok: true, text: 'Saved' }
-  } catch {
-    saveMsg.value = { ok: false, text: 'Failed' }
-  }
-  setTimeout(() => { saveMsg.value = null }, 2500)
-}
 
 // ── Refresh ──
 async function refreshAll() {
@@ -840,7 +812,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 
 /* ── Content area ────────────────────────────────────────────────────────── */
 .knowledge-content { flex: 1; overflow-y: auto; padding: 1.5rem 2rem 2rem; scrollbar-width: thin; display: flex; flex-direction: column; }
-.knowledge-content-inner { max-width: 75rem; margin: 0 auto; display: flex; flex-direction: column; gap: 1.25rem; flex: 1; width: 100%; }
+/* Use full available width like ConfigView's models tab — knowledge cards
+   benefit from the extra horizontal room on wide displays. */
+.knowledge-content-inner { max-width: none; margin: 0 auto; display: flex; flex-direction: column; gap: 1.25rem; flex: 1; width: 100%; }
 
 /* ── Top bar (RAG switch + create button) ────────────────────────── */
 .top-bar-card { padding: 0.875rem 1.25rem; }
