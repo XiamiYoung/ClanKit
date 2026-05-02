@@ -231,64 +231,6 @@ async function readJSONAsync(file, fallback) {
   }
 }
 
-// --- Chat index helpers ------------------------------------------------------
-function chatMetaFromChat(chat) {
-  const { messages, ...meta } = chat
-  return meta
-}
-
-// --- Migration: monolithic chats.json -> per-chat files -----------------------
-async function migrateChatsIfNeeded() {
-  const chatsDir = p().CHATS_DIR
-  const indexFile = p().CHATS_INDEX_FILE
-  const oldFile = p().CHATS_FILE
-
-  if (fs.existsSync(chatsDir) && fs.existsSync(indexFile)) {
-    // Already migrated -- clean up any leftover .tmp files
-    try {
-      const files = await fs.promises.readdir(chatsDir)
-      for (const f of files) {
-        if (f.endsWith('.tmp')) {
-          await fs.promises.unlink(path.join(chatsDir, f)).catch(() => {})
-        }
-      }
-    } catch {}
-    return
-  }
-
-  if (!fs.existsSync(chatsDir)) {
-    fs.mkdirSync(chatsDir, { recursive: true })
-  }
-
-  if (fs.existsSync(oldFile)) {
-    // Migrate from monolithic file
-    try {
-      const allChats = JSON.parse(fs.readFileSync(oldFile, 'utf8'))
-      if (Array.isArray(allChats)) {
-        const index = []
-        for (const chat of allChats) {
-          if (!chat.id) continue
-          await writeJSONAtomic(path.join(chatsDir, `${chat.id}.json`), chat)
-          index.push(chatMetaFromChat(chat))
-        }
-        await writeJSONAtomic(indexFile, index)
-        // Backup old file
-        await fs.promises.rename(oldFile, oldFile + '.backup')
-        logger.info(`Migrated ${index.length} chats from chats.json to chats/ directory`)
-      }
-    } catch (err) {
-      logger.error('Chat migration failed:', err.message)
-      // If migration fails, create empty index so app still works
-      if (!fs.existsSync(indexFile)) {
-        await writeJSONAtomic(indexFile, [])
-      }
-    }
-  } else {
-    // Fresh install -- create empty index
-    await writeJSONAtomic(indexFile, [])
-  }
-}
-
 
 
 // --- Default Data -----------------------------------------------------------
@@ -576,7 +518,6 @@ app.whenReady().then(async () => {
   localEmbedding.init(ds.paths().MODELS_DIR, bundledModelsDir)
   localVectorStore.init(ds.paths().DATA_DIR)
 
-  await migrateChatsIfNeeded()
 
   // One-shot agents.json + souls/ → agents.db migration. No-op after first run.
   try {
