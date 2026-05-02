@@ -442,38 +442,33 @@ const modeDropdownOpen = ref(false)
 const modeDropdownWrapEl = ref(null)
 
 // Flash the mode dropdown for 3s on entry to a freshly-created chat.
-// Color matches the chat-tree active-row palette so the flash visually echoes
-// the chat's identity rather than a generic accent.
-const CHAT_FLASH_RGB = [
-  '37, 99, 235',   // blue   #2563EB
-  '124, 58, 237',  // purple #7C3AED
-  '5, 150, 105',   // green  #059669
-  '217, 119, 6',   // orange #D97706
-  '220, 38, 38',   // red    #DC2626
-  '8, 145, 178',   // cyan   #0891B2
-  '202, 138, 4',   // yellow #CA8A04
-  '190, 24, 93',   // pink   #BE185D
-]
-function _flashRgbForChat(node) {
-  if (!node) return CHAT_FLASH_RGB[0]
-  if (typeof node.createdAt === 'number') return CHAT_FLASH_RGB[node.createdAt % CHAT_FLASH_RGB.length]
-  const id = node.id || ''
-  if (!id) return CHAT_FLASH_RGB[0]
-  let hash = 0
-  for (let i = 0; i < id.length; i++) hash = ((hash << 5) - hash + id.charCodeAt(i)) | 0
-  return CHAT_FLASH_RGB[Math.abs(hash) % CHAT_FLASH_RGB.length]
+// Color is read from the actual chat-tree active row's gradient (mid stop) so
+// the flash matches the sidebar highlight for this chat.
+function _readChatTreeRgb(chatId) {
+  if (!chatId || typeof document === 'undefined') return '37, 99, 235'
+  const row = document.querySelector('.chat-tree-row[data-chat-id="' + CSS.escape(chatId) + '"]')
+  const bgEl = row?.querySelector('div[aria-hidden="true"]')
+  if (!bgEl) return '37, 99, 235'
+  const bg = window.getComputedStyle(bgEl).backgroundImage || ''
+  const stops = bg.match(/rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)/g)
+  if (!stops || stops.length === 0) return '37, 99, 235'
+  const mid = stops[Math.floor(stops.length / 2)]
+  const m = mid.match(/(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/)
+  if (!m) return '37, 99, 235'
+  return m[1] + ', ' + m[2] + ', ' + m[3]
 }
 const flashMode = ref(false)
-const flashRgb = ref(CHAT_FLASH_RGB[0])
+const flashRgb = ref('37, 99, 235')
 let _flashTimer = null
 watch(
   () => chat.value?.id,
-  () => {
+  async () => {
     if (_flashTimer) { clearTimeout(_flashTimer); _flashTimer = null }
     flashMode.value = false
     const createdAt = chat.value?.createdAt
     if (chat.value?.id && createdAt && Date.now() - createdAt < 2000) {
-      flashRgb.value = _flashRgbForChat(chat.value)
+      await nextTick()
+      flashRgb.value = _readChatTreeRgb(chat.value?.id)
       flashMode.value = true
       _flashTimer = setTimeout(() => { flashMode.value = false; _flashTimer = null }, 3000)
     }

@@ -264,6 +264,7 @@ const ChatTreeNodeView = defineComponent({
 
         return h('div', {
           class: 'flex items-center gap-0.5 pr-1 cursor-pointer group relative chat-tree-row',
+          'data-chat-id': node.id,
           style: {
             paddingLeft: indent + 'px',
             paddingTop: '0px',
