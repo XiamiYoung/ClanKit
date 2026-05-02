@@ -299,6 +299,152 @@ class ChatStore {
       this._db = null
     }
   }
+
+  // ── Chats ───────────────────────────────────────────────────────────────
+
+  /**
+   * Returns chat metadata for the chat list UI. Includes all columns —
+   * the renderer's lazy-load path will fetch messages separately via
+   * getMessages() / getChatMeta() as needed.
+   */
+  listChatIndex() {
+    const db = this._open()
+    const rows = db.prepare(`
+      SELECT * FROM chats
+      ORDER BY last_message_at DESC NULLS LAST, updated_at DESC
+    `).all()
+    return rows.map(rowToChat)
+  }
+
+  getChatMeta(chatId) {
+    if (!chatId) return null
+    const db = this._open()
+    const row = db.prepare('SELECT * FROM chats WHERE id = ?').get(chatId)
+    return rowToChat(row)
+  }
+
+  /**
+   * Replace the chat row entirely. The chat's `messages` array on the input
+   * is IGNORED — messages have their own write path (appendMessage /
+   * appendMessages).
+   */
+  saveChatMeta(chat) {
+    if (!chat?.id) throw new Error('saveChatMeta: id required')
+    const db = this._open()
+    const r = chatToRow(chat)
+    db.prepare(`
+      INSERT INTO chats (
+        id, title, icon, type, system_agent_id, user_agent_id, provider, model,
+        usage, context_metrics, per_agent_context_metrics, last_context_snapshot,
+        is_group_chat, group_agent_ids, group_agent_overrides,
+        group_audience_mode, group_audience_agent_ids,
+        working_path, coding_mode, coding_provider,
+        permission_mode, chat_allow_list, chat_danger_overrides, max_agent_rounds,
+        auto_title_eligible, auto_title_locked, auto_title_attempt_count,
+        analysis_target_agent_id, is_pinned,
+        mode, mode_transitions, mode_transition_pending, productivity_mode_notice_shown,
+        created_at, updated_at, last_message_at
+      ) VALUES (
+        @id, @title, @icon, @type, @system_agent_id, @user_agent_id, @provider, @model,
+        @usage, @context_metrics, @per_agent_context_metrics, @last_context_snapshot,
+        @is_group_chat, @group_agent_ids, @group_agent_overrides,
+        @group_audience_mode, @group_audience_agent_ids,
+        @working_path, @coding_mode, @coding_provider,
+        @permission_mode, @chat_allow_list, @chat_danger_overrides, @max_agent_rounds,
+        @auto_title_eligible, @auto_title_locked, @auto_title_attempt_count,
+        @analysis_target_agent_id, @is_pinned,
+        @mode, @mode_transitions, @mode_transition_pending, @productivity_mode_notice_shown,
+        @created_at, @updated_at, @last_message_at
+      )
+      ON CONFLICT(id) DO UPDATE SET
+        title=excluded.title, icon=excluded.icon, type=excluded.type,
+        system_agent_id=excluded.system_agent_id, user_agent_id=excluded.user_agent_id,
+        provider=excluded.provider, model=excluded.model,
+        usage=excluded.usage,
+        context_metrics=excluded.context_metrics,
+        per_agent_context_metrics=excluded.per_agent_context_metrics,
+        last_context_snapshot=excluded.last_context_snapshot,
+        is_group_chat=excluded.is_group_chat,
+        group_agent_ids=excluded.group_agent_ids,
+        group_agent_overrides=excluded.group_agent_overrides,
+        group_audience_mode=excluded.group_audience_mode,
+        group_audience_agent_ids=excluded.group_audience_agent_ids,
+        working_path=excluded.working_path,
+        coding_mode=excluded.coding_mode,
+        coding_provider=excluded.coding_provider,
+        permission_mode=excluded.permission_mode,
+        chat_allow_list=excluded.chat_allow_list,
+        chat_danger_overrides=excluded.chat_danger_overrides,
+        max_agent_rounds=excluded.max_agent_rounds,
+        auto_title_eligible=excluded.auto_title_eligible,
+        auto_title_locked=excluded.auto_title_locked,
+        auto_title_attempt_count=excluded.auto_title_attempt_count,
+        analysis_target_agent_id=excluded.analysis_target_agent_id,
+        is_pinned=excluded.is_pinned,
+        mode=excluded.mode,
+        mode_transitions=excluded.mode_transitions,
+        mode_transition_pending=excluded.mode_transition_pending,
+        productivity_mode_notice_shown=excluded.productivity_mode_notice_shown,
+        updated_at=excluded.updated_at,
+        last_message_at=excluded.last_message_at
+    `).run(r)
+  }
+
+  /**
+   * Patch-style update — merge partial fields into the existing chat row.
+   * Use for accumulateUsage and other narrow updates.
+   */
+  patchChatMeta(chatId, patch) {
+    if (!chatId || !patch) return
+    const existing = this.getChatMeta(chatId)
+    if (!existing) return
+    this.saveChatMeta({ ...existing, ...patch, id: chatId, updatedAt: Date.now() })
+  }
+
+  /**
+   * Atomically accumulate token-usage counters. Mirrors the legacy
+   * accumulateUsage in store.js.
+   */
+  accumulateUsage(chatId, metrics, provider, model) {
+    if (!chatId || !metrics) return
+    const db = this._open()
+    const tx = db.transaction(() => {
+      const existing = this.getChatMeta(chatId)
+      if (!existing) return
+      const u = existing.usage || {}
+      const newUsage = {
+        inputTokens:         (u.inputTokens         || 0) + (metrics.inputTokens         || 0),
+        outputTokens:        (u.outputTokens        || 0) + (metrics.outputTokens        || 0),
+        cacheCreationTokens: (u.cacheCreationTokens || 0) + (metrics.cacheCreationTokens || 0),
+        cacheReadTokens:     (u.cacheReadTokens     || 0) + (metrics.cacheReadTokens     || 0),
+        voiceInputTokens:    (u.voiceInputTokens    || 0) + (metrics.voiceInputTokens    || 0),
+        voiceOutputTokens:   (u.voiceOutputTokens   || 0) + (metrics.voiceOutputTokens   || 0),
+        whisperCalls:        (u.whisperCalls        || 0) + (metrics.whisperCalls        || 0),
+        whisperSecs:         (u.whisperSecs         || 0) + (metrics.whisperSecs         || 0),
+        ttsChars:            (u.ttsChars            || 0) + (metrics.ttsChars            || 0),
+      }
+      const patch = { usage: newUsage }
+      if (provider && !existing.provider) patch.provider = provider
+      if (model    && !existing.model)    patch.model    = model
+      this.patchChatMeta(chatId, patch)
+    })
+    tx()
+  }
+
+  deleteChat(chatId) {
+    if (!chatId) return
+    const db = this._open()
+    db.prepare('DELETE FROM chats WHERE id = ?').run(chatId)
+  }
+
+  countChats() {
+    return this._open().prepare('SELECT COUNT(*) AS n FROM chats').get().n
+  }
+
+  countMessages(chatId) {
+    if (!chatId) return 0
+    return this._open().prepare('SELECT COUNT(*) AS n FROM messages WHERE chat_id = ?').get(chatId).n
+  }
 }
 
 let _instance = null
