@@ -181,13 +181,18 @@ export function useChunkHandler({
       const msgId = uuidv4()
       perChatStreamingMsgId.set(agentKey, msgId)
       perChatStreamingSegments.set(agentKey, [])
-      // Add a streaming placeholder message for this agent
+      // Add a streaming placeholder message for this agent.
+      // Stamp timestamp at creation so SQL ORDER BY ts preserves chronological
+      // position even if the message is persisted later when streaming completes.
+      const startedAt = Date.now()
       targetChat.messages.push({
         id: msgId,
         role: 'assistant',
         content: '',
+        timestamp: startedAt,
+        createdAt: startedAt,
         streaming: true,
-        streamingStartedAt: Date.now(),
+        streamingStartedAt: startedAt,
         agentId: chunk.agentId,
         agentName: chunk.agentName,
         segments: []
@@ -565,6 +570,8 @@ export function useChunkHandler({
         targetChat.messages.push({
           id: uuidv4(),
           role: 'system',
+          timestamp: Date.now(),
+          createdAt: Date.now(),
           compaction: true,
           compactionKind: chunk.kind || 'auto',
           agentId:   chunk.agentId   || null,
@@ -651,7 +658,8 @@ export function useChunkHandler({
               streaming: false,
               isError: true,
               errorDetail: chunk.error,
-              timestamp: new Date().toISOString(),
+              timestamp: Date.now(),
+              createdAt: Date.now(),
             })
           }
         }
