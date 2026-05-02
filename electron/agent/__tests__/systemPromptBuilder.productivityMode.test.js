@@ -267,6 +267,15 @@ describe('IDENTITY ANCHOR — HARD RULE (roleplay mode)', () => {
     expect(out).not.toContain('IDENTITY ANCHOR — HARD RULE')
     expect(out).not.toContain('身份锚定')
   })
+
+  it('IDENTITY ANCHOR block appears before the persona/identity line (envelope-level)', () => {
+    const out = buildSystemPrompt({ ...baseConfig, mode: 'chat', language: 'en' }, [], [], [], [], baseAgent)
+    const anchorIdx = out.indexOf('IDENTITY ANCHOR — HARD RULE')
+    const personaIdx = out.indexOf('You are "Clank"')
+    expect(anchorIdx).toBeGreaterThan(-1)
+    expect(personaIdx).toBeGreaterThan(-1)
+    expect(anchorIdx).toBeLessThan(personaIdx)
+  })
 })
 
 describe('ABOUT THE USER relationship instruction (roleplay mode)', () => {
