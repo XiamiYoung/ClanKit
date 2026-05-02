@@ -249,3 +249,75 @@ describe('Coding mode block removed', () => {
     expect(b).toBe(a)
   })
 })
+
+describe('IDENTITY ANCHOR — HARD RULE (roleplay mode)', () => {
+  it('chat mode contains IDENTITY ANCHOR — HARD RULE block (en)', () => {
+    const out = buildSystemPrompt({ ...baseConfig, mode: 'chat', language: 'en' }, [], [], [], [], baseAgent)
+    expect(out).toContain('IDENTITY ANCHOR — HARD RULE')
+    expect(out).toContain('You are "Clank"')
+  })
+
+  it('chat mode contains 身份锚定 block (zh)', () => {
+    const out = buildSystemPrompt({ ...baseConfig, mode: 'chat', language: 'zh' }, [], [], [], [], baseAgent)
+    expect(out).toContain('身份锚定 — 硬性规则')
+  })
+
+  it('productivity mode does NOT contain IDENTITY ANCHOR block', () => {
+    const out = buildSystemPrompt({ ...baseConfig, mode: 'productivity', language: 'en' }, [], [], [], [], baseAgent)
+    expect(out).not.toContain('IDENTITY ANCHOR — HARD RULE')
+    expect(out).not.toContain('身份锚定')
+  })
+})
+
+describe('ABOUT THE USER relationship instruction (roleplay mode)', () => {
+  const userAgent = {
+    userAgentName: 'Alice',
+    userAgentDescription: 'A novelist',
+    userAgentPrompt: 'I write science fiction.'
+  }
+
+  it('chat mode appends relationship-instruction line when user persona is set (en)', () => {
+    const out = buildSystemPrompt({ ...baseConfig, mode: 'chat', language: 'en' }, [], [], [], [], { ...baseAgent, ...userAgent })
+    expect(out).toContain('Based on the description above, weave the user naturally')
+  })
+
+  it('chat mode appends relationship-instruction line when user persona is set (zh)', () => {
+    const out = buildSystemPrompt({ ...baseConfig, mode: 'chat', language: 'zh' }, [], [], [], [], { ...baseAgent, ...userAgent })
+    expect(out).toContain('基于上面的用户描述，自然地融入对话')
+  })
+
+  it('productivity mode does NOT append the relationship-instruction line', () => {
+    const out = buildSystemPrompt({ ...baseConfig, mode: 'productivity', language: 'en' }, [], [], [], [], { ...baseAgent, ...userAgent })
+    expect(out).not.toContain('weave the user naturally')
+    expect(out).not.toContain('自然地融入对话')
+  })
+
+  it('chat mode does NOT add the line when no user persona is set', () => {
+    const out = buildSystemPrompt({ ...baseConfig, mode: 'chat', language: 'en' }, [], [], [], [], baseAgent)
+    expect(out).not.toContain('weave the user naturally')
+  })
+})
+
+describe('Roleplay persona tail (roleplay mode)', () => {
+  it('chat mode appends the roleplay persona tail (en)', () => {
+    const out = buildSystemPrompt({ ...baseConfig, mode: 'chat', language: 'en' }, [], [], [], [], baseAgent)
+    expect(out).toContain('TASK CONSTRAINTS FOR THIS TURN (roleplay mode')
+  })
+
+  it('chat mode appends the roleplay persona tail (zh)', () => {
+    const out = buildSystemPrompt({ ...baseConfig, mode: 'chat', language: 'zh' }, [], [], [], [], baseAgent)
+    expect(out).toContain('当前任务约束（角色扮演模式')
+  })
+
+  it('productivity mode does NOT append the roleplay persona tail', () => {
+    const out = buildSystemPrompt({ ...baseConfig, mode: 'productivity', language: 'en' }, [], [], [], [], baseAgent)
+    expect(out).not.toContain('roleplay mode')
+    expect(out).not.toContain('角色扮演模式')
+  })
+
+  it('roleplay tail does not appear when there is no named persona', () => {
+    const noNameAgent = { systemAgentPrompt: 'Generic helper.' }
+    const out = buildSystemPrompt({ ...baseConfig, mode: 'chat', language: 'en' }, [], [], [], [], noNameAgent)
+    expect(out).not.toContain('TASK CONSTRAINTS FOR THIS TURN (roleplay mode')
+  })
+})
