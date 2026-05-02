@@ -1546,6 +1546,10 @@ ipcMain.handle('agent:doc-run', async (event, {
     loopConfig.excludedToolNames = ['update_memory', 'read_memory', 'fetch_newsfeed']
     _injectCachedModelMaxOutputTokens(loopConfig)
 
+    // AI Doc embedded chat is always task-driven (read/edit files, fetch external
+    // content). Force productivity mode so tool_choice='required' fires on the first
+    // iteration and the agent never fabricates listings/file contents.
+    loopConfig.mode = 'productivity'
     const loop = new AgentLoop(loopConfig)
     _activeDocLoops.set(requestId, loop)
 
