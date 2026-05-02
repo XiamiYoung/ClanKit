@@ -44,6 +44,10 @@ function _ensureSubscription(chatsStore) {
       msg.segments = [{ type: 'text', content: msg.content }]
     } else if (type === 'done') {
       msg.streaming = false
+      if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt
+      // Don't update msg.timestamp here — keep the creation-time stamp so
+      // ORDER BY ts preserves chronological insertion order even if other
+      // messages were interleaved during the stream.
       if (!msg.content) {
         // Empty greeting — drop the placeholder so the chat doesn't show a blank bubble.
         const idx = chat.messages.indexOf(msg)
@@ -127,14 +131,20 @@ export async function triggerAgentGreeting({ chatId, agentId }) {
   _inFlight.add(chatId)
 
   // Push a streaming placeholder so the UI renders text as deltas arrive.
+  // Stamp timestamp at creation time so SQL ORDER BY ts preserves chronological
+  // order — without this, the placeholder gets a late ts at persist time and
+  // sorts AFTER any user messages typed during the greeting stream.
   const msgId = uuidv4()
+  const startedAt = Date.now()
   if (!Array.isArray(chat.messages)) chat.messages = []
   chat.messages.push({
     id: msgId,
     role: 'assistant',
     content: '',
+    timestamp: startedAt,
+    createdAt: startedAt,
     streaming: true,
-    streamingStartedAt: Date.now(),
+    streamingStartedAt: startedAt,
     agentId: agent.id,
     agentName: agent.name,
     segments: [],
