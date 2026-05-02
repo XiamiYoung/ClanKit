@@ -433,7 +433,7 @@ function toggleSwapMenu() {
 const chat = computed(() => chatsStore.chats.find(c => c.id === props.chatId) || null)
 const isRunning = computed(() => chat.value?.isRunning ?? false)
 const isProductivity = computed(() => chat.value?.mode === 'productivity')
-const showModeChip = computed(() => chat.value && chat.value.type !== 'analysis')
+const showModeChip = computed(() => !!chat.value)
 const modeLabel = computed(() => isProductivity.value ? t('chats.modeProductivityTooltip') : t('chats.modeChatTooltip'))
 
 // ── Mode dropdown ──

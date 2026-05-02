@@ -197,8 +197,8 @@ describe('ChatHeader mode dropdown', () => {
     expect(setModeMock).not.toHaveBeenCalled()
   })
 
-  it('dropdown is hidden when chat.type === "analysis"', () => {
+  it('dropdown is shown on analysis chats so users can see the locked-in productivity default', () => {
     const wrapper = mountHeader({ type: 'analysis' })
-    expect(wrapper.find('.ch-mode-dd-btn').exists()).toBe(false)
+    expect(wrapper.find('.ch-mode-dd-btn').exists()).toBe(true)
   })
 })

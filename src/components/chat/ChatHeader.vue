@@ -990,7 +990,6 @@ watch(
 const showModeChip = computed(() => {
   const c = chat.value
   if (!c) return false
-  if (c.type === 'analysis') return false
   return true
 })
 
