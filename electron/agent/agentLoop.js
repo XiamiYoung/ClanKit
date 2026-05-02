@@ -58,6 +58,35 @@ function sanitizeForJson(obj) {
   return obj
 }
 
+// ── Reply Bank mode gate (extracted from buildSystemPrompt for testability) ──
+// Skip in productivity mode (style-blind, same gating principle as Speech DNA in
+// systemPromptBuilder). Failure is silent — Reply Bank issues must never block
+// the LLM call. See spec 2026-05-02 §5.3.
+async function _maybeInjectReplyBank(activeAgentId, messages, mode, systemPrompt) {
+  if (mode === 'productivity') return systemPrompt
+  if (!activeAgentId) return systemPrompt
+  try {
+    const ds = require('../lib/dataStore')
+    const replyBankMod = require('../memory/ReplyBank')
+    const replyBank = replyBankMod.getInstance(ds.paths().AGENT_MEMORY_DIR)
+    if (!replyBank.has(activeAgentId)) return systemPrompt
+    const lastUser = [...messages].reverse().find(m => m.role === 'user')
+    const queryText = typeof lastUser?.content === 'string'
+      ? lastUser.content
+      : Array.isArray(lastUser?.content)
+        ? lastUser.content.filter(b => b.type === 'text').map(b => b.text).join(' ')
+        : ''
+    if (!queryText || queryText.trim().length < 2) return systemPrompt
+    const examples = await replyBank.retrieve(activeAgentId, queryText, 3)
+    if (!examples || examples.length === 0) return systemPrompt
+    const block = replyBankMod.formatFewShotBlock(examples)
+    return block ? systemPrompt + '\n\n---\n' + block : systemPrompt
+  } catch (rbErr) {
+    try { require('../logger').logger.warn('[agentLoop] reply bank injection failed:', rbErr.message) } catch {}
+    return systemPrompt
+  }
+}
+
 // No hardcoded skill prompts — they arrive dynamically from the UI store
 
 class AgentLoop {
@@ -615,38 +644,13 @@ class AgentLoop {
       this.ragContext
     )
 
-    // ── Reply Bank few-shot injection (Phase C) ──────────────────────────
-    // If this system agent has a built Reply Bank (from chat import), retrieve
-    // the top 3 semantically-similar past replies for the current user message
-    // and inject them as a few-shot block at the end of the system prompt.
-    // Purely additive — silent no-op for agents without a reply bank.
-    try {
-      const activeAgentId = agentPrompts?.systemAgentId
-      if (activeAgentId) {
-        const ds = require('../lib/dataStore')
-        const replyBankMod = require('../memory/ReplyBank')
-        const replyBank = replyBankMod.getInstance(ds.paths().AGENT_MEMORY_DIR)
-        if (replyBank.has(activeAgentId)) {
-          // Find the most recent user message content
-          const lastUser = [...messages].reverse().find(m => m.role === 'user')
-          const queryText = typeof lastUser?.content === 'string'
-            ? lastUser.content
-            : Array.isArray(lastUser?.content)
-              ? lastUser.content.filter(b => b.type === 'text').map(b => b.text).join(' ')
-              : ''
-          if (queryText && queryText.trim().length >= 2) {
-            const examples = await replyBank.retrieve(activeAgentId, queryText, 3)
-            if (examples && examples.length > 0) {
-              const block = replyBankMod.formatFewShotBlock(examples)
-              if (block) systemPrompt += '\n\n---\n' + block
-            }
-          }
-        }
-      }
-    } catch (rbErr) {
-      // Reply bank injection must never block LLM call — log and continue
-      try { require('../logger').logger.warn('[agentLoop] reply bank injection failed:', rbErr.message) } catch {}
-    }
+    // Reply Bank few-shot injection — gated to roleplay mode (see _maybeInjectReplyBank).
+    systemPrompt = await _maybeInjectReplyBank(
+      agentPrompts?.systemAgentId,
+      messages,
+      this._mode,
+      systemPrompt
+    )
 
     // If a per-agent assigned task was dispatched, replace the last user message
     // with just that task so the LLM never sees other agents' task sections.
@@ -2476,3 +2480,4 @@ class AgentLoop {
 }
 
 module.exports = { AgentLoop }
+module.exports._maybeInjectReplyBank = _maybeInjectReplyBank
