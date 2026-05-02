@@ -22,50 +22,17 @@ function _hasPlaintextSensitiveFields(rawCfg) {
   return false
 }
 
-// -- Segment archiving --------------------------------------------------------
-const SEGMENT_HOT_COUNT = 100
-const SEGMENT_SIZE = 100
-
-async function archiveOldSegments(chat) {
-  if (!chat.messages || chat.messages.length <= SEGMENT_HOT_COUNT) return
-  const { CHATS_DIR } = ds.paths()
-  const toArchive = chat.messages.slice(0, chat.messages.length - SEGMENT_HOT_COUNT)
-  chat.messages = chat.messages.slice(chat.messages.length - SEGMENT_HOT_COUNT)
-  let maxSeg = chat.segmentCount || 0
-  for (let i = 0; i < toArchive.length; i += SEGMENT_SIZE) {
-    maxSeg++
-    const batch = toArchive.slice(i, i + SEGMENT_SIZE)
-    const segFile = path.join(CHATS_DIR, `${chat.id}.seg.${maxSeg}.json`)
-    if (!fs.existsSync(segFile)) {
-      await ds.writeJSONAtomic(segFile, { chatId: chat.id, segIndex: maxSeg, messages: batch })
-    }
-  }
-  chat.segmentCount = maxSeg
-}
-
 // -- Usage accumulation (exported for use by ipc/agent.js) --------------------
-async function accumulateUsage(chatId, metrics, provider, model) {
+// Sync wrapper around ChatStore.accumulateUsage. Kept exported for IPC
+// callers. The atomic increment + provider/model first-write semantics live
+// inside ChatStore.
+function accumulateUsage(chatId, metrics, provider, model) {
   if (!chatId || !metrics) return
-  const file = path.join(ds.paths().CHATS_DIR, `${chatId}.json`)
-  let chat
-  try { chat = await ds.readJSONAsync(file, null) } catch { return }
-  if (!chat) return
-
-  const u = chat.usage || {}
-  chat.usage = {
-    inputTokens:         (u.inputTokens         || 0) + (metrics.inputTokens         || 0),
-    outputTokens:        (u.outputTokens        || 0) + (metrics.outputTokens        || 0),
-    cacheCreationTokens: (u.cacheCreationTokens || 0) + (metrics.cacheCreationTokens || 0),
-    cacheReadTokens:     (u.cacheReadTokens     || 0) + (metrics.cacheReadTokens     || 0),
-    voiceInputTokens:    (u.voiceInputTokens    || 0) + (metrics.voiceInputTokens    || 0),
-    voiceOutputTokens:   (u.voiceOutputTokens   || 0) + (metrics.voiceOutputTokens   || 0),
-    whisperCalls:        (u.whisperCalls        || 0) + (metrics.whisperCalls        || 0),
-    whisperSecs:         (u.whisperSecs         || 0) + (metrics.whisperSecs         || 0),
-    ttsChars:            (u.ttsChars            || 0) + (metrics.ttsChars            || 0),
-  }
-  if (provider && !chat.provider) chat.provider = provider
-  if (model     && !chat.model)   chat.model     = model
-  try { await ds.writeJSONAtomic(file, chat) } catch (err) {
+  try {
+    const { getInstance } = require('../chat/ChatStore')
+    const store = getInstance(ds.paths().DATA_DIR)
+    store.accumulateUsage(chatId, metrics, provider, model)
+  } catch (err) {
     logger.warn('accumulateUsage write failed', err.message)
   }
 }
@@ -73,77 +40,80 @@ async function accumulateUsage(chatId, metrics, provider, model) {
 function register({ DEFAULT_CONFIG }) {
   const p = () => ds.paths()
 
-  ipcMain.handle('store:get-chat-index', async () => ds.readJSONAsync(p().CHATS_INDEX_FILE, []))
+  function _chatStore() {
+    const { getInstance } = require('../chat/ChatStore')
+    return getInstance(p().DATA_DIR)
+  }
 
-  ipcMain.handle('store:save-chat-index', async (_, index) => {
-    await ds.writeJSONAtomic(p().CHATS_INDEX_FILE, index)
+  ipcMain.handle('store:get-chat-index', async () => {
+    return _chatStore().listChatIndex()
+  })
+
+  ipcMain.handle('store:save-chat-index', async (_, _index) => {
+    // No-op: with SQLite, the chat index is auto-derived from the chats table.
+    // Renderer pushes the full index when chats are reordered/pinned, but the
+    // source of truth is now SQLite — payload is ignored. Keep the IPC channel
+    // accepting calls so renderer code doesn't need to change.
     return true
   })
 
   ipcMain.handle('store:get-chat', async (_, chatId) => {
-    const file = path.join(p().CHATS_DIR, `${chatId}.json`)
-    return ds.readJSONAsync(file, null)
+    if (!chatId) return null
+    const store = _chatStore()
+    const meta = store.getChatMeta(chatId)
+    if (!meta) return null
+    const messages = store.getMessages(chatId)
+    return { ...meta, messages, segmentCount: 0 }
   })
 
-  ipcMain.handle('store:get-chat-segments', async (_, { chatId, fromSeg, toSeg }) => {
-    const messages = []
-    for (let i = fromSeg; i <= toSeg; i++) {
-      const segFile = path.join(p().CHATS_DIR, `${chatId}.seg.${i}.json`)
-      const seg = await ds.readJSONAsync(segFile, null)
-      if (seg && seg.messages) messages.push(...seg.messages)
-    }
-    return messages
+  ipcMain.handle('store:get-chat-segments', async (_, _payload) => {
+    // Legacy renderer call: "give me messages from shard fromSeg to toSeg".
+    // Post-migration there are no shards — store:get-chat returns ALL messages.
+    // Return [] so the renderer's lazy-load logic gracefully no-ops.
+    return []
   })
 
   ipcMain.handle('store:save-chat', async (_, chat) => {
     if (!chat || !chat.id) return false
-    const existing = await ds.readJSONAsync(path.join(p().CHATS_DIR, `${chat.id}.json`), null)
+    const store = _chatStore()
+    // Preserve legacy merge semantics: usage/model/provider on existing row are
+    // preferred when the incoming chat omits them (renderer doesn't always
+    // re-send these fields).
+    const existing = store.getChatMeta(chat.id)
     if (existing) {
-      if (chat.usage == null && existing.usage) chat.usage = existing.usage
-      if (!chat.model    && existing.model)    chat.model    = existing.model
-      if (!chat.provider && existing.provider) chat.provider = existing.provider
-      if (existing.usage && chat.usage) {
-        const VOICE_KEYS = ['whisperCalls', 'whisperSecs', 'voiceInputTokens', 'voiceOutputTokens']
-        for (const k of VOICE_KEYS) {
-          if ((existing.usage[k] || 0) > (chat.usage[k] || 0)) chat.usage[k] = existing.usage[k]
-        }
-      }
-      if (existing.segmentCount && !chat.segmentCount) chat.segmentCount = existing.segmentCount
+      if (chat.usage == null && existing.usage)       chat.usage    = existing.usage
+      if (!chat.model    && existing.model)           chat.model    = existing.model
+      if (!chat.provider && existing.provider)        chat.provider = existing.provider
     }
-    await archiveOldSegments(chat)
-    await ds.writeJSONAtomic(path.join(p().CHATS_DIR, `${chat.id}.json`), chat)
+    store.saveChatMeta(chat)
+    if (Array.isArray(chat.messages) && chat.messages.length > 0) {
+      store.appendMessages(chat.id, chat.messages)
+    }
     return true
   })
 
   ipcMain.handle('store:delete-chat', async (_, chatId) => {
-    const file = path.join(p().CHATS_DIR, `${chatId}.json`)
-    try { await fs.promises.unlink(file) } catch {}
-    const index = await ds.readJSONAsync(p().CHATS_INDEX_FILE, [])
-    const filtered = index.filter(e => e.id !== chatId)
-    await ds.writeJSONAtomic(p().CHATS_INDEX_FILE, filtered)
+    if (!chatId) return false
+    _chatStore().deleteChat(chatId)
     return true
   })
 
   ipcMain.handle('store:get-chats', async () => {
-    const index = await ds.readJSONAsync(p().CHATS_INDEX_FILE, null)
-    if (index === null) return ds.readJSON(p().CHATS_FILE, [])
-    const chats = []
-    for (const entry of index) {
-      const chat = await ds.readJSONAsync(path.join(p().CHATS_DIR, `${entry.id}.json`), null)
-      if (chat) chats.push(chat)
-    }
-    return chats
+    const store = _chatStore()
+    const index = store.listChatIndex()
+    return index.map(c => ({ ...c, messages: null }))
   })
 
   ipcMain.handle('store:save-chats', async (_, chats) => {
-    if (!fs.existsSync(p().CHATS_DIR)) fs.mkdirSync(p().CHATS_DIR, { recursive: true })
-    const index = []
-    for (const chat of chats) {
-      if (!chat.id) continue
-      await ds.writeJSONAtomic(path.join(p().CHATS_DIR, `${chat.id}.json`), chat)
-      index.push(ds.chatMetaFromChat(chat))
+    if (!Array.isArray(chats)) return false
+    const store = _chatStore()
+    for (const c of chats) {
+      if (!c?.id) continue
+      store.saveChatMeta(c)
+      if (Array.isArray(c.messages) && c.messages.length > 0) {
+        store.appendMessages(c.id, c.messages)
+      }
     }
-    await ds.writeJSONAtomic(p().CHATS_INDEX_FILE, index)
     return true
   })
 
