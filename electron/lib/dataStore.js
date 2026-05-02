@@ -95,7 +95,6 @@ function init() {
     fs.mkdirSync(DATA_DIR, { recursive: true })
   }
 
-  const CHATS_DIR        = path.join(DATA_DIR, 'chats')
   const MEMORY_DIR       = path.join(DATA_DIR, 'memory')
   const AGENT_MEMORY_DIR = path.join(MEMORY_DIR, 'agents')
   const USER_MEMORY_DIR  = path.join(MEMORY_DIR, 'users')
@@ -115,9 +114,6 @@ function init() {
     DATA_DIR,
     DEFAULT_DATA_PATH,
     CONFIG_FILE:          path.join(DATA_DIR, 'config.json'),
-    CHATS_FILE:           path.join(DATA_DIR, 'chats.json'),
-    CHATS_DIR,
-    CHATS_INDEX_FILE:     path.join(CHATS_DIR, 'index.json'),
     MCP_SERVERS_FILE:     path.join(DATA_DIR, 'mcp-servers.json'),
     TOOLS_FILE:           path.join(DATA_DIR, 'tools.json'),
     AGENT_ARTIFACTS_DIR:  path.join(DATA_DIR, 'agent-artifacts'),
