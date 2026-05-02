@@ -2272,11 +2272,16 @@ ipcMain.handle('agent:suggest-chat-title', async (_event, { chatId, messages, at
     // Re-bind um to the resolved values so the rest of the handler uses them.
     const resolvedUm = { provider: resolvedProvider, model: resolvedModel }
 
+    // Strictness ladder:
+    //   attempt 1 (renderer's first checkpoint, currently turn 2) → BALANCED
+    //   attempt 2 (renderer's second checkpoint, currently turn 5) → LENIENT
+    //   later attempts → LENIENT
+    // The strictness reduces over attempts since later attempts have more
+    // conversation context and the user has waited long enough that ANY
+    // reasonable title is preferable to "新建对话".
     const strictness = Number(attempt || 1) <= 1
-      ? 'VERY_STRICT'
-      : Number(attempt || 1) === 2
-        ? 'BALANCED'
-        : 'LENIENT'
+      ? 'BALANCED'
+      : 'LENIENT'
 
     const systemPrompt = `You generate concise chat titles.
 
@@ -2348,6 +2353,7 @@ Rules:
     const title = String(parsed?.title || '').trim().replace(/[\n\r\t]+/g, ' ')
 
     if (!clear || !title) {
+      logger.agent('suggest-chat-title: not clear', { chatId, attempt, strictness, raw: raw.slice(0, 200) })
       return { success: true, clear: false }
     }
 
@@ -2357,10 +2363,11 @@ Rules:
       .trim()
 
     if (!sanitized || sanitized.length < 2) {
+      logger.agent('suggest-chat-title: title too short', { chatId, attempt, title })
       return { success: true, clear: false }
     }
 
-    logger.agent('suggest-chat-title', { chatId, attempt, title: sanitized })
+    logger.agent('suggest-chat-title: ok', { chatId, attempt, title: sanitized })
     return { success: true, clear: true, title: sanitized }
   } catch (err) {
     logger.error('agent:suggest-chat-title error', err.message)
