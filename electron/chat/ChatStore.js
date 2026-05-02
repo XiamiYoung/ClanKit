@@ -1,0 +1,312 @@
+/**
+ * ChatStore — SQLite-backed store for chats and messages.
+ *
+ * Single DB at {DATA_DIR}/chats.db. Schema version tracked via
+ * PRAGMA user_version = 1. WAL mode. Singleton per Electron main process.
+ *
+ * Lazy initialization: better-sqlite3 only required on first DB call.
+ * Pure helpers (rowTo* / *ToRow / serializeJsonField / extractSearchText) are
+ * unit-testable without the native binding.
+ *
+ * Mirrors AgentStore + TaskStore + MemoryStore patterns.
+ *
+ * Schema highlights:
+ *   - segments stored as JSON column on each message row (heterogeneous types,
+ *     read/written wholesale, never queried by sub-field)
+ *   - text_for_search column extracted JS-side from text segments at write time
+ *   - messages_fts virtual FTS5 with trigram tokenizer for CJK; trigger keeps
+ *     it in sync with messages table
+ */
+const path = require('path')
+const fs = require('fs')
+const { logger } = require('../logger')
+
+let _Database = null
+function _getDb() {
+  if (!_Database) _Database = require('better-sqlite3')
+  return _Database
+}
+
+const SCHEMA_VERSION = 1
+
+const SCHEMA = `
+CREATE TABLE IF NOT EXISTS chats (
+  id                              TEXT PRIMARY KEY,
+  title                           TEXT NOT NULL DEFAULT '',
+  icon                            TEXT,
+  type                            TEXT NOT NULL DEFAULT 'chat' CHECK(type IN ('chat','analysis')),
+  system_agent_id                 TEXT,
+  user_agent_id                   TEXT,
+  provider                        TEXT,
+  model                           TEXT,
+  usage                           TEXT,
+  context_metrics                 TEXT,
+  per_agent_context_metrics       TEXT,
+  last_context_snapshot           TEXT,
+  is_group_chat                   INTEGER NOT NULL DEFAULT 0,
+  group_agent_ids                 TEXT NOT NULL DEFAULT '[]',
+  group_agent_overrides           TEXT NOT NULL DEFAULT '{}',
+  group_audience_mode             TEXT NOT NULL DEFAULT 'auto',
+  group_audience_agent_ids        TEXT NOT NULL DEFAULT '[]',
+  working_path                    TEXT,
+  coding_mode                     INTEGER NOT NULL DEFAULT 0,
+  coding_provider                 TEXT NOT NULL DEFAULT 'claude-code',
+  permission_mode                 TEXT NOT NULL DEFAULT 'inherit',
+  chat_allow_list                 TEXT NOT NULL DEFAULT '[]',
+  chat_danger_overrides           TEXT NOT NULL DEFAULT '[]',
+  max_agent_rounds                INTEGER,
+  auto_title_eligible             INTEGER NOT NULL DEFAULT 0,
+  auto_title_locked               INTEGER NOT NULL DEFAULT 0,
+  auto_title_attempt_count        INTEGER NOT NULL DEFAULT 0,
+  analysis_target_agent_id        TEXT,
+  is_pinned                       INTEGER NOT NULL DEFAULT 0,
+  created_at                      INTEGER NOT NULL,
+  updated_at                      INTEGER NOT NULL,
+  last_message_at                 INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_chats_last_message_at ON chats(last_message_at DESC);
+CREATE INDEX IF NOT EXISTS idx_chats_pinned          ON chats(is_pinned, last_message_at DESC);
+
+CREATE TABLE IF NOT EXISTS messages (
+  id              TEXT PRIMARY KEY,
+  chat_id         TEXT NOT NULL REFERENCES chats(id) ON DELETE CASCADE,
+  role            TEXT NOT NULL CHECK(role IN ('user','assistant')),
+  content         TEXT NOT NULL DEFAULT '',
+  segments        TEXT NOT NULL DEFAULT '[]',
+  ts              INTEGER NOT NULL,
+  created_at      INTEGER,
+  duration_ms     INTEGER,
+  user_agent_id   TEXT,
+  agent_id        TEXT,
+  agent_name      TEXT,
+  is_error        INTEGER NOT NULL DEFAULT 0,
+  error_detail    TEXT,
+  error_code      TEXT,
+  plan_data       TEXT,
+  plan_state      TEXT,
+  token_usage     TEXT,
+  text_for_search TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_messages_chat_ts ON messages(chat_id, ts);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+  text_for_search,
+  content='messages',
+  content_rowid='rowid',
+  tokenize='trigram'
+);
+
+CREATE TRIGGER IF NOT EXISTS msg_fts_ai AFTER INSERT ON messages BEGIN
+  INSERT INTO messages_fts(rowid, text_for_search) VALUES (new.rowid, new.text_for_search);
+END;
+CREATE TRIGGER IF NOT EXISTS msg_fts_ad AFTER DELETE ON messages BEGIN
+  INSERT INTO messages_fts(messages_fts, rowid, text_for_search) VALUES ('delete', old.rowid, old.text_for_search);
+END;
+CREATE TRIGGER IF NOT EXISTS msg_fts_au AFTER UPDATE ON messages BEGIN
+  INSERT INTO messages_fts(messages_fts, rowid, text_for_search) VALUES ('delete', old.rowid, old.text_for_search);
+  INSERT INTO messages_fts(rowid, text_for_search) VALUES (new.rowid, new.text_for_search);
+END;
+`
+
+// ── Pure helpers (unit-testable, no DB dependency) ───────────────────────────
+
+function serializeJsonField(value) {
+  if (value === null || value === undefined) return null
+  return JSON.stringify(value)
+}
+
+function deserializeJsonField(json, fallback = null) {
+  if (json === null || json === undefined || json === '') return fallback
+  try {
+    return JSON.parse(json)
+  } catch {
+    return fallback
+  }
+}
+
+function extractSearchText(segments) {
+  if (!Array.isArray(segments)) return ''
+  const parts = []
+  for (const seg of segments) {
+    if (seg?.type === 'text' && typeof seg.content === 'string' && seg.content) {
+      parts.push(seg.content)
+    }
+  }
+  return parts.join(' ')
+}
+
+function _bool01(v) { return v ? 1 : 0 }
+function _01bool(v) { return Boolean(v) }
+
+function rowToChat(row) {
+  if (!row) return null
+  return {
+    id: row.id,
+    title: row.title || '',
+    icon: row.icon || '',
+    type: row.type || 'chat',
+    systemAgentId: row.system_agent_id || null,
+    userAgentId: row.user_agent_id || null,
+    provider: row.provider || null,
+    model: row.model || null,
+    usage: deserializeJsonField(row.usage, null),
+    contextMetrics: deserializeJsonField(row.context_metrics, null),
+    perAgentContextMetrics: deserializeJsonField(row.per_agent_context_metrics, {}),
+    lastContextSnapshot: deserializeJsonField(row.last_context_snapshot, null),
+    isGroupChat: _01bool(row.is_group_chat),
+    groupAgentIds: deserializeJsonField(row.group_agent_ids, []),
+    groupAgentOverrides: deserializeJsonField(row.group_agent_overrides, {}),
+    groupAudienceMode: row.group_audience_mode || 'auto',
+    groupAudienceAgentIds: deserializeJsonField(row.group_audience_agent_ids, []),
+    workingPath: row.working_path || null,
+    codingMode: _01bool(row.coding_mode),
+    codingProvider: row.coding_provider || 'claude-code',
+    permissionMode: row.permission_mode || 'inherit',
+    chatAllowList: deserializeJsonField(row.chat_allow_list, []),
+    chatDangerOverrides: deserializeJsonField(row.chat_danger_overrides, []),
+    maxAgentRounds: row.max_agent_rounds === null || row.max_agent_rounds === undefined ? null : row.max_agent_rounds,
+    autoTitleEligible: _01bool(row.auto_title_eligible),
+    autoTitleLocked: _01bool(row.auto_title_locked),
+    autoTitleAttemptCount: row.auto_title_attempt_count || 0,
+    analysisTargetAgentId: row.analysis_target_agent_id || null,
+    isPinned: _01bool(row.is_pinned),
+    createdAt: row.created_at || 0,
+    updatedAt: row.updated_at || 0,
+    lastMessageAt: row.last_message_at || null,
+  }
+}
+
+function chatToRow(chat) {
+  return {
+    id: chat.id,
+    title: chat.title || '',
+    icon: chat.icon || null,
+    type: chat.type === 'analysis' ? 'analysis' : 'chat',
+    system_agent_id: chat.systemAgentId || null,
+    user_agent_id: chat.userAgentId || null,
+    provider: chat.provider || null,
+    model: chat.model || null,
+    usage: serializeJsonField(chat.usage),
+    context_metrics: serializeJsonField(chat.contextMetrics),
+    per_agent_context_metrics: serializeJsonField(chat.perAgentContextMetrics),
+    last_context_snapshot: serializeJsonField(chat.lastContextSnapshot),
+    is_group_chat: _bool01(chat.isGroupChat),
+    group_agent_ids: serializeJsonField(chat.groupAgentIds) || '[]',
+    group_agent_overrides: serializeJsonField(chat.groupAgentOverrides) || '{}',
+    group_audience_mode: chat.groupAudienceMode || 'auto',
+    group_audience_agent_ids: serializeJsonField(chat.groupAudienceAgentIds) || '[]',
+    working_path: chat.workingPath || null,
+    coding_mode: _bool01(chat.codingMode),
+    coding_provider: chat.codingProvider || 'claude-code',
+    permission_mode: chat.permissionMode || 'inherit',
+    chat_allow_list: serializeJsonField(chat.chatAllowList) || '[]',
+    chat_danger_overrides: serializeJsonField(chat.chatDangerOverrides) || '[]',
+    max_agent_rounds: chat.maxAgentRounds === null || chat.maxAgentRounds === undefined ? null : chat.maxAgentRounds,
+    auto_title_eligible: _bool01(chat.autoTitleEligible),
+    auto_title_locked: _bool01(chat.autoTitleLocked),
+    auto_title_attempt_count: chat.autoTitleAttemptCount || 0,
+    analysis_target_agent_id: chat.analysisTargetAgentId || null,
+    is_pinned: _bool01(chat.isPinned),
+    created_at: chat.createdAt || Date.now(),
+    updated_at: chat.updatedAt || Date.now(),
+    last_message_at: chat.lastMessageAt || null,
+  }
+}
+
+function rowToMessage(row) {
+  if (!row) return null
+  return {
+    id: row.id,
+    role: row.role,
+    content: row.content || '',
+    segments: deserializeJsonField(row.segments, []),
+    timestamp: row.ts || 0,
+    createdAt: row.created_at || 0,
+    durationMs: row.duration_ms || null,
+    userAgentId: row.user_agent_id || null,
+    agentId: row.agent_id || null,
+    agentName: row.agent_name || null,
+    isError: _01bool(row.is_error),
+    errorDetail: row.error_detail || null,
+    errorCode: row.error_code || null,
+    planData: deserializeJsonField(row.plan_data, null),
+    planState: row.plan_state || null,
+    tokenUsage: deserializeJsonField(row.token_usage, null),
+  }
+}
+
+function messageToRow(msg, chatId) {
+  if (!chatId) throw new Error('messageToRow: chatId required')
+  if (!msg?.id) throw new Error('messageToRow: msg.id required')
+  return {
+    id: msg.id,
+    chat_id: chatId,
+    role: msg.role,
+    content: msg.content || '',
+    segments: serializeJsonField(msg.segments) || '[]',
+    ts: msg.timestamp || msg.createdAt || Date.now(),
+    created_at: msg.createdAt || msg.timestamp || Date.now(),
+    duration_ms: msg.durationMs || null,
+    user_agent_id: msg.userAgentId || null,
+    agent_id: msg.agentId || null,
+    agent_name: msg.agentName || null,
+    is_error: _bool01(msg.isError),
+    error_detail: msg.errorDetail || null,
+    error_code: msg.errorCode || null,
+    plan_data: serializeJsonField(msg.planData),
+    plan_state: msg.planState || null,
+    token_usage: serializeJsonField(msg.tokenUsage),
+    text_for_search: extractSearchText(msg.segments),
+  }
+}
+
+// ── DB layer (skeleton — methods added in Tasks 1.2 + 1.3) ───────────────────
+
+class ChatStore {
+  constructor(dbPath) {
+    this.dbPath = dbPath
+    this._db = null
+  }
+
+  _open() {
+    if (this._db) return this._db
+    const Database = _getDb()
+    fs.mkdirSync(path.dirname(this.dbPath), { recursive: true })
+    const db = new Database(this.dbPath)
+    db.pragma('journal_mode = WAL')
+    db.pragma('foreign_keys = ON')
+    db.exec(SCHEMA)
+    db.pragma(`user_version = ${SCHEMA_VERSION}`)
+    this._db = db
+    return db
+  }
+
+  close() {
+    if (this._db) {
+      try { this._db.close() } catch {}
+      this._db = null
+    }
+  }
+}
+
+let _instance = null
+function getInstance(dataDir) {
+  if (_instance) return _instance
+  _instance = new ChatStore(path.join(dataDir, 'chats.db'))
+  return _instance
+}
+
+function _reset() {
+  if (_instance) { try { _instance.close() } catch {}; _instance = null }
+}
+
+module.exports = {
+  ChatStore,
+  getInstance,
+  _reset,
+  rowToChat, chatToRow,
+  rowToMessage, messageToRow,
+  serializeJsonField, deserializeJsonField,
+  extractSearchText,
+  SCHEMA_VERSION,
+}
