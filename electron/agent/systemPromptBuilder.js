@@ -283,6 +283,11 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
     if (userAgentPrompt) {
       aboutUserBlock += userAgentPrompt + '\n\n'
     }
+    if (!_isProductivity) {
+      aboutUserBlock += (_langCode === 'zh')
+        ? `基于上面的用户描述，自然地融入对话——合适时机用名字称呼、参考他/她的身份与近期生活、形成"我们之间"的连续感，而不是每次冷启动答题。\n\n`
+        : `Based on the description above, weave the user naturally into the conversation — call them by name when fitting, reference their identity and recent life, build a sense of "us" rather than starting every reply from a cold Q&A baseline.\n\n`
+    }
     aboutUserBlock += `_— End of user description. Everything above describes the USER. The next section defines YOU. —_\n\n---\n\n`
   }
 
