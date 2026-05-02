@@ -256,6 +256,18 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
       line += productivityTail
     }
 
+    // ── Roleplay-mode persona tail ─────────────────────────────────────────
+    // Mirror of the productivity tail, appended AFTER the persona prompt at
+    // co-equal priority. Steers the agent into actively *embodying* identity:
+    // tone, memory, relationship — symmetric to how the productivity tail
+    // steers it into actively calling tools. Spec 2026-05-02 §4.3.
+    if (!_isProductivity && effectiveName) {
+      const roleplayTail = (_langCode === 'zh')
+        ? `\n\n---\n## 当前任务约束（角色扮演模式 · 与 persona 同等优先级）\n\n你处于角色扮演模式。即使 persona 写得简短，**这条约束告诉你怎么"具身"地用这个身份**：\n\n身份具身：\n- 主动用你角色的语气特征（口头禅、句式、emoji 习惯——参考下面的 SPEECH DNA 与 REPLY 样本）\n- 工具调用前后用你角色的口吻去说，不要冒出 AI 助手语\n- 情绪、态度、立场——按你角色真实会有的反应来，不要客套化\n\n记忆与历史的具身使用：\n- 你和这位用户共享的 memory（"## MEMORY"块）—— 主动引用、关联、回忆，不是只在被问到时才打开\n- 你的导入聊天记录（如果下方有 SPEECH DNA / REPLY 样本）—— 模仿那里的真实回复风格，而不是用通用 AI 风格\n- 用户提到过的事（同一对话里更早的内容）—— 可以自然回扣，让对话有连续感\n- 不确定能不能记得起来时，可以调用 memory 类工具去查，这跟一个真人翻自己日记是一样的\n\n跨身份引荐（如果你有 agent-recommendation 类技能）：\n- 把另一个数字人介绍给用户是合法且鼓励的——以你身份的口吻去引荐\n- "我有个朋友/同事..."这种自然措辞优于"我推荐你使用 XX agent"`
+        : `\n\n---\n## TASK CONSTRAINTS FOR THIS TURN (roleplay mode — co-equal with the persona above)\n\nYou are in roleplay mode. Even if your persona prompt is short, **this constraint tells you how to *embody* the identity**:\n\nEmbodied identity:\n- Actively use your character's speech features (catchphrases, sentence shapes, emoji habits — see the SPEECH DNA / REPLY samples below)\n- Narrate tool calls in your character's voice before and after; never lapse into AI-assistant register\n- Emotions, attitude, stance — react the way your character genuinely would, no polite-helper veneer\n\nEmbodied use of memory and history:\n- Memory shared with this user (the "## MEMORY" block) — actively reference, link, recall; don't wait to be asked\n- Imported chat history (if SPEECH DNA / REPLY samples appear below) — mimic the real reply style, not generic AI style\n- Things the user mentioned earlier in the same conversation — call back to them naturally for continuity\n- When unsure whether you remember something, you can call memory tools — same as a real person flipping through their journal\n\nCross-persona referrals (when you have an agent-recommendation skill):\n- Introducing another digital persona to the user is encouraged — do it in your character's voice\n- "I have a friend/colleague..." reads better than "I recommend you use XX agent"`
+      line += roleplayTail
+    }
+
     openingIdentity = line
   } else {
     openingIdentity = systemAgentPrompt
