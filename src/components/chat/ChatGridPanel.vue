@@ -15,6 +15,7 @@
         <div v-if="showModeChip" class="gp-mode-dd-wrap" ref="modeDropdownWrapEl">
           <button
             class="gp-mode-dd-btn"
+            :class="{ 'gp-mode-dd-flash': flashMode }"
             v-tooltip="isProductivity ? t('chats.modeProductivity') : t('chats.modeChat')"
             :aria-label="isProductivity ? t('chats.modeProductivity') : t('chats.modeChat')"
             :aria-haspopup="true"
@@ -439,6 +440,24 @@ const showProductivityConfirm = ref(false)
 const modeDropdownOpen = ref(false)
 const modeDropdownWrapEl = ref(null)
 
+// Flash the mode dropdown for 1s on entry to a freshly-created chat,
+// so the user notices which mode (Roleplay vs Professional) the new chat starts in.
+const flashMode = ref(false)
+let _flashTimer = null
+watch(
+  () => chat.value?.id,
+  () => {
+    if (_flashTimer) { clearTimeout(_flashTimer); _flashTimer = null }
+    flashMode.value = false
+    const createdAt = chat.value?.createdAt
+    if (chat.value?.id && createdAt && Date.now() - createdAt < 2000) {
+      flashMode.value = true
+      _flashTimer = setTimeout(() => { flashMode.value = false; _flashTimer = null }, 1000)
+    }
+  },
+  { immediate: true }
+)
+
 function selectMode(target) {
   modeDropdownOpen.value = false
   if (!chat.value) return
@@ -460,7 +479,10 @@ function _onModeDropdownDocClick(e) {
   }
 }
 onMounted(() => document.addEventListener('click', _onModeDropdownDocClick))
-onUnmounted(() => document.removeEventListener('click', _onModeDropdownDocClick))
+onUnmounted(() => {
+  document.removeEventListener('click', _onModeDropdownDocClick)
+  if (_flashTimer) { clearTimeout(_flashTimer); _flashTimer = null }
+})
 
 // ── Swap ──
 const collapsedFolders = ref(new Set())
@@ -1363,4 +1385,14 @@ function deleteMessage(msg) {
   padding: 0.1rem 0.35rem;
 }
 .gp-swap-item-indent { padding-left: 1.75rem; }
+
+/* New-chat mode-dropdown attention flash — fires once for ~1s on entry to a freshly created chat */
+@keyframes gp-mode-dd-flash-anim {
+  0%   { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.7), 0 0 0 0 rgba(251, 191, 36, 0.4); transform: scale(1); }
+  30%  { box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.5), 0 0 14px 6px rgba(251, 191, 36, 0.35); transform: scale(1.04); }
+  100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); transform: scale(1); }
+}
+.gp-mode-dd-flash {
+  animation: gp-mode-dd-flash-anim 1s ease-out 1;
+}
 </style>

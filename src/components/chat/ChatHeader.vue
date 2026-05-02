@@ -63,7 +63,7 @@
           <div v-if="showModeChip" class="ch-mode-dd-wrap" ref="modeDropdownWrapEl">
             <button
               class="ch-mode-dd-btn"
-              :class="{ 'ch-mode-dd-btn--productivity': isProductivity }"
+              :class="{ 'ch-mode-dd-btn--productivity': isProductivity, 'ch-mode-dd-flash': flashMode }"
               :aria-label="isProductivity ? t('chats.modeProductivity') : t('chats.modeChat')"
               :aria-haspopup="true"
               :aria-expanded="modeDropdownOpen ? 'true' : 'false'"
@@ -949,6 +949,24 @@ const isProductivity = computed(() => chat.value?.mode === 'productivity')
 const modeDropdownOpen = ref(false)
 const modeDropdownWrapEl = ref(null)
 
+// Flash the mode dropdown for 1s when the user enters a freshly-created chat,
+// so they notice which mode (Roleplay vs Professional) the new chat starts in.
+const flashMode = ref(false)
+let _flashTimer = null
+watch(
+  () => chat.value?.id,
+  () => {
+    if (_flashTimer) { clearTimeout(_flashTimer); _flashTimer = null }
+    flashMode.value = false
+    const createdAt = chat.value?.createdAt
+    if (chat.value?.id && createdAt && Date.now() - createdAt < 2000) {
+      flashMode.value = true
+      _flashTimer = setTimeout(() => { flashMode.value = false; _flashTimer = null }, 1000)
+    }
+  },
+  { immediate: true }
+)
+
 const showModeChip = computed(() => {
   const c = chat.value
   if (!c) return false
@@ -987,7 +1005,10 @@ function onDocClickForModeDropdown(e) {
   }
 }
 onMounted(() => document.addEventListener('click', onDocClickForModeDropdown))
-onUnmounted(() => document.removeEventListener('click', onDocClickForModeDropdown))
+onUnmounted(() => {
+  document.removeEventListener('click', onDocClickForModeDropdown)
+  if (_flashTimer) { clearTimeout(_flashTimer); _flashTimer = null }
+})
 
 function confirmProductivitySwitch() {
   showProductivityConfirm.value = false
@@ -1884,5 +1905,15 @@ function confirmProductivitySwitch() {
   font-weight: 400;
   color: #9CA3AF;
   line-height: 1.4;
+}
+
+/* New-chat mode-dropdown attention flash — fires once for ~1s on entry to a freshly created chat */
+@keyframes ch-mode-dd-flash-anim {
+  0%   { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.7), 0 0 0 0 rgba(251, 191, 36, 0.4); transform: scale(1); }
+  30%  { box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.5), 0 0 14px 6px rgba(251, 191, 36, 0.35); transform: scale(1.04); }
+  100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); transform: scale(1); }
+}
+.ch-mode-dd-flash {
+  animation: ch-mode-dd-flash-anim 1s ease-out 1;
 }
 </style>
