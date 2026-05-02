@@ -976,7 +976,7 @@ watch(
     if (_flashTimer) { clearTimeout(_flashTimer); _flashTimer = null }
     flashMode.value = false
     const createdAt = chat.value?.createdAt
-    if (chat.value?.id && createdAt && Date.now() - createdAt < 2000) {
+    if (chat.value?.id && createdAt && Date.now() - createdAt < 5000) {
       // Wait one tick so the chat-tree row exists in DOM before we read its color
       await nextTick()
       flashRgb.value = _readChatTreeRgb(chat.value?.id)

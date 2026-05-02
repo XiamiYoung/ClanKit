@@ -466,7 +466,7 @@ watch(
     if (_flashTimer) { clearTimeout(_flashTimer); _flashTimer = null }
     flashMode.value = false
     const createdAt = chat.value?.createdAt
-    if (chat.value?.id && createdAt && Date.now() - createdAt < 2000) {
+    if (chat.value?.id && createdAt && Date.now() - createdAt < 5000) {
       await nextTick()
       flashRgb.value = _readChatTreeRgb(chat.value?.id)
       flashMode.value = true
