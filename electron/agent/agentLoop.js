@@ -488,6 +488,11 @@ class AgentLoop {
     if (Array.isArray(enabledSkills) && enabledSkills.length > 0) {
       try {
         const { loadSkillTools } = require('../lib/skillToolLoader')
+        // Lazy-resolve store singletons so skill tools can read SQLite without
+        // require() — skills run from {DATA_DIR}/skills/ which has no path to
+        // the app's node_modules / source tree.
+        let _agentStoreRef = null
+        try { _agentStoreRef = require('./AgentStore').getInstance(this.config.dataPath || '') } catch {}
         const skillCtx = {
           dataPath: this.config.dataPath || '',
           docPath:  this.config.DoCPath  || '',
@@ -497,6 +502,7 @@ class AgentLoop {
           agentName: agentPrompts?.analysisTargetAgentName || agentPrompts?.userAgentName || 'unknown',
           agentType: agentPrompts?.analysisTargetAgentType || 'system',
           language:  this.config.language || 'en',
+          agentStore: _agentStoreRef,
         }
         const skillResult = loadSkillTools(enabledSkills, skillCtx, this.toolRegistry)
         // Forward any modelHints declared in skill manifests to the analysis tool

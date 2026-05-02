@@ -47,6 +47,7 @@ class ListAgentsTool extends BaseTool {
     )
     this._context = context || {}
     this._dataPath = context?.dataPath || null
+    this._agentStore = context?.agentStore || null
   }
 
   schema() {
@@ -56,13 +57,15 @@ class ListAgentsTool extends BaseTool {
   }
 
   async execute() {
-    if (!this._dataPath) return this._err('Data path not available in skill context')
+    // Skills run from {DATA_DIR}/skills/ and cannot require() project
+    // modules — the host injects an AgentStore reference via the context.
+    if (!this._agentStore) {
+      return this._err('AgentStore not available in skill context (host did not inject context.agentStore)')
+    }
 
     let list = []
     try {
-      const { getInstance: getAgentStore } = require('../../../agent/AgentStore')
-      const store = getAgentStore(this._dataPath)
-      list = store.getByKind('system')
+      list = this._agentStore.getByKind('system')
     } catch (err) {
       return this._err(`Failed to read agents: ${err.message}`)
     }
