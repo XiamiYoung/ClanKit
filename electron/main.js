@@ -602,6 +602,17 @@ app.whenReady().then(async () => {
     logger.error('[main] tasks.db migration failed:', err.message, err.stack)
   }
 
+  // One-shot chats/* JSON → chats.db migration. No-op after first run.
+  try {
+    const { migrate: migrateChats } = require('./migrations/chatsToSqlite')
+    const result = migrateChats(ds.paths().DATA_DIR)
+    if (!result.skipped) {
+      logger.info(`[main] chats.db migration complete: ${result.migratedChats} chats, ${result.migratedMessages} messages`)
+    }
+  } catch (err) {
+    logger.error('[main] chats.db migration failed:', err.message, err.stack)
+  }
+
   createWindow()
 
   // ── Lazy local file server for HTML preview (started on first use) ──
