@@ -445,6 +445,143 @@ class ChatStore {
     if (!chatId) return 0
     return this._open().prepare('SELECT COUNT(*) AS n FROM messages WHERE chat_id = ?').get(chatId).n
   }
+
+  // ── Messages ────────────────────────────────────────────────────────────
+
+  /**
+   * Get all messages for a chat in chronological order.
+   * Returns plain message objects with segments deserialized.
+   */
+  getMessages(chatId) {
+    if (!chatId) return []
+    const db = this._open()
+    const rows = db.prepare(`
+      SELECT * FROM messages WHERE chat_id = ? ORDER BY ts ASC, rowid ASC
+    `).all(chatId)
+    return rows.map(rowToMessage)
+  }
+
+  /**
+   * Paginated message load. `before` is a ms timestamp; returns the `limit`
+   * most-recent messages with ts < before. Useful for "load older" UX.
+   */
+  getMessagesPage(chatId, { before = null, limit = 100 } = {}) {
+    if (!chatId) return []
+    const db = this._open()
+    const sql = before
+      ? 'SELECT * FROM messages WHERE chat_id = ? AND ts < ? ORDER BY ts DESC LIMIT ?'
+      : 'SELECT * FROM messages WHERE chat_id = ? ORDER BY ts DESC LIMIT ?'
+    const args = before ? [chatId, before, limit] : [chatId, limit]
+    const rows = db.prepare(sql).all(...args)
+    return rows.reverse().map(rowToMessage)
+  }
+
+  /**
+   * Append a single message. ON CONFLICT updates — same message id rewrites,
+   * which is fine for stream-incremental persistence.
+   */
+  appendMessage(chatId, msg) {
+    if (!chatId) throw new Error('appendMessage: chatId required')
+    if (!msg?.id) throw new Error('appendMessage: msg.id required')
+    const db = this._open()
+    const r = messageToRow(msg, chatId)
+    db.prepare(`
+      INSERT INTO messages (
+        id, chat_id, role, content, segments, ts, created_at, duration_ms,
+        user_agent_id, agent_id, agent_name, is_error, error_detail, error_code,
+        plan_data, plan_state, token_usage, text_for_search
+      ) VALUES (
+        @id, @chat_id, @role, @content, @segments, @ts, @created_at, @duration_ms,
+        @user_agent_id, @agent_id, @agent_name, @is_error, @error_detail, @error_code,
+        @plan_data, @plan_state, @token_usage, @text_for_search
+      )
+      ON CONFLICT(id) DO UPDATE SET
+        role=excluded.role, content=excluded.content, segments=excluded.segments,
+        ts=excluded.ts, duration_ms=excluded.duration_ms,
+        user_agent_id=excluded.user_agent_id, agent_id=excluded.agent_id,
+        agent_name=excluded.agent_name, is_error=excluded.is_error,
+        error_detail=excluded.error_detail, error_code=excluded.error_code,
+        plan_data=excluded.plan_data, plan_state=excluded.plan_state,
+        token_usage=excluded.token_usage,
+        text_for_search=excluded.text_for_search
+    `).run(r)
+    db.prepare('UPDATE chats SET last_message_at = ?, updated_at = ? WHERE id = ?')
+      .run(r.ts, Date.now(), chatId)
+  }
+
+  /**
+   * Bulk-append messages atomically. Used by migration script and bulk imports.
+   */
+  appendMessages(chatId, msgs) {
+    if (!chatId) throw new Error('appendMessages: chatId required')
+    if (!Array.isArray(msgs) || msgs.length === 0) return
+    const db = this._open()
+    const insert = db.prepare(`
+      INSERT INTO messages (
+        id, chat_id, role, content, segments, ts, created_at, duration_ms,
+        user_agent_id, agent_id, agent_name, is_error, error_detail, error_code,
+        plan_data, plan_state, token_usage, text_for_search
+      ) VALUES (
+        @id, @chat_id, @role, @content, @segments, @ts, @created_at, @duration_ms,
+        @user_agent_id, @agent_id, @agent_name, @is_error, @error_detail, @error_code,
+        @plan_data, @plan_state, @token_usage, @text_for_search
+      )
+      ON CONFLICT(id) DO UPDATE SET
+        role=excluded.role, content=excluded.content, segments=excluded.segments,
+        ts=excluded.ts, duration_ms=excluded.duration_ms,
+        user_agent_id=excluded.user_agent_id, agent_id=excluded.agent_id,
+        agent_name=excluded.agent_name, is_error=excluded.is_error,
+        error_detail=excluded.error_detail, error_code=excluded.error_code,
+        plan_data=excluded.plan_data, plan_state=excluded.plan_state,
+        token_usage=excluded.token_usage,
+        text_for_search=excluded.text_for_search
+    `)
+    let maxTs = 0
+    const tx = db.transaction(() => {
+      for (const m of msgs) {
+        if (!m?.id) continue
+        const r = messageToRow(m, chatId)
+        insert.run(r)
+        if (r.ts > maxTs) maxTs = r.ts
+      }
+      if (maxTs > 0) {
+        db.prepare('UPDATE chats SET last_message_at = ?, updated_at = ? WHERE id = ?')
+          .run(maxTs, Date.now(), chatId)
+      }
+    })
+    tx()
+  }
+
+  removeMessage(chatId, msgId) {
+    if (!chatId || !msgId) return
+    const db = this._open()
+    db.prepare('DELETE FROM messages WHERE chat_id = ? AND id = ?').run(chatId, msgId)
+  }
+
+  /**
+   * FTS5 full-text search across messages. Returns matching messages
+   * ranked by BM25.
+   */
+  searchFulltext(query, { chatId = null, limit = 50 } = {}) {
+    if (!query || typeof query !== 'string') return []
+    const db = this._open()
+    const sql = chatId
+      ? `SELECT m.* FROM messages_fts f
+         JOIN messages m ON f.rowid = m.rowid
+         WHERE f.text_for_search MATCH ? AND m.chat_id = ?
+         ORDER BY bm25(messages_fts) LIMIT ?`
+      : `SELECT m.* FROM messages_fts f
+         JOIN messages m ON f.rowid = m.rowid
+         WHERE f.text_for_search MATCH ?
+         ORDER BY bm25(messages_fts) LIMIT ?`
+    const args = chatId ? [query, chatId, limit] : [query, limit]
+    try {
+      return db.prepare(sql).all(...args).map(rowToMessage)
+    } catch (err) {
+      logger.warn('[ChatStore] searchFulltext error:', err.message)
+      return []
+    }
+  }
 }
 
 let _instance = null
