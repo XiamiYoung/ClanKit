@@ -37,13 +37,13 @@ class AnalyzeAgentTool extends BaseTool {
       isSelf
         ? `Load the complete imported chat history to perform deep self-analysis of "Me" (the user). ` +
           'Step 1: call with action="stats" to get total message count, date range, monthly activity heat map, and sender breakdown. ' +
-          'Step 2 (optional): call with action="read_import_artifacts" to load pre-computed Speech DNA, Nuwa persona sections, evidence index, and Reply Bank stats from the import pipeline. ' +
+          'Step 2 (optional): call with action="read_import_artifacts" to load pre-computed Speech DNA, Persona persona sections, evidence index, and Reply Bank stats from the import pipeline. ' +
           'Step 3: call with action="analyze_all" to run parallel chunked analysis of all messages. ' +
           'Step 4: call with action="extract_sections" to produce structured JSON for the report. ' +
           'Step 5: call render_persona_report tool passing sections and stats objects — the tool auto-generates all D scalars and HTML fragments. Do NOT use file_operation to write HTML — always use render_persona_report.'
         : `Load the complete imported chat history for "${targetAgentName}" to perform deep analysis. ` +
           'Step 1: call with action="stats" to get total message count, date range, monthly activity heat map, and sender breakdown. ' +
-          'Step 2 (optional): call with action="read_import_artifacts" to load pre-computed Speech DNA, Nuwa persona sections, evidence index, and Reply Bank stats from the import pipeline. ' +
+          'Step 2 (optional): call with action="read_import_artifacts" to load pre-computed Speech DNA, Persona persona sections, evidence index, and Reply Bank stats from the import pipeline. ' +
           'Step 3: call with action="analyze_all" to run parallel chunked analysis of all messages. ' +
           'Step 4: call with action="extract_sections" to produce structured JSON for the report. ' +
           'Step 5: call render_persona_report tool passing sections and stats objects — the tool auto-generates all D scalars and HTML fragments. Do NOT use file_operation to write HTML — always use render_persona_report.',
@@ -164,7 +164,7 @@ class AnalyzeAgentTool extends BaseTool {
             '"messages": load messages by page (150 per page, chronological). ' +
             '"analyze_all": perform full parallel chunked analysis of all messages (recommended for comprehensive analysis). Cached automatically — if the same agent was analyzed before and no new messages have been added since, returns the cached result instantly. Use force_refresh=true to invalidate cache. ' +
             '"extract_sections": REQUIRED STEP after analyze_all before generating the HTML report. Takes the cached narrative analysis + message samples and produces structured JSON with 19 sections of data (intimacy score, constellation, dialogue theatre, subtext decoder, interaction tips, signals, compatibility, etc). Fast (~1-2 min). Re-runnable without re-analyzing. Pass the returned sections + stats objects directly to render_persona_report — the tool auto-generates all D scalars and 27 HTML fragments internally. ' +
-            '"read_import_artifacts": load pre-computed artifacts from the Nuwa import pipeline — Speech DNA, persona sections, evidence index, Reply Bank stats. Returns whatever exists; gracefully handles missing files (e.g. for agents created without chat import).',
+            '"read_import_artifacts": load pre-computed artifacts from the Persona import pipeline — Speech DNA, persona sections, evidence index, Reply Bank stats. Returns whatever exists; gracefully handles missing files (e.g. for agents created without chat import).',
         },
         page: {
           type: 'integer',
@@ -1484,7 +1484,7 @@ Output JSON directly, starting with { :`
   }
 
   /**
-   * Read pre-computed artifacts from the Nuwa import pipeline.
+   * Read pre-computed artifacts from the Persona import pipeline.
    * Gracefully handles any or all files being missing — returns what exists.
    */
   _readImportArtifacts() {
@@ -1494,7 +1494,7 @@ Output JSON directly, starting with { :`
       agent_name: this.targetAgentName,
       imported: false,   // true if any import artifacts found
       speechDna: null,
-      nuwaSections: null,
+      personaSections: null,
       evidenceIndex: null,
       replyBank: null,
       harness: null,
@@ -1519,11 +1519,11 @@ Output JSON directly, starting with { :`
       logger.warn('[AnalyzeAgentTool] import_artifacts read error:', err.message)
     }
 
-    // 4. Nuwa sections from the memory store (extract only Nuwa-specific sections)
+    // 4. Persona sections from the memory store (extract only Persona-specific sections)
     if (agentTypeFound) {
       try {
         const content = _memoryStore.readMarkdown(agentId, agentTypeFound) || ''
-        const nuwaSectionNames = ['Mental Models', 'Decision Heuristics', 'Values & Anti-Patterns',
+        const personaSectionNames = ['Mental Models', 'Decision Heuristics', 'Values & Anti-Patterns',
           'Relational Genealogy', 'Honest Boundaries', 'Core Tensions', 'Relationship Timeline']
         const sections = {}
         let currentSection = null
@@ -1531,7 +1531,7 @@ Output JSON directly, starting with { :`
         for (const line of content.split('\n')) {
           const m = line.match(/^## (.+)$/)
           if (m) {
-            if (currentSection && nuwaSectionNames.includes(currentSection)) {
+            if (currentSection && personaSectionNames.includes(currentSection)) {
               sections[currentSection] = currentLines.join('\n').trim()
             }
             currentSection = m[1]
@@ -1540,13 +1540,13 @@ Output JSON directly, starting with { :`
             currentLines.push(line)
           }
         }
-        if (currentSection && nuwaSectionNames.includes(currentSection)) {
+        if (currentSection && personaSectionNames.includes(currentSection)) {
           sections[currentSection] = currentLines.join('\n').trim()
         }
         // Only include if at least one section has real content (not just placeholder)
         const hasSections = Object.values(sections).some(s => s && !s.startsWith('_(none'))
         if (hasSections) {
-          result.nuwaSections = sections
+          result.personaSections = sections
           result.imported = true
         }
       } catch (err) {
@@ -1591,9 +1591,9 @@ Output JSON directly, starting with { :`
       const score = h.score
       summary.push(`Validation: ${score ? `${score.likes}/${score.total} liked (${score.pct}%)` : 'run but not scored'}`)
     }
-    if (result.nuwaSections) {
-      const filled = Object.entries(result.nuwaSections).filter(([, v]) => v && !v.startsWith('_(none')).map(([k]) => k)
-      summary.push(`Nuwa sections populated: ${filled.join(', ')}`)
+    if (result.personaSections) {
+      const filled = Object.entries(result.personaSections).filter(([, v]) => v && !v.startsWith('_(none')).map(([k]) => k)
+      summary.push(`Persona sections populated: ${filled.join(', ')}`)
     }
     result.summary = summary.join('\n')
 

@@ -269,7 +269,33 @@ function classifyMessages(messages, targetName) {
 }
 
 /**
- * Build the message block string for the AI prompt.
+ * Replace one-time contextual identifiers in chat content with placeholders.
+ * Prevents the LLM from elevating tracking numbers, order IDs, verification codes,
+ * and WeChat IDs into "personality traits" when they're really just transient
+ * artefacts of one specific exchange.
+ *
+ * Conservative thresholds — keep dates, currency amounts, model numbers, and
+ * Chinese mobile numbers (11 digits) intact.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+function scrubOneTimeIds(text) {
+  if (!text) return text
+  let s = String(text)
+  // Express tracking IDs — China EMS / domestic / international
+  s = s.replace(/\bE\d{8,12}(?:CN)?\b/g, '[tracking_id]')
+  // SF / YT / JD / ZTO / etc. (2-4 letter prefix + 10-18 digits)
+  s = s.replace(/\b[A-Z]{2,4}\d{10,18}\b/g, '[tracking_id]')
+  // Long pure-number IDs (order numbers, transaction IDs).
+  // Threshold 12+ avoids 11-digit phone numbers and 4-digit years.
+  s = s.replace(/\b\d{12,}\b/g, '[number]')
+  // WeChat IDs (wxid_xxxxxxxxxx)
+  s = s.replace(/\bwxid_[a-zA-Z0-9_-]+/g, '[contact_id]')
+  return s
+}
+
+/**
  * Build the message block string for the AI prompt.
  *
  * @param {object} classified - result of classifyMessages()
@@ -288,7 +314,7 @@ function buildMessageBlock(classified, targetName, analyzeTarget) {
     for (const m of msgs) {
       const sender = m.sender === 'them' ? name : 'Me'
       const ts = m.timestamp ? `[${m.timestamp}] ` : ''
-      lines.push(`${ts}${sender}: ${m.content}`)
+      lines.push(`${ts}${sender}: ${scrubOneTimeIds(m.content)}`)
     }
   }
 
@@ -316,7 +342,7 @@ function buildMessageBlock(classified, targetName, analyzeTarget) {
     for (const m of allSlice) {
       const sender = m.sender === 'them' ? name : 'Me'
       const ts = m.timestamp ? `[${m.timestamp}] ` : ''
-      lines.push(`${ts}${sender}: ${m.content}`)
+      lines.push(`${ts}${sender}: ${scrubOneTimeIds(m.content)}`)
     }
   }
 
@@ -350,4 +376,5 @@ module.exports = {
   classifyMessages,
   buildMessageBlock,
   listWhatsAppSenders,
+  scrubOneTimeIds,
 }

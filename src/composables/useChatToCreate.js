@@ -20,7 +20,7 @@ export function useChatToCreate() {
       chatTitle || t('chats.newChat'),
       [BUILTIN_SYSTEM_AGENT_ID],
       null,
-      { userAgentId: userAgent?.id }
+      { userAgentId: userAgent?.id, mode: 'productivity' }
     )
     if (chat?.id) {
       chatsStore.pendingInputPrefill = { text: prefillText, chatId: chat.id }

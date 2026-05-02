@@ -1,9 +1,9 @@
 'use strict'
 
 /**
- * critic.js — Phase 2 of the Nuwa pipeline: Triple Verification.
+ * critic.js — Phase 2 of the Persona pipeline: Triple Verification.
  *
- * Each claim from the extractors must pass three checks (照搬 nuwa 方法论):
+ * Each claim from the extractors must pass three checks (照搬 persona 方法论):
  *   1. Cross-Domain Reproduction  — appears in ≥2 different topics/contexts
  *   2. Generative Power           — predicts the person's reaction to new situations
  *   3. Exclusivity                — distinctive to this person, not generic human

@@ -1,7 +1,7 @@
 'use strict'
 
 /**
- * claims.js — schema + helpers for the Nuwa-style claim/evidence pipeline.
+ * claims.js — schema + helpers for the Persona-style claim/evidence pipeline.
  *
  * A "claim" is a single observation about the target person, extracted from
  * chat history by one of the dimension extractors in extractors.js. Every
@@ -11,7 +11,7 @@
  * Pipeline:
  *   extractors.js → produces raw claims
  *   critic.js    → verifies each claim against 3 criteria, drops weak ones
- *   synthesizer.js → assembles verified claims into 8 nuwa sections
+ *   synthesizer.js → assembles verified claims into 8 persona sections
  */
 
 const { logger } = require('../../logger')
@@ -50,11 +50,12 @@ function tagMessagesWithIds(messages) {
  *   [m2] 2024-07-12 22:16 Them: 怎么了
  */
 function formatTaggedChatBlock(tagged, themLabel = 'Them') {
+  const { scrubOneTimeIds } = require('./chatParser')
   const lines = []
   for (const t of tagged) {
     const sender = t.sender === 'them' ? themLabel : (t.sender === 'me' ? 'Me' : t.sender)
     const ts = t.timestamp ? `${t.timestamp} ` : ''
-    const content = (t.content || '').replace(/\n+/g, ' ').slice(0, 500)
+    const content = scrubOneTimeIds((t.content || '').replace(/\n+/g, ' ').slice(0, 500))
     lines.push(`[${t.id}] ${ts}${sender}: ${content}`)
   }
   return lines.join('\n')

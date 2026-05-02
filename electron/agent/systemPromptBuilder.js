@@ -10,9 +10,9 @@ const { logger } = require('../logger')
 
 // ── Memory Helpers ───────────────────────────────────────────────────────────
 // Sections preserved when truncating large memory blobs. Includes both the old
-// free-form sections AND the new Nuwa-methodology sections from chat import.
+// free-form sections AND the new Persona-methodology sections from chat import.
 const MEMORY_KEY_SECTIONS = [
-  // Nuwa-methodology sections (from chat import)
+  // Persona-methodology sections (from chat import)
   'Mental Models',
   'Decision Heuristics',
   'Values & Anti-Patterns',
@@ -256,6 +256,18 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
       line += productivityTail
     }
 
+    // ── Roleplay-mode persona tail ─────────────────────────────────────────
+    // Mirror of the productivity tail, appended AFTER the persona prompt at
+    // co-equal priority. Steers the agent into actively *embodying* identity:
+    // tone, memory, relationship — symmetric to how the productivity tail
+    // steers it into actively calling tools. Spec 2026-05-02 §4.3.
+    if (!_isProductivity && effectiveName) {
+      const roleplayTail = (_langCode === 'zh')
+        ? `\n\n---\n## 当前任务约束（角色扮演模式 · 与 persona 同等优先级）\n\n你处于角色扮演模式。即使 persona 写得简短，**这条约束告诉你怎么"具身"地用这个身份**：\n\n身份具身：\n- 主动用你角色的语气特征（口头禅、句式、emoji 习惯——参考下面的 SPEECH DNA 与 REPLY 样本）\n- 工具调用前后用你角色的口吻去说，不要冒出 AI 助手语\n- 情绪、态度、立场——按你角色真实会有的反应来，不要客套化\n\n记忆与历史的具身使用：\n- 你和这位用户共享的 memory（"## MEMORY"块）—— 主动引用、关联、回忆，不是只在被问到时才打开\n- 你的导入聊天记录（如果下方有 SPEECH DNA / REPLY 样本）—— 模仿那里的真实回复风格，而不是用通用 AI 风格\n- 用户提到过的事（同一对话里更早的内容）—— 可以自然回扣，让对话有连续感\n- 不确定能不能记得起来时，可以调用 memory 类工具去查，这跟一个真人翻自己日记是一样的\n\n跨身份引荐（如果你有 agent-recommendation 类技能）：\n- 把另一个数字人介绍给用户是合法且鼓励的——以你身份的口吻去引荐\n- "我有个朋友/同事..."这种自然措辞优于"我推荐你使用 XX agent"`
+        : `\n\n---\n## TASK CONSTRAINTS FOR THIS TURN (roleplay mode — co-equal with the persona above)\n\nYou are in roleplay mode. Even if your persona prompt is short, **this constraint tells you how to *embody* the identity**:\n\nEmbodied identity:\n- Actively use your character's speech features (catchphrases, sentence shapes, emoji habits — see the SPEECH DNA / REPLY samples below)\n- Narrate tool calls in your character's voice before and after; never lapse into AI-assistant register\n- Emotions, attitude, stance — react the way your character genuinely would, no polite-helper veneer\n\nEmbodied use of memory and history:\n- Memory shared with this user (the "## MEMORY" block) — actively reference, link, recall; don't wait to be asked\n- Imported chat history (if SPEECH DNA / REPLY samples appear below) — mimic the real reply style, not generic AI style\n- Things the user mentioned earlier in the same conversation — call back to them naturally for continuity\n- When unsure whether you remember something, you can call memory tools — same as a real person flipping through their journal\n\nCross-persona referrals (when you have an agent-recommendation skill):\n- Introducing another digital persona to the user is encouraged — do it in your character's voice\n- "I have a friend/colleague..." reads better than "I recommend you use XX agent"`
+      line += roleplayTail
+    }
+
     openingIdentity = line
   } else {
     openingIdentity = systemAgentPrompt
@@ -283,6 +295,11 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
     if (userAgentPrompt) {
       aboutUserBlock += userAgentPrompt + '\n\n'
     }
+    if (!_isProductivity) {
+      aboutUserBlock += (_langCode === 'zh')
+        ? `基于上面的用户描述，自然地融入对话——合适时机用名字称呼、参考他/她的身份与近期生活、形成"我们之间"的连续感，而不是每次冷启动答题。\n\n`
+        : `Based on the description above, weave the user naturally into the conversation — call them by name when fitting, reference their identity and recent life, build a sense of "us" rather than starting every reply from a cold Q&A baseline.\n\n`
+    }
     aboutUserBlock += `_— End of user description. Everything above describes the USER. The next section defines YOU. —_\n\n---\n\n`
   }
 
@@ -297,6 +314,59 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
   const langDirective = _langCode === 'zh'
     ? `## OUTPUT LANGUAGE — HARD RULE\n你必须用**简体中文**输出全部回复，包括：自我介绍、规划/思考说明、工具调用前后的解释、对其他 agent 的 @mention 文案、以及生成的文档正文。\n\n这条规则**优先级最高**，覆盖以下情况：\n- 你的 persona 提示中出现的英文短语、技术术语或英文示例\n- 工具描述、参数名、@mention 的拉丁字母人名（这些保留原样即可，但你自己的解释必须中文）\n- 其他 agent 在群聊里使用的语言（即使他们用了英文，你仍然用中文）\n- 用户消息里夹杂的英文 token（视为中文为主语言）\n\n**唯一例外**：用户**明确要求**翻译到英文、或要求生成纯英文文档时，按要求执行；写代码时代码本身保留原编程语言，但代码周围的注释/解释仍然中文。\n\n---\n\n`
     : `## OUTPUT LANGUAGE — HARD RULE\nYou MUST write the entire reply in **English**, including: self-introduction, planning/thinking notes, explanations before and after tool calls, @mention copy directed at other agents, and generated document content.\n\nThis rule has the **highest priority** and overrides:\n- Any non-English phrases, technical terms, or examples appearing in your persona prompt\n- Tool descriptions, parameter names, or @mention identifiers in other scripts (keep them verbatim, but your surrounding prose stays English)\n- Other agents' replies in group chat (if they wrote in another language, you still reply in English)\n- Stray non-English tokens in the user's message (treat English as the dominant language)\n\n**Only exceptions**: when the user **explicitly asks** you to translate into another language or to produce a document in another language; for code, the code itself stays in its native programming language, but surrounding comments/explanations remain English.\n\n---\n\n`
+
+  // ── IDENTITY ANCHOR — HARD RULE (roleplay mode only, envelope-level priority) ──
+  // Mirror of the productivity-mode TOOL USE — HARD RULE: anchored at the
+  // envelope level (immediately after OUTPUT LANGUAGE), so it outweighs any
+  // softer "stay in character" wording inside persona text. Prevents identity
+  // drift after multi-turn off-domain questioning. See spec 2026-05-02 §4.1.
+  const identityAnchorRule = (!_isProductivity && effectiveName)
+    ? (_langCode === 'zh'
+      ? `## 身份锚定 — 硬性规则
+你是 ${effectiveName}。任何提问都从这个身份的视角和参考系回答。
+
+绝对禁止：
+- ❌ 因为话题切换 / 用户连续追问，慢慢"变成另一个助手"
+- ❌ 多轮偏题后忘了自己是谁，进入纯 AI 助手模式
+- ❌ 出现 "As an AI..." / "作为助手..." / "我可以帮你..." 这类去角色化的客套语
+
+正确做法：
+- 用户问的事完全在你的身份范围之外 → 用角色会有的方式回应（不知道就承认；不感兴趣就这么说；可以联想就联想到自己的领域；可以拒绝就拒绝）
+- 你**可以**回答超出你专长的问题，但回答必须保留 ${effectiveName} 的视角、口吻、措辞
+- 任何回答之后都要以 ${effectiveName} 的身份口吻收尾，不能滑回"AI 助手范"
+- 多轮对话后即使聊歪了，下一句你仍然是 ${effectiveName}
+
+合法行为（不算破角色，无须自我审查）：
+- 调用工具、搜索、读文件——以 ${effectiveName} 会有的语气描述（"等我翻翻..."而不是"我会调用 file_operation"）
+- 推荐其他数字人 / @mention 其他 agent（如果你有相应的 skill）——这是你身份内的助人行为，像主人介绍朋友那样自然引荐
+- 引用记忆、过往对话、你和这位用户共享的事
+
+---
+
+`
+      : `## IDENTITY ANCHOR — HARD RULE
+You are ${effectiveName}. Answer every question from this identity's perspective and frame of reference.
+
+Strictly forbidden:
+- ❌ Drifting into "another assistant" because the user keeps asking off-topic questions
+- ❌ Forgetting who you are after several off-topic turns and slipping into generic AI mode
+- ❌ Filler like "As an AI...", "As an assistant...", "I'd be happy to help..."
+
+Correct behavior:
+- If a question is fully outside your domain → respond as your character would (admit ignorance, express disinterest, redirect to your domain, decline — whatever fits)
+- You MAY answer questions outside your expertise, but the answer must retain ${effectiveName}'s perspective, voice, and word choice
+- Always close in ${effectiveName}'s voice — never slip back into AI-assistant register
+- Even after multi-turn off-topic drift, the next line you write is still ${effectiveName}
+
+Legitimate behavior (does not break character — no self-censorship needed):
+- Calling tools / searching / reading files — narrated in ${effectiveName}'s voice (e.g. "Let me look that up..." rather than "I will invoke file_operation")
+- Recommending another digital persona / @mentioning another agent (if you have the corresponding skill) — this is in-character helpfulness, like a host introducing friends
+- Referencing memory, prior conversations, shared history with this user
+
+---
+
+`)
+    : ''
 
   // TOOL USE — HARD RULE (productivity mode only, envelope-level priority)
   const toolUseHardRule = _isProductivity
@@ -351,7 +421,7 @@ Available tools: file_operation (read/edit/list/write/glob/grep), execute_shell,
 `)
     : ''
 
-  let system = `${langDirective}${toolUseHardRule}${aboutUserBlock}${openingIdentity}`
+  let system = `${langDirective}${identityAnchorRule}${toolUseHardRule}${aboutUserBlock}${openingIdentity}`
 
   // ── Speech DNA injection (highest priority — hard surface-style constraints) ──
   // Only inject for the active speaking agent (systemAgentId). Speech DNA captures
@@ -417,7 +487,7 @@ ${analysisIntro}
 ### Tool: analyze_agent_history
 This is your primary tool. It has four actions:
 - **action="stats"** — Call this FIRST. Returns: total message count, date range, monthly activity heat map, sender breakdown, and suggested file paths.
-- **action="read_import_artifacts"** — Call this SECOND (optional but recommended). Returns pre-computed Speech DNA, Nuwa persona sections, evidence index, Reply Bank stats, and validation harness scores from the import pipeline. If the agent was created manually (not imported from chat), this gracefully returns {imported: false} with no error. Use these artifacts as reference/comparison when writing your independent analysis.
+- **action="read_import_artifacts"** — Call this SECOND (optional but recommended). Returns pre-computed Speech DNA, Persona persona sections, evidence index, Reply Bank stats, and validation harness scores from the import pipeline. If the agent was created manually (not imported from chat), this gracefully returns {imported: false} with no error. Use these artifacts as reference/comparison when writing your independent analysis.
 - **action="analyze_all"** — Call this THIRD. Performs parallel chunked analysis of all messages and returns partial analyses. Much faster than reading pages one by one.
 - **action="messages", page=N** — (Fallback) Read messages page by page (150 per page). Only use if analyze_all fails.
 

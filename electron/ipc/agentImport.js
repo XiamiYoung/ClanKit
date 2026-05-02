@@ -23,7 +23,7 @@ const { logger } = require('../logger')
 const { extractWhatsAppMessages, extractPlainTextMessages, classifyMessages, buildMessageBlock, listWhatsAppSenders } = require('../agent/chatImport/chatParser')
 const { buildCombinedPrompt, generatePersona } = require('../agent/chatImport/personaBuilder')
 const { extractSpeechDna } = require('../agent/chatImport/speechDnaExtractor')
-const { extractNuwaSections } = require('../agent/chatImport/nuwaPipeline')
+const { extractPersonaSections } = require('../agent/chatImport/personaPipeline')
 const wechatDecryptor = require('../agent/chatImport/wechatDecryptor')
 const wechatParser = require('../agent/chatImport/wechatParser')
 
@@ -281,29 +281,29 @@ ipcMain.handle('agent:import-analyze', async (event, { classified, profile, conf
 
     const result = await generatePersona(fullPrompt, effectiveConfig, (payload) => sendProgress(event, payload), profile, contextWindows, language, analyzeTarget)
 
-    // Phase A + B: run Speech DNA extraction and the 4-phase Nuwa pipeline in parallel.
+    // Phase A + B: run Speech DNA extraction and the 4-phase Persona pipeline in parallel.
     // Both are purely additive — failure is logged but never blocks the legacy persona output.
     if (result?.success) {
-      sendProgress(event, { step: 'nuwa', progress: 90, message: 'Running 4-phase extraction (Nuwa pipeline)...' })
+      sendProgress(event, { step: 'persona', progress: 90, message: 'Running 4-phase extraction (Persona pipeline)...' })
 
-      const [speechDnaResult, nuwaResult] = await Promise.all([
+      const [speechDnaResult, personaResult] = await Promise.all([
         extractSpeechDna(classified, profile, effectiveConfig, language, analyzeTarget)
           .catch(err => { logger.warn('[analyze] speech DNA failed (non-fatal):', err.message); return null }),
-        extractNuwaSections(classified, profile, effectiveConfig, language, analyzeTarget, (payload) => {
+        extractPersonaSections(classified, profile, effectiveConfig, language, analyzeTarget, (payload) => {
           sendProgress(event, { step: payload.phase, progress: payload.progress, message: payload.message })
-        }).catch(err => { logger.warn('[analyze] nuwa pipeline failed (non-fatal):', err.message); return null }),
+        }).catch(err => { logger.warn('[analyze] persona pipeline failed (non-fatal):', err.message); return null }),
       ])
 
       if (speechDnaResult) {
         result.speechDna = speechDnaResult
         logger.info(`agent:import-analyze: extracted speech DNA (${speechDnaResult.catchphrases?.length || 0} catchphrases)`)
       }
-      if (nuwaResult) {
-        if (nuwaResult.sections) result.nuwaSections = nuwaResult.sections
-        if (nuwaResult.evidenceIndex) result.evidenceIndex = nuwaResult.evidenceIndex
-        if (nuwaResult.counts) result.nuwaCounts = nuwaResult.counts
-        if (nuwaResult.accuracyTier) result.accuracyTier = nuwaResult.accuracyTier
-        logger.info(`agent:import-analyze: nuwa pipeline tier=${nuwaResult.accuracyTier?.tier}, counts=${JSON.stringify(nuwaResult.counts || {})}`)
+      if (personaResult) {
+        if (personaResult.sections) result.personaSections = personaResult.sections
+        if (personaResult.evidenceIndex) result.evidenceIndex = personaResult.evidenceIndex
+        if (personaResult.counts) result.personaCounts = personaResult.counts
+        if (personaResult.accuracyTier) result.accuracyTier = personaResult.accuracyTier
+        logger.info(`agent:import-analyze: persona pipeline tier=${personaResult.accuracyTier?.tier}, counts=${JSON.stringify(personaResult.counts || {})}`)
       }
     }
 
@@ -350,10 +350,16 @@ ${generatedPrompt}`
     const fullSystem = speechBlock ? `${characterHeader}\n\n---\n${speechBlock}` : characterHeader
 
     const { _callLLM } = require('../agent/chatImport/personaBuilder')
+    const { buildHarnessPrompt } = require('../agent/chatImport/harnessPromptBuilder')
 
-    // Run all pairs in parallel, capped at 6 concurrent to avoid rate limits
-    const BATCH = 6
+    // Run pairs in small batches. BATCH=3 strikes a balance: faster than fully
+    // sequential but still cycles sibling-reply context every 3 pairs so later
+    // batches see what was already produced and diversify against it. Without
+    // this, the LLM tends to spam the same 2-3 catchphrases across all 15
+    // validation pairs, making the validation useless.
+    const BATCH = 3
     const results = []
+    const siblingReplies = []  // accumulates across batches; injected as anti-repetition signal
     for (let i = 0; i < pairs.length; i += BATCH) {
       const batch = pairs.slice(i, i + BATCH)
       sendProgress(event, {
@@ -361,27 +367,22 @@ ${generatedPrompt}`
         progress: 10 + Math.round((i / pairs.length) * 85),
         message: zh ? `正在生成第 ${i + 1}-${Math.min(i + BATCH, pairs.length)}/${pairs.length} 条回复...` : `Generating replies ${i + 1}-${Math.min(i + BATCH, pairs.length)}/${pairs.length}...`,
       })
+
+      // Snapshot siblings BEFORE the batch fires so all parallel calls in this
+      // batch see the same set (deterministic, no race).
+      const siblingSnapshot = siblingReplies.slice(-9)
+
       const batchResults = await Promise.all(
         batch.map(async (pair) => {
           try {
-            // Build per-pair prompt. If this pair has previous attempts
-            // (from earlier rounds the user rated 👎), inject them as
-            // feedback so the model tries a different approach this time.
-            let feedbackBlock = ''
-            const prev = Array.isArray(pair.previousAttempts)
-              ? pair.previousAttempts.filter(a => a.rating === 'dislike')
-              : []
-            if (prev.length > 0) {
-              const attempts = prev.map((a, k) => {
-                let line = zh ? `尝试 ${k + 1}: "${a.generatedReply}"` : `Attempt ${k + 1}: "${a.generatedReply}"`
-                if (a.reason) line += zh ? ` — 用户反馈: "${a.reason}"` : ` — feedback: "${a.reason}"`
-                return line
-              }).join('\n')
-              feedbackBlock = zh
-                ? `\n\n以下是你之前的回复，用户认为不像本人：\n${attempts}\n\n这次换一种回法，避开之前的问题。`
-                : `\n\nYour previous replies were marked "not like them" by the user:\n${attempts}\n\nTry a different approach this time — avoid the issues above.`
-            }
-            const fullPrompt = `${fullSystem}\n\n---\nThe user just said: "${pair.userMessage}"${feedbackBlock}\n\nReply as ${agentName} would — no explanation, no stage directions, just the actual reply text.`
+            const fullPrompt = buildHarnessPrompt({
+              fullSystem,
+              agentName,
+              userMessage: pair.userMessage,
+              siblings: siblingSnapshot,
+              previousAttempts: pair.previousAttempts || [],
+              language,
+            })
             const raw = await _callLLM(fullPrompt, effectiveConfig, 512)
             return {
               userMessage: pair.userMessage,
@@ -400,6 +401,10 @@ ${generatedPrompt}`
           }
         })
       )
+      // Append non-empty replies to the rolling sibling buffer for next batch.
+      for (const r of batchResults) {
+        if (r.generatedReply) siblingReplies.push(r.generatedReply)
+      }
       results.push(...batchResults)
     }
 
@@ -430,13 +435,13 @@ ipcMain.handle('agent:import-write-harness', async (_event, { agentId, agentType
   }
 })
 
-// ─── agent:import-write-nuwa-sections ────────────────────────────────────
-// Persist Nuwa-pipeline sections to the agent's memory store (structured bulk
+// ─── agent:import-write-persona-sections ────────────────────────────────────
+// Persist Persona-pipeline sections to the agent's memory store (structured bulk
 // write) and the evidence index to a sidecar JSON. Called by the wizard after
 // agent creation. Merges into the existing memory — preserves any runtime
 // entries already written.
 
-ipcMain.handle('agent:import-write-nuwa-sections', async (_event, { agentId, agentName, agentType, sections, evidenceIndex }) => {
+ipcMain.handle('agent:import-write-persona-sections', async (_event, { agentId, agentName, agentType, sections, evidenceIndex }) => {
   try {
     if (!agentId || !sections || typeof sections !== 'object') {
       return { success: true, written: false }
@@ -457,7 +462,7 @@ ipcMain.handle('agent:import-write-nuwa-sections', async (_event, { agentId, age
 
     const { headerLines, sections: memorySections } = parseMarkdown(content)
 
-    // For each nuwa section, REPLACE (not merge) the content. These sections are
+    // For each persona section, REPLACE (not merge) the content. These sections are
     // owned by the import pipeline and rewritten wholesale on re-import.
     for (const [sectionName, sectionBody] of Object.entries(sections)) {
       if (!sectionBody || !sectionBody.trim()) continue
@@ -473,7 +478,7 @@ ipcMain.handle('agent:import-write-nuwa-sections', async (_event, { agentId, age
     store.upsertMeta(agentId, type, agentName)
     const result = store.writeMarkdown(agentId, type, newContent)
 
-    // Evidence index goes into the import_artifacts table. The nuwa sections
+    // Evidence index goes into the import_artifacts table. The persona sections
     // above already wrote into memory.db — that path is unchanged.
     if (evidenceIndex) {
       const { getInstance: getAgentStore } = require('../agent/AgentStore')
@@ -481,10 +486,10 @@ ipcMain.handle('agent:import-write-nuwa-sections', async (_event, { agentId, age
       agentStore.upsertImportArtifacts(agentId, { evidence: evidenceIndex })
     }
 
-    logger.info(`agent:import-write-nuwa-sections: wrote (store)`, { agentId, ...result })
+    logger.info(`agent:import-write-persona-sections: wrote (store)`, { agentId, ...result })
     return { success: true, written: true, ...result }
   } catch (err) {
-    logger.error('agent:import-write-nuwa-sections error', err.message)
+    logger.error('agent:import-write-persona-sections error', err.message)
     return { success: false, error: err.message }
   }
 })
@@ -505,6 +510,77 @@ ipcMain.handle('agent:import-write-speech-dna', async (_event, { agentId, agentT
     return { success: true, written: true }
   } catch (err) {
     logger.error('agent:import-write-speech-dna error', err.message)
+    return { success: false, error: err.message }
+  }
+})
+
+// ─── agent:recommend-voice ───────────────────────────────────────────────
+// Pick a voice id from a candidate list that best fits the imported persona.
+// Receives: { personaPrompt, description, gender, language, candidates: [{id,name,gender,locale,vibe}] }
+// Returns: { success: true, voiceId } where voiceId is one of the candidate ids.
+// Falls back to the first candidate on any failure — non-blocking for the wizard.
+ipcMain.handle('agent:recommend-voice', async (_event, { personaPrompt, description, gender, language, candidates, config }) => {
+  try {
+    const list = Array.isArray(candidates) ? candidates.filter(c => c && c.id) : []
+    if (list.length === 0) return { success: false, error: 'No candidate voices' }
+    if (list.length === 1) return { success: true, voiceId: list[0].id }
+
+    const ds = require('../lib/dataStore')
+    const cfg = config || ds.readJSON(ds.paths().CONFIG_FILE, {})
+    if (!cfg.utilityModel?.provider || !cfg.utilityModel?.model) {
+      return { success: true, voiceId: list[0].id, fallback: 'no_utility_model' }
+    }
+
+    const zh = language === 'zh'
+    const personaSnippet = (personaPrompt || '').slice(0, 1500)
+    const voiceLines = list.map(v => `- ${v.id} | ${v.name} | ${v.gender} | ${v.vibe || ''}`).join('\n')
+    const prompt = zh
+      ? `根据下面这个数字人的人格档案，从候选语音中挑选最契合的一个。只返回 voice id，不要任何其他文字。
+
+# 人格档案 (节选)
+${personaSnippet}
+
+# 简介
+${description || '(无)'}
+
+# 性别
+${gender || '未知'}
+
+# 候选语音
+${voiceLines}
+
+# 你的输出
+（只输出一个 voice id，例如：zh-CN-XiaoxiaoNeural）`
+      : `Pick the voice id that best matches this persona. Return only the voice id, nothing else.
+
+# Persona (excerpt)
+${personaSnippet}
+
+# Description
+${description || '(none)'}
+
+# Gender
+${gender || 'unknown'}
+
+# Candidate voices
+${voiceLines}
+
+# Your output
+(just one voice id, e.g. en-US-AndrewNeural)`
+
+    const { _callLLM } = require('../agent/chatImport/personaBuilder')
+    const raw = await _callLLM(prompt, cfg, 64, { maxRetries: 0 })
+    const cleaned = String(raw || '').trim().replace(/[`'"]/g, '').split(/\s/)[0]
+    const matched = list.find(c => c.id === cleaned)
+    if (matched) {
+      logger.info(`agent:recommend-voice: picked ${matched.id} for persona`)
+      return { success: true, voiceId: matched.id }
+    }
+    logger.warn(`agent:recommend-voice: LLM returned "${raw}" — not in candidate list, falling back`)
+    return { success: true, voiceId: list[0].id, fallback: 'no_match' }
+  } catch (err) {
+    logger.warn('agent:recommend-voice failed:', err.message)
+    // Best-effort: caller already has a gender-based default; this is a soft enhancement.
     return { success: false, error: err.message }
   }
 })

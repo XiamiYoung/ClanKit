@@ -36,7 +36,7 @@ const SAMPLE_MD = `# Memory: Alice
 - [2026-04-27] add: Likes concise replies
 `
 
-const NUWA_MD = `# Memory: Bob
+const PERSONA_MD = `# Memory: Bob
 
 > Last updated: 2026-04-27T08:00:00Z
 
@@ -73,7 +73,7 @@ describe('parseMarkdownToRows', () => {
   })
 
   it('preserves the exact bullet text including punctuation and CJK', () => {
-    const { rows } = parseMarkdownToRows(NUWA_MD, 'agent-2', 'system')
+    const { rows } = parseMarkdownToRows(PERSONA_MD, 'agent-2', 'system')
     const contents = rows.map(r => r.content)
     expect(contents).toContain('Treats arguments as collaborative truth-finding')
     expect(contents).toContain('把代码当工艺品')
@@ -115,10 +115,10 @@ describe('parseMarkdownToRows', () => {
 
   it('uses provided source and timestamp', () => {
     const { rows } = parseMarkdownToRows(SAMPLE_MD, 'agent-1', 'system', {
-      source: 'import-nuwa',
+      source: 'import-persona',
       timestamp: 1700000000000,
     })
-    expect(rows.every(r => r.source === 'import-nuwa')).toBe(true)
+    expect(rows.every(r => r.source === 'import-persona')).toBe(true)
     expect(rows.every(r => r.createdAt === 1700000000000)).toBe(true)
     expect(rows.every(r => r.updatedAt === 1700000000000)).toBe(true)
   })
@@ -210,8 +210,8 @@ describe('parseMarkdownToRows ↔ rowsToMarkdown round-trip', () => {
     expect(final).toEqual(original)
   })
 
-  it('preserves CJK and Nuwa-section content', () => {
-    const { rows, agentName } = parseMarkdownToRows(NUWA_MD, 'agent-2', 'system')
+  it('preserves CJK and Persona-section content', () => {
+    const { rows, agentName } = parseMarkdownToRows(PERSONA_MD, 'agent-2', 'system')
     const out = rowsToMarkdown(rows, { agentName, agentType: 'system' })
     const reparsed = parseMarkdownToRows(out, 'agent-2', 'system')
 

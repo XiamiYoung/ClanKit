@@ -15,6 +15,8 @@
         <div v-if="showModeChip" class="gp-mode-dd-wrap" ref="modeDropdownWrapEl">
           <button
             class="gp-mode-dd-btn"
+            :class="{ 'gp-mode-dd-flash': flashMode }"
+            :style="flashMode ? { '--flash-rgb': flashRgb } : null"
             v-tooltip="isProductivity ? t('chats.modeProductivity') : t('chats.modeChat')"
             :aria-label="isProductivity ? t('chats.modeProductivity') : t('chats.modeChat')"
             :aria-haspopup="true"
@@ -431,13 +433,48 @@ function toggleSwapMenu() {
 const chat = computed(() => chatsStore.chats.find(c => c.id === props.chatId) || null)
 const isRunning = computed(() => chat.value?.isRunning ?? false)
 const isProductivity = computed(() => chat.value?.mode === 'productivity')
-const showModeChip = computed(() => chat.value && chat.value.type !== 'analysis')
+const showModeChip = computed(() => !!chat.value)
 const modeLabel = computed(() => isProductivity.value ? t('chats.modeProductivityTooltip') : t('chats.modeChatTooltip'))
 
 // ── Mode dropdown ──
 const showProductivityConfirm = ref(false)
 const modeDropdownOpen = ref(false)
 const modeDropdownWrapEl = ref(null)
+
+// Flash the mode dropdown for 3s on entry to a freshly-created chat.
+// Color is read from the actual chat-tree active row's gradient (mid stop) so
+// the flash matches the sidebar highlight for this chat.
+function _readChatTreeRgb(chatId) {
+  if (!chatId || typeof document === 'undefined') return '37, 99, 235'
+  const row = document.querySelector('.chat-tree-row[data-chat-id="' + CSS.escape(chatId) + '"]')
+  const bgEl = row?.querySelector('div[aria-hidden="true"]')
+  if (!bgEl) return '37, 99, 235'
+  const bg = window.getComputedStyle(bgEl).backgroundImage || ''
+  const stops = bg.match(/rgb\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)/g)
+  if (!stops || stops.length === 0) return '37, 99, 235'
+  const mid = stops[Math.floor(stops.length / 2)]
+  const m = mid.match(/(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/)
+  if (!m) return '37, 99, 235'
+  return m[1] + ', ' + m[2] + ', ' + m[3]
+}
+const flashMode = ref(false)
+const flashRgb = ref('37, 99, 235')
+let _flashTimer = null
+watch(
+  () => chat.value?.id,
+  async () => {
+    if (_flashTimer) { clearTimeout(_flashTimer); _flashTimer = null }
+    flashMode.value = false
+    const createdAt = chat.value?.createdAt
+    if (chat.value?.id && createdAt && Date.now() - createdAt < 5000) {
+      await nextTick()
+      flashRgb.value = _readChatTreeRgb(chat.value?.id)
+      flashMode.value = true
+      _flashTimer = setTimeout(() => { flashMode.value = false; _flashTimer = null }, 3000)
+    }
+  },
+  { immediate: true }
+)
 
 function selectMode(target) {
   modeDropdownOpen.value = false
@@ -460,7 +497,10 @@ function _onModeDropdownDocClick(e) {
   }
 }
 onMounted(() => document.addEventListener('click', _onModeDropdownDocClick))
-onUnmounted(() => document.removeEventListener('click', _onModeDropdownDocClick))
+onUnmounted(() => {
+  document.removeEventListener('click', _onModeDropdownDocClick)
+  if (_flashTimer) { clearTimeout(_flashTimer); _flashTimer = null }
+})
 
 // ── Swap ──
 const collapsedFolders = ref(new Set())
@@ -1363,4 +1403,19 @@ function deleteMessage(msg) {
   padding: 0.1rem 0.35rem;
 }
 .gp-swap-item-indent { padding-left: 1.75rem; }
+
+/* New-chat mode-dropdown attention flash — 3 pulses over 3s, color matches the
+   chat-tree active-row palette (per-chat via --flash-rgb inline style). */
+@keyframes gp-mode-dd-flash-anim {
+  0%   { box-shadow: 0 0 0 0 rgba(var(--flash-rgb), 0); transform: scale(1); }
+  10%  { box-shadow: 0 0 0 6px rgba(var(--flash-rgb), 0.75), 0 0 20px 10px rgba(var(--flash-rgb), 0.55); transform: scale(1.06); }
+  33%  { box-shadow: 0 0 0 0 rgba(var(--flash-rgb), 0); transform: scale(1); }
+  43%  { box-shadow: 0 0 0 6px rgba(var(--flash-rgb), 0.75), 0 0 20px 10px rgba(var(--flash-rgb), 0.55); transform: scale(1.06); }
+  66%  { box-shadow: 0 0 0 0 rgba(var(--flash-rgb), 0); transform: scale(1); }
+  76%  { box-shadow: 0 0 0 6px rgba(var(--flash-rgb), 0.75), 0 0 20px 10px rgba(var(--flash-rgb), 0.55); transform: scale(1.06); }
+  100% { box-shadow: 0 0 0 0 rgba(var(--flash-rgb), 0); transform: scale(1); }
+}
+.gp-mode-dd-flash {
+  animation: gp-mode-dd-flash-anim 3s ease-out 1;
+}
 </style>

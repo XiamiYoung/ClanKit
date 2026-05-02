@@ -1507,7 +1507,7 @@ ipcMain.handle('agent:generate-greeting', async (event, { chatId, agentId, langu
 
     const systemPrompt = `${aboutUserBlock}${personaBlock}You have just been opened in a brand new chat by the user — they have not said anything yet.${reanchor}
 
-Write a short opening greeting (2-4 sentences) in ${langLabel}, fully in character as ${agentName} (the persona described in the YOU ARE section above — NOT the user's persona). ${addressLine} Briefly hint at who YOU (${agentName}) are and what YOU can help this specific person with, then warmly invite them to share what they need. Keep the tone natural, never robotic, never generic. Do NOT use markdown headings, bullet points, code blocks, or quotation marks around the greeting. Output only the greeting text itself.`
+Write a short opening greeting (2-4 sentences) in ${langLabel}, fully in character as ${agentName} (the persona described in the YOU ARE section above — NOT the user's persona). ${addressLine} Open in a natural, fully-in-character way — it could be a casual check-in, a quick question, sharing what's on your mind, a small observation, or whatever fits this persona's voice. Do NOT list capabilities or frame it as "here's what I can help you with" — that reads like an AI assistant menu, not a real person greeting someone they know. Keep the tone natural, never robotic, never generic. Do NOT use markdown headings, bullet points, code blocks, or quotation marks around the greeting. Output only the greeting text itself.`
 
     abort = new AbortController()
     _activeGreetings.set(chatId, abort)
@@ -1621,6 +1621,10 @@ ipcMain.handle('agent:doc-run', async (event, {
     loopConfig.excludedToolNames = ['update_memory', 'read_memory', 'fetch_newsfeed']
     _injectCachedModelMaxOutputTokens(loopConfig)
 
+    // AI Doc embedded chat is always task-driven (read/edit files, fetch external
+    // content). Force productivity mode so tool_choice='required' fires on the first
+    // iteration and the agent never fabricates listings/file contents.
+    loopConfig.mode = 'productivity'
     const loop = new AgentLoop(loopConfig)
     _activeDocLoops.set(requestId, loop)
 
@@ -1823,7 +1827,14 @@ ipcMain.handle('agent:doc-permission-response', (_event, requestId, { blockId, d
 
 // -- Lightweight one-shot LLM call (for AI Enhance features) -----------------
 // Uses global config.utilityModel — falls back to first active configured provider.
-ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
+ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config, agentName, language }) => {
+  // Defensive post-process: strip any [tracking_id]/[number]/[contact_id]/wxid_xxx
+  // hallucinations from the LLM output. Mirrors the chat-import path so AI
+  // Generate / AI Enhance flows in AgentBodyViewer + SetupWizard get the same
+  // safety net. agentName + language are optional — when missing, scrubber
+  // falls back to neutral pronoun ('them' / '对方').
+  const { _scrubGeneratedPersona } = require('../agent/chatImport/personaBuilder')
+  const _finalize = (text) => _scrubGeneratedPersona(text || '', agentName || '', language || 'en')
   try {
     let um = (config.utilityModel?.provider && config.utilityModel?.model) ? config.utilityModel : null
 
@@ -1868,7 +1879,7 @@ ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
         contents: prompt,
       })
       const text = resp.candidates?.[0]?.content?.parts?.[0]?.text || ''
-      return { success: true, text }
+      return { success: true, text: _finalize(text) }
     }
 
     const isOpenAI = um.provider !== 'anthropic' && um.provider !== 'openrouter' && um.provider !== 'google'
@@ -1891,7 +1902,7 @@ ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
         messages: [{ role: 'user', content: prompt }],
       })
       const text = response.choices?.[0]?.message?.content || ''
-      return { success: true, text }
+      return { success: true, text: _finalize(text) }
     } else {
       // anthropic or openrouter — both use AnthropicClient
       const { AnthropicClient } = require('../agent/core/AnthropicClient')
@@ -1908,7 +1919,7 @@ ipcMain.handle('agent:enhance-prompt', async (event, { prompt, config }) => {
         messages: [{ role: 'user', content: prompt }],
       })
       const text = response.content.filter(b => b.type === 'text').map(b => b.text).join('')
-      return { success: true, text }
+      return { success: true, text: _finalize(text) }
     }
   } catch (err) {
     logger.error('agent:enhance-prompt error', err.message)

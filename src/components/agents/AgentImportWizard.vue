@@ -370,7 +370,7 @@
             <div class="field-group">
               <label class="field-label">{{ t('agents.voice') }} <span style="color:var(--c-danger);">*</span></label>
               <div class="iw-voice-row">
-                <select v-model="importVoiceId" class="field-select" style="flex:1;">
+                <select v-model="importVoiceId" class="field-select" style="flex:1;" @change="_onVoicePickerChange">
                   <option v-for="v in EDGE_VOICES" :key="v.id" :value="v.id">
                     {{ v.name }} — {{ v.gender === 'Female' ? t('common.female') : v.gender === 'Male' ? t('common.male') : '' }} · {{ v.locale === 'zh-CN' ? t('common.chinese') : t('common.english') }}
                   </option>
@@ -583,7 +583,7 @@ import { useModelsStore } from '../../stores/models'
 import AppButton from '../common/AppButton.vue'
 import AvatarPicker from './AvatarPicker.vue'
 import { generateRandomBatch, getAvatarDataUri } from './agentAvatars'
-import { EDGE_VOICES, getDefaultVoiceForLocale } from '../../utils/edgeVoices'
+import { EDGE_VOICES, getDefaultVoiceForLocale, getDefaultVoiceForGender } from '../../utils/edgeVoices'
 
 const { t, locale } = useI18n()
 const agentsStore = useAgentsStore()
@@ -1058,6 +1058,25 @@ const agentProviderType = ref('')
 const agentModelId = ref('')
 const importVoiceId = ref(getDefaultVoiceForLocale(configStore.language))
 const previewingVoice = ref(false)
+
+// Track whether the user has manually picked a voice so a later gender / persona
+// auto-suggestion does NOT override their explicit choice.
+const userPickedVoiceManually = ref(false)
+watch(importVoiceId, (_v, _old, onCleanup) => {
+  // Skip the very first programmatic write done by suggestion logic; the picker
+  // sets this flag itself when the human picks via the <select>.
+})
+
+// Auto-update voice default when user changes profile.gender — only if they
+// haven't manually picked one yet.
+watch(() => profile.gender, (newGender) => {
+  if (userPickedVoiceManually.value) return
+  importVoiceId.value = getDefaultVoiceForGender(configStore.language, newGender)
+})
+
+function _onVoicePickerChange() {
+  userPickedVoiceManually.value = true
+}
 let _previewAudioEl = null
 
 async function previewImportVoice() {
@@ -1125,7 +1144,7 @@ const agentName = ref('')
 const agentDescription = ref('')
 const extractedMemories = ref([])
 const extractedSpeechDna = ref(null)
-const extractedNuwaSections = ref(null)
+const extractedPersonaSections = ref(null)
 const extractedEvidenceIndex = ref(null)
 const accuracyTier = ref(null)  // { tier, mode, message: { en, zh } }
 const saveHistory = ref(true)
@@ -1357,7 +1376,7 @@ async function doAnalyze() {
   agentDescription.value = res.description || ''
   extractedMemories.value = Array.isArray(res.memories) ? res.memories : []
   extractedSpeechDna.value = res.speechDna || null
-  extractedNuwaSections.value = res.nuwaSections || null
+  extractedPersonaSections.value = res.personaSections || null
   extractedEvidenceIndex.value = res.evidenceIndex || null
   accuracyTier.value = res.accuracyTier || null
   // Auto-fill relationship and impression from LLM inference (only if user hasn't set them)
@@ -1373,6 +1392,35 @@ async function doAnalyze() {
     : (res.suggestedName || profile.name || contactDisplayName || 'Imported')
   // Analysis done — unlock step 4
   if (maxReachedStep.value < 4) maxReachedStep.value = 4
+
+  // Best-effort: ask the utility model which voice fits this persona, but only
+  // if user hasn't manually picked one. Failure is silent — gender-default stays.
+  if (!userPickedVoiceManually.value) {
+    try {
+      const lang = String(configStore.language || '').startsWith('zh') ? 'zh-CN' : 'en-US'
+      // Filter candidates by language; further filter by gender when known.
+      let candidates = EDGE_VOICES.filter(v => v.locale === lang)
+      const g = String(profile.gender || '').toLowerCase()
+      if (g === 'male' || g === 'female') {
+        const wantGender = g === 'male' ? 'Male' : 'Female'
+        const filtered = candidates.filter(v => v.gender === wantGender)
+        if (filtered.length > 0) candidates = filtered
+      }
+      const reco = await window.electronAPI.agentImport.recommendVoice({
+        personaPrompt: generatedPrompt.value || '',
+        description: agentDescription.value || '',
+        gender: profile.gender || '',
+        language: configStore.language || 'en',
+        candidates: JSON.parse(JSON.stringify(candidates)),
+        config: JSON.parse(JSON.stringify(configStore.config)),
+      })
+      if (reco?.success && reco.voiceId && !userPickedVoiceManually.value) {
+        importVoiceId.value = reco.voiceId
+      }
+    } catch (e) {
+      // Silent — voice already has gender-aware default from the watcher.
+    }
+  }
 }
 
 // ── Avatar ──────────────────────────────────────────────────────────────────
@@ -1472,7 +1520,7 @@ async function doCreateAgent() {
     }
   }
 
-  // Write Speech DNA fingerprint (Phase A — Nuwa Expression DNA layer)
+  // Write Speech DNA fingerprint (Phase A — Persona Expression DNA layer)
   if (extractedSpeechDna.value) {
     try {
       await window.electronAPI.agentImport.writeSpeechDna({
@@ -1485,38 +1533,43 @@ async function doCreateAgent() {
     }
   }
 
-  // Write harness validation results (Phase D) — persist even without ratings
+  // Write harness validation results (Phase D) — persist even without ratings.
+  // Defensive: clone the ENTIRE payload through JSON to strip any Vue
+  // reactive proxies / non-plain values that would fail the structured-clone
+  // boundary at ipcRenderer.invoke. ("An object could not be cloned" used to
+  // surface here intermittently.)
   if (harnessResults.value.length > 0) {
     try {
-      await window.electronAPI.agentImport.writeHarness({
+      const harnessPayload = JSON.parse(JSON.stringify({
         agentId,
         agentType: props.agentType || 'system',
         harness: {
           version: 1,
           generatedAt: new Date().toISOString(),
           score: harnessScore.value,
-          pairs: JSON.parse(JSON.stringify(harnessResults.value)),
+          pairs: harnessResults.value,
         },
-      })
+      }))
+      await window.electronAPI.agentImport.writeHarness(harnessPayload)
     } catch (e) {
       console.warn('Failed to write harness:', e)
     }
   }
 
-  // Write Nuwa-pipeline sections + evidence index (Phase B)
-  if (extractedNuwaSections.value) {
+  // Write Persona-pipeline sections + evidence index (Phase B)
+  if (extractedPersonaSections.value) {
     try {
-      await window.electronAPI.agentImport.writeNuwaSections({
+      await window.electronAPI.agentImport.writePersonaSections({
         agentId,
         agentName: agentName.value.trim().replace(/\s+/g, '_'),
         agentType: props.agentType || 'system',
-        sections: JSON.parse(JSON.stringify(extractedNuwaSections.value)),
+        sections: JSON.parse(JSON.stringify(extractedPersonaSections.value)),
         evidenceIndex: extractedEvidenceIndex.value
           ? JSON.parse(JSON.stringify(extractedEvidenceIndex.value))
           : null,
       })
     } catch (e) {
-      console.warn('Failed to write nuwa sections:', e)
+      console.warn('Failed to write persona sections:', e)
     }
   }
 

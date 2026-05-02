@@ -12249,7 +12249,7 @@ LLM 演艺术家角色时容易回弹到"矫情诗人"或"治愈系工具人"。
   },
   // ── 职场专家（内置 showcase / built-in lineup）─────────────────────────────
   // 这一组每个 agent 都带 memory + speech 字段：安装时会写到磁盘，模拟"导入聊天后
-  // 经过 Nuwa 4 阶段抽取得到的人格底子"，让首次对话就有深度。
+  // 经过 Persona 4 阶段抽取得到的人格底子"，让首次对话就有深度。
   {
     id: 'career-pros-zh',
     name: '职场专家',
@@ -14000,9 +14000,9 @@ export function generateAgentsFromDescription(description, language = 'en') {
 // ── Memory / Speech DNA seeding helpers ───────────────────────────────────
 //
 // Some built-in template agents ship with a `memory` and/or `speech` block to
-// simulate the result of the chat-import Nuwa pipeline. These helpers convert
+// simulate the result of the chat-import Persona pipeline. These helpers convert
 // the friendly nested-object shape used in the template into the wire format
-// expected by the agent:import-write-nuwa-sections / write-speech-dna IPC
+// expected by the agent:import-write-persona-sections / write-speech-dna IPC
 // handlers, so newly-installed agents start with depth instead of a blank slate.
 
 const MEMORY_BULLET_SECTIONS = {
@@ -14017,7 +14017,7 @@ const MEMORY_BULLET_SECTIONS = {
 
 /**
  * Convert a template `memory` block into the markdown sections object expected
- * by agent:import-write-nuwa-sections.
+ * by agent:import-write-persona-sections.
  *   Input : { identity, mentalModels: [...], decisionHeuristics: [...], ... }
  *   Output: { Identity: '\n...\n', 'Mental Models': '\n- ...\n- ...\n', ... }
  */
@@ -14105,7 +14105,7 @@ export async function installRecommendedTemplates({ templates, agentsStore, prov
         if (a.memory) {
           const sections = templateMemoryToSections(a.memory)
           if (sections) {
-            await window.electronAPI.agentImport.writeNuwaSections({
+            await window.electronAPI.agentImport.writePersonaSections({
               agentId:    newAgent.id,
               agentName:  newAgent.name,
               agentType:  'system',

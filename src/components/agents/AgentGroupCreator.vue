@@ -798,7 +798,7 @@ ${profSections}
 
 The "prompt" field must be a plain string with markdown section headers.
 
-Each agent must ALSO ship with a Nuwa-style "memory" and "speech" block — these become persistent memory injected into the system prompt at runtime, simulating what would normally come from imported chat history. Without them, the agent feels generic on first contact.
+Each agent must ALSO ship with a Persona-style "memory" and "speech" block — these become persistent memory injected into the system prompt at runtime, simulating what would normally come from imported chat history. Without them, the agent feels generic on first contact.
 
 Return ONLY valid JSON — no markdown, no code fences, no explanation:
 {
@@ -888,7 +888,7 @@ Rules:
             prompt: isRichPrompt(a.prompt)
               ? a.prompt.trim()
               : buildFallbackPrompt(a, lang),
-            // Pass through Nuwa-style assets (may be undefined if AI omitted them).
+            // Pass through Persona-style assets (may be undefined if AI omitted them).
             // The install path turns these into MemoryStore rows + .speech.json sidecar.
             memory: (a.memory && typeof a.memory === 'object') ? a.memory : null,
             speech: (a.speech && typeof a.speech === 'object') ? a.speech : null,
@@ -944,7 +944,7 @@ async function createAgents() {
     )
 
     // Map of normalizedName → { memory, speech } for built-in templates that
-    // ship pre-fabricated Nuwa-style memory. Populated only on the template
+    // ship pre-fabricated Persona-style memory. Populated only on the template
     // path so the AI-proposal path stays unchanged.
     let templateMemoryMap = null
 
@@ -1050,7 +1050,7 @@ async function createAgents() {
               if (assets.memory) {
                 const sections = templateMemoryToSections(assets.memory)
                 if (sections) {
-                  await window.electronAPI.agentImport.writeNuwaSections({
+                  await window.electronAPI.agentImport.writePersonaSections({
                     agentId:    newAgent.id,
                     agentName:  newAgent.name,
                     agentType:  props.agentType,
