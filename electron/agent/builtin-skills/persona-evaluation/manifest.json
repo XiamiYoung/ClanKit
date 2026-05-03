@@ -1,6 +1,6 @@
 {
   "id": "persona-evaluation",
-  "version": 1,
+  "version": 2,
   "builtin": true,
   "description": "Deep persona analysis framework (OCEAN, MBTI, attachment, core needs rubrics with evidence standards). ONLY load when the user explicitly requests a formal personality/persona analysis report. Do NOT load for casual profile note-taking, simple user-info documents, or first-contact introductions — for those, just write a plain Markdown file directly."
 }
