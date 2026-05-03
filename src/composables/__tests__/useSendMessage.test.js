@@ -169,6 +169,30 @@ describe('useSendMessage', () => {
     expect(callArg.isGroup).toBe(false)
   })
 
+  // ─── 2b. Pre-response wavebar persists in group chat ──────────────────────
+  // Regression: in group chat the green wavebar must persist between the user
+  // bubble and the first agent_start (covers the resolveAddressees window).
+  // Single chat clears the indicator immediately and replaces it with a
+  // streaming bubble that has its own internal wavebar — different mechanism.
+
+  it('group chat: isWaitingIndicator persists after sendMessage (until first agent_start)', async () => {
+    mockChat.groupAgentIds = ['agent1', 'agent2']
+    const inputText = ref('Hello group')
+    const { sendMessage } = createSendMessage({
+      inputText,
+      activeSystemAgentIds: computed(() => ['agent1', 'agent2']),
+    })
+    await sendMessage()
+
+    const callArg = mockElectronAPI.sendMessage.mock.calls[0][0]
+    expect(callArg.isGroup).toBe(true)
+
+    const indicators = mockChat.messages.filter(m => m.isWaitingIndicator)
+    expect(indicators.length).toBe(1)
+    expect(indicators[0].waitingState).toBe('running')
+    expect(indicators[0].streaming).toBe(true)
+  })
+
   // ─── 3. Shows interrupt confirmation when busy ─────────────────────────────
 
   it('shows interrupt confirmation instead of sending when chat.isRunning is true', async () => {
