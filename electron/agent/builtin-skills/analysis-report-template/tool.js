@@ -140,6 +140,27 @@ const GROWTH_GRADIENTS = [
   'linear-gradient(90deg,#7c3aed,#a78bfa)',
 ]
 
+// Relationship verdict tiers (Section 00 hero). Score 0-100 maps to tier 1-10.
+// LLM picks `label` from the per-tier pool (documented in persona-evaluation
+// skill); if missing, fall back to the tier default below.
+const REL_TIERS = [
+  { num: 1,  min: 95, icon: '🌟',  defaultLabel: { zh: '天选搭子',  en: 'Soulmates' } },
+  { num: 2,  min: 85, icon: '💛',  defaultLabel: { zh: '推心置腹',  en: 'Closer than family' } },
+  { num: 3,  min: 75, icon: '🧡',  defaultLabel: { zh: '情投意合',  en: 'Tight-knit' } },
+  { num: 4,  min: 65, icon: '☀️',  defaultLabel: { zh: '相谈甚欢',  en: 'Good friends' } },
+  { num: 5,  min: 55, icon: '🌿',  defaultLabel: { zh: '老相识了',  en: 'Friendly enough' } },
+  { num: 6,  min: 45, icon: '🤝',  defaultLabel: { zh: '点头之交',  en: 'Mere acquaintances' } },
+  { num: 7,  min: 35, icon: '🌫️', defaultLabel: { zh: '渐行渐远',  en: 'Drifting apart' } },
+  { num: 8,  min: 25, icon: '❄️',  defaultLabel: { zh: '形同陌路',  en: 'Practically strangers' } },
+  { num: 9,  min: 15, icon: '🌑',  defaultLabel: { zh: '相看两厌',  en: "Can't stand each other" } },
+  { num: 10, min: 0,  icon: '🔥',  defaultLabel: { zh: '互相嫌弃',  en: 'Sworn enemies' } },
+]
+
+function relTierFromScore(score) {
+  const s = Math.max(0, Math.min(100, Number(score) || 0))
+  return REL_TIERS.find(t => s >= t.min) || REL_TIERS[REL_TIERS.length - 1]
+}
+
 // ─── Dimension spec (16 unique dims — compressed from 28 because of heavy
 // source-data overlap. Each row in the rendered table pulls from ONE unique
 // schema field family so the content doesn't repeat the same phrases 4-5
@@ -249,7 +270,7 @@ function identifySenders(sendersRaw, agentName) {
 
 // ─── D scalar builder ───
 
-function buildDScalars(sections, stats, agentName, lang, isSelf) {
+function buildDScalars(sections, stats, agentName, lang, isSelf, L) {
   const s = sections || {}
   const st = stats || {}
   const pc = s.persona_card || {}
@@ -360,6 +381,29 @@ function buildDScalars(sections, stats, agentName, lang, isSelf) {
     intimacy_density: String(intim.interaction_density || 0),
     intimacy_depth: String(intim.emotional_depth || 0),
     intimacy_stability: String(intim.stability || 0),
+
+    ...(() => {
+      const verdict = pc.relationship_verdict || {}
+      const score = Math.round(Math.max(0, Math.min(100, Number(verdict.score ?? intim.total) || 0)))
+      const tier = relTierFromScore(score)
+      const label = String(verdict.label || tier.defaultLabel[lang] || tier.defaultLabel.en)
+      const icon = String(verdict.icon || tier.icon)
+      const tierName = (L && L[`rel_hero_tier${tier.num}_name`]) || ''
+      let reason = String(verdict.reason || '').trim()
+      if (!reason) {
+        reason = lang === 'zh'
+          ? `信任 ${intim.trust ?? 0} · 互动 ${intim.interaction_density ?? 0} · 情感 ${intim.emotional_depth ?? 0} · 稳定 ${intim.stability ?? 0} · 依赖 ${intim.dependency ?? 0}`
+          : `Trust ${intim.trust ?? 0} · Density ${intim.interaction_density ?? 0} · Depth ${intim.emotional_depth ?? 0} · Stability ${intim.stability ?? 0} · Dependence ${intim.dependency ?? 0}`
+      }
+      return {
+        rel_hero_score: String(score),
+        rel_hero_tier_class: `rel-tier-${tier.num}`,
+        rel_hero_tier_name: tierName,
+        rel_hero_label: label,
+        rel_hero_icon: icon,
+        rel_hero_reason: reason,
+      }
+    })(),
 
     chemistry_type: chem.type || '', chemistry_emoji: chem.emoji || '⚗️', chemistry_desc: chem.desc || '',
     zodiac_name: zodiac.name || '', zodiac_emoji: zodiac.emoji || '⭐',
@@ -1372,7 +1416,7 @@ class RenderReportTool extends BaseTool {
       const L = strings[lang]
       if (!L) return this._err(`strings.json has no locale "${lang}"`)
 
-      const D = buildDScalars(sections, stats, agentName, lang, isSelfFlavor)
+      const D = buildDScalars(sections, stats, agentName, lang, isSelfFlavor, L)
       const HTML = buildAllHtml(sections, stats, lang)
       const stripFlavor = isSelfFlavor ? 'other-only' : 'self-only'
       logger.agent('[RenderReportTool] flavor', {

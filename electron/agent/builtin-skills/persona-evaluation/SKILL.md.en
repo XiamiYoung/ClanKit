@@ -180,6 +180,40 @@ Confidence: 0.0–1.0
 
 These dimensions add social media shareability to the report — screenshot-friendly, fun, conversation-starting. Place them in the first half of the report.
 
+### 3B.0 Hero Verdict (Eye-catching first screen)
+
+**This is the very first thing the reader sees.** It must grab attention — one glance should tell them what kind of relationship this is.
+
+Output to `persona_card.relationship_verdict`:
+
+```json
+{
+  "label": "<pick ONE from the 10 candidates of the matching tier below>",
+  "reason": "<one sentence explaining the score; must cite at least 2 dimension sub-scores>"
+}
+```
+
+**The score is auto-pulled from `intimacy_score.total` — don't re-state it.** You pick `label` based on the conversation's actual vibe from the matching tier's 10 candidates. `reason` must reference ≥2 dimension sub-scores, e.g. "Trust 80 and Stability 75 push the total up, but Emotional Depth at 45 caps the ceiling."
+
+#### 10 tiers (auto-classified by total score)
+
+| Score | Tier | Candidate labels (pick ONE) |
+|-------|------|----------------------------|
+| **95–100** 🌟 Off the charts | Soulmates / Ride or die / Two peas in a pod / Joined at the hip / Match made in heaven / Thick as thieves / Inseparable / Kindred spirits / Lifelong bond / Built for each other |
+| **85–94** 💛 Bosom buddies | Closer than family / Trust them with my life / Tell each other everything / Found my person / Day-one friends / Heart-to-heart confidants / True blue / Down to the bone / Best friends forever / Brothers in arms |
+| **75–84** 🧡 Tight crew | Tight-knit / Always in sync / Click instantly / On the same page / Real ones / Solid friendship / Like-minded crew / Vibe perfectly / See eye to eye / Get each other completely |
+| **65–74** ☀️ Genuinely friendly | Good friends / Get along great / Easy company / On the same wavelength / Genuine connection / Glad to see them / Solid rapport / Comfortable together / Mutual respect / Bring out the best |
+| **55–64** 🌿 Friendly enough | Friendly acquaintances / Long-time familiars / Hang out occasionally / On good terms / Casual buddies / Easygoing rapport / Decent chemistry / Cordial and warm / Comfortable but not close / Friendly without depth |
+| **45–54** 🤝 Acquaintances | Mere acquaintances / Polite strangers / Nodding terms / Surface-level only / Hi-and-bye / Cordial coworkers / Small talk and that's it / Know the name, not the soul / Show face and move on / Civil but distant |
+| **35–44** 🌫️ Drifting | Drifting apart / Lost touch / Going through the motions / Not what it used to be / Talking past each other / Quietly fading / One-sided effort / Forced politeness / Read receipts only / Distance creeping in |
+| **25–34** ❄️ Cold and distant | Practically strangers / Strangers in the same room / Bare minimum civility / Mutual avoidance / Just a name in contacts / Nothing left to say / Cold-shoulder default / Ghosted long ago / Frozen out / Dead silence between us |
+| **15–24** 🌑 Friction-heavy | Rub each other wrong / Can't stand each other / Walking on eggshells / Passive-aggressive vibes / Forced smiles only / Eye-roll territory / Bad chemistry / Tense whenever close / Awkward every time / Bickering nonstop |
+| **0–14** 🔥 Burned bridges | Sworn enemies / Bad blood / Blocked and deleted / Burn the bridge / Mortal enemies / Done forever / Won't share a room / Toxic history / Don't say their name / Dead to me |
+
+**Selection principle:** don't just pick by score — pick by the actual vibe of the conversation. Two relationships at 78 might warrant very different labels: "Tell each other everything" emphasizes information flow, "Joined at the hip" emphasizes physical presence. Read the dialogue tone, then pick.
+
+**Reason writing:** one sentence, citing ≥2 dimension sub-scores. Template: `<high dim>` pulls the total up, but `<low dim>` caps the ceiling — fill in real sub-scores.
+
 ### 3B.1 Intimacy Score
 
 5 dimensions scored 1-100 each, displayed as a radar chart.

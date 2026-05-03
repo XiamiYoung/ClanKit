@@ -1105,6 +1105,10 @@ class AnalyzeAgentTool extends BaseTool {
       "total": <0-100>, "trust": <0-100>, "dependency": <0-100>,
       "interaction_density": <0-100>, "emotional_depth": <0-100>, "stability": <0-100>
     },
+    "relationship_verdict": {
+      "label": "<${zh ? '从 persona-evaluation skill 第 3B.0 节对应分档的 10 个候选标签中按对话氛围挑 1 个;不要自创' : 'pick ONE from the 10 candidate labels in the matching tier of persona-evaluation skill section 3B.0, based on the actual conversation vibe; do NOT invent your own'}>",
+      "reason": "<${zh ? '1 句话解释为什么是这个分,必须引用 ≥2 个维度子分(信任/依赖/互动密度/情感深度/稳定性)' : 'one sentence explaining the score; must cite ≥2 dimension sub-scores (trust/dependency/density/depth/stability)'}>"
+    },
     "keywords": ["<3-5 ${zh ? '大字标签' : 'big-font labels'}>"],
     "constellation": { "name": "${zh ? '<星座名>' : '<sign>'}", "emoji": "<zodiac emoji>", "match_pct": <0-100>, "reason": "<1-2 sentences>" },
     "chemistry": { "type": "${zh ? '<互补型/镜像型/导师型/战友型/锚点型 之一>' : '<Complementary/Mirror/Mentor/Comrade/Anchor>'}", "emoji": "<emoji>", "desc": "<1 sentence>" }

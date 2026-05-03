@@ -238,6 +238,343 @@
   .intimacy-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--pink), var(--amber)); }
   .intimacy-val { font-size: 13px; font-weight: 700; color: var(--ink); min-width: 32px; text-align: right; }
 
+  /* ─── Relationship Verdict Hero (Section 00) ─── */
+  .rel-hero {
+    --rel-bg-from: #F0E9DD;
+    --rel-bg-to: #E8DEC8;
+    --rel-text: var(--ink);
+    --rel-accent: var(--coral);
+    --rel-track: rgba(0,0,0,0.10);
+    --rel-glow: 0 12px 32px -16px rgba(0,0,0,0.18);
+    position: relative;
+    isolation: isolate;
+    margin: 0 auto 64px;
+    padding: 56px 48px;
+    border-radius: var(--r-lg);
+    background: linear-gradient(135deg, var(--rel-bg-from), var(--rel-bg-to));
+    color: var(--rel-text);
+    box-shadow: var(--rel-glow);
+    overflow: hidden;
+  }
+  .rel-hero-bg {
+    position: absolute; inset: 0; z-index: 0;
+    pointer-events: none; overflow: hidden;
+    border-radius: inherit;
+    background: radial-gradient(circle at 20% 20%, rgba(255,255,255,0.18), transparent 60%);
+  }
+  .rel-hero-bg::before, .rel-hero-bg::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none;
+  }
+  .rel-hero > .rel-hero-kicker,
+  .rel-hero > .rel-hero-grid { position: relative; z-index: 1; }
+  .rel-hero-kicker {
+    position: relative; font-family: var(--font-sans);
+    font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--rel-accent); font-weight: 600;
+    display: inline-block; padding: 4px 12px;
+    border: 1px solid var(--rel-accent); border-radius: 100px;
+    margin-bottom: 28px;
+  }
+  .rel-hero-grid {
+    position: relative;
+    display: grid; grid-template-columns: auto 1fr; gap: 56px; align-items: center;
+  }
+  .rel-hero-score-block { text-align: center; flex-shrink: 0; }
+  .rel-hero-icon { font-size: 56px; line-height: 1; margin-bottom: 4px; }
+  .rel-hero-score {
+    font-family: var(--font-heading); font-weight: 900;
+    font-size: clamp(110px, 12vw, 160px); line-height: 0.88; letter-spacing: -0.045em;
+    color: var(--rel-text);
+  }
+  .rel-hero-unit {
+    display: inline-block;
+    font-size: 22px; font-weight: 500;
+    opacity: 0.45;
+    margin-left: 14px;
+    letter-spacing: 0.04em;
+    vertical-align: 0.32em;
+  }
+  .rel-hero-tier-name {
+    font-family: var(--font-sans); font-weight: 700;
+    font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--rel-accent); margin-top: 10px;
+  }
+  .rel-hero-content { min-width: 0; }
+  .rel-hero-label {
+    font-family: var(--font-heading); font-style: italic; font-weight: 500;
+    font-size: clamp(36px, 4.6vw, 60px); line-height: 1.05; letter-spacing: -0.02em;
+    color: var(--rel-text); margin: 0 0 16px;
+  }
+  .rel-hero-reason {
+    font-family: var(--font-sans); font-size: 15px; line-height: 1.65;
+    color: var(--rel-text); opacity: 0.82;
+    max-width: 580px; margin: 0 0 28px;
+  }
+  .rel-hero-dims { display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px; }
+  .rel-hero-dim { display: flex; flex-direction: column; gap: 5px; }
+  .rel-hero-dim-label { font-size: 11px; color: var(--rel-text); opacity: 0.65; font-family: var(--font-sans); }
+  .rel-hero-dim-val { font-size: 20px; font-weight: 800; color: var(--rel-text); font-family: var(--font-heading); line-height: 1; }
+  .rel-hero-dim-track { height: 5px; background: var(--rel-track); border-radius: 100px; overflow: hidden; }
+  .rel-hero-dim-fill { height: 100%; background: var(--rel-accent); border-radius: 100px; transition: width 1.4s cubic-bezier(.16,1,.3,1); }
+
+  /* Tier 1: Off the charts — gold glow */
+  .rel-hero.rel-tier-1 {
+    --rel-bg-from: #FFE25C; --rel-bg-to: #FF8A30;
+    --rel-text: #3A1D00; --rel-accent: #B85C00;
+    --rel-track: rgba(58,29,0,0.18);
+    --rel-glow: 0 0 0 1px rgba(255,255,255,0.45) inset, 0 30px 80px -20px rgba(255,180,40,0.6), 0 0 70px rgba(255,200,80,0.4);
+    animation: rel-tier1-pulse 4.5s ease-in-out infinite;
+  }
+  .rel-hero.rel-tier-1 .rel-hero-label {
+    background: linear-gradient(135deg, #B85C00 0%, #6B2D00 100%);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  @keyframes rel-tier1-pulse {
+    0%, 100% { box-shadow: 0 0 0 1px rgba(255,255,255,0.45) inset, 0 30px 80px -20px rgba(255,180,40,0.6), 0 0 70px rgba(255,200,80,0.4); }
+    50%      { box-shadow: 0 0 0 1px rgba(255,255,255,0.55) inset, 0 36px 92px -16px rgba(255,180,40,0.78), 0 0 90px rgba(255,200,80,0.55); }
+  }
+
+  /* Tier 2: Bosom buddies — warm gold */
+  .rel-hero.rel-tier-2 {
+    --rel-bg-from: #FFD27A; --rel-bg-to: #E5A53A;
+    --rel-text: #3D2200; --rel-accent: #8B5400;
+    --rel-track: rgba(61,34,0,0.16);
+    --rel-glow: 0 25px 60px -20px rgba(232,169,61,0.5);
+  }
+
+  /* Tier 3: Tight crew — warm orange */
+  .rel-hero.rel-tier-3 {
+    --rel-bg-from: #FFB47A; --rel-bg-to: #EC7942;
+    --rel-text: #3A1A00; --rel-accent: #8B3A0A;
+    --rel-track: rgba(58,26,0,0.16);
+    --rel-glow: 0 20px 50px -16px rgba(238,126,74,0.45);
+  }
+
+  /* Tier 4: Genuinely friendly — sun yellow */
+  .rel-hero.rel-tier-4 {
+    --rel-bg-from: #FFE89E; --rel-bg-to: #F4C260;
+    --rel-text: #3A2A00; --rel-accent: #946B00;
+    --rel-track: rgba(58,42,0,0.15);
+    --rel-glow: 0 16px 40px -16px rgba(246,197,106,0.45);
+  }
+
+  /* Tier 5: Friendly enough — lime/sage */
+  .rel-hero.rel-tier-5 {
+    --rel-bg-from: #D8E8B5; --rel-bg-to: #A1C476;
+    --rel-text: #1F3010; --rel-accent: #4A6F2A;
+    --rel-track: rgba(31,48,16,0.16);
+    --rel-glow: 0 14px 36px -16px rgba(166,201,125,0.45);
+  }
+
+  /* Tier 6: Acquaintances — neutral gray-blue */
+  .rel-hero.rel-tier-6 {
+    --rel-bg-from: #DCE3EA; --rel-bg-to: #ADBBC8;
+    --rel-text: #2A3540; --rel-accent: #4A5A6E;
+    --rel-track: rgba(42,53,64,0.15);
+    --rel-glow: 0 12px 32px -16px rgba(181,194,207,0.5);
+  }
+
+  /* Tier 7: Drifting — foggy blue */
+  .rel-hero.rel-tier-7 {
+    --rel-bg-from: #C7D2DD; --rel-bg-to: #8AA0B5;
+    --rel-text: #1F2A36; --rel-accent: #36495E;
+    --rel-track: rgba(31,42,54,0.18);
+    --rel-glow: 0 10px 28px -14px rgba(143,164,184,0.5);
+  }
+
+  /* Tier 8: Cold and distant — cold gray */
+  .rel-hero.rel-tier-8 {
+    --rel-bg-from: #B0B7BE; --rel-bg-to: #76808A;
+    --rel-text: #1A1F26; --rel-accent: #2D3640;
+    --rel-track: rgba(26,31,38,0.20);
+    --rel-glow: 0 8px 24px -14px rgba(124,134,143,0.55);
+  }
+
+  /* Tier 9: Friction-heavy — dark purple */
+  .rel-hero.rel-tier-9 {
+    --rel-bg-from: #5C4A6E; --rel-bg-to: #3A2A4F;
+    --rel-text: #F0E8F5; --rel-accent: #D2BBE8;
+    --rel-track: rgba(255,255,255,0.12);
+    --rel-glow: 0 8px 24px -10px rgba(61,45,82,0.7);
+  }
+  .rel-hero.rel-tier-9 .rel-hero-kicker { color: var(--rel-accent); border-color: var(--rel-accent); }
+
+  /* Tier 10: Burned bridges — dark red warning */
+  .rel-hero.rel-tier-10 {
+    --rel-bg-from: #6B1F1F; --rel-bg-to: #2E0808;
+    --rel-text: #FFE2DC; --rel-accent: #FF8B7A;
+    --rel-track: rgba(255,255,255,0.10);
+    --rel-glow: 0 10px 28px -8px rgba(107,31,31,0.7), inset 0 0 60px rgba(0,0,0,0.35);
+    animation: rel-tier10-flicker 3.2s ease-in-out infinite;
+  }
+  .rel-hero.rel-tier-10 .rel-hero-kicker { color: var(--rel-accent); border-color: var(--rel-accent); }
+  @keyframes rel-tier10-flicker {
+    0%, 100% { box-shadow: 0 10px 28px -8px rgba(107,31,31,0.7), inset 0 0 60px rgba(0,0,0,0.35); }
+    50%      { box-shadow: 0 12px 34px -6px rgba(155,42,42,0.85), inset 0 0 80px rgba(0,0,0,0.45); }
+  }
+
+  /* ─── Tier-matched animated backgrounds ─── */
+
+  /* Tier 1 — golden sparkles + slow rotating rays */
+  .rel-hero.rel-tier-1 .rel-hero-bg { background: radial-gradient(ellipse at 30% 20%, rgba(255,255,255,0.25), transparent 60%); }
+  .rel-hero.rel-tier-1 .rel-hero-bg::before {
+    background:
+      radial-gradient(2px 2px at 12% 28%, rgba(255,255,255,0.95), transparent 60%),
+      radial-gradient(1.5px 1.5px at 35% 64%, rgba(255,255,255,0.85), transparent 60%),
+      radial-gradient(2.5px 2.5px at 58% 18%, rgba(255,255,255,0.9), transparent 60%),
+      radial-gradient(1.5px 1.5px at 78% 76%, rgba(255,255,255,0.85), transparent 60%),
+      radial-gradient(2px 2px at 88% 38%, rgba(255,255,255,0.9), transparent 60%),
+      radial-gradient(1.5px 1.5px at 22% 86%, rgba(255,255,255,0.8), transparent 60%);
+    animation: rel-tier1-sparkle 5s ease-in-out infinite;
+  }
+  .rel-hero.rel-tier-1 .rel-hero-bg::after {
+    background: conic-gradient(from 0deg at 80% 30%,
+      transparent 0deg, rgba(255,245,200,0.16) 25deg, transparent 55deg,
+      transparent 170deg, rgba(255,245,200,0.10) 195deg, transparent 220deg);
+    animation: rel-tier1-rays 22s linear infinite;
+    mix-blend-mode: overlay;
+  }
+  @keyframes rel-tier1-sparkle {
+    0%, 100% { opacity: 0.45; transform: scale(1); }
+    50%      { opacity: 1;    transform: scale(1.08); }
+  }
+  @keyframes rel-tier1-rays { to { transform: rotate(360deg); } }
+
+  /* Tier 2 — warm orbs gently breathing/orbiting */
+  .rel-hero.rel-tier-2 .rel-hero-bg::before {
+    background:
+      radial-gradient(140px 140px at 78% 28%, rgba(255,210,122,0.45), transparent 70%),
+      radial-gradient(180px 180px at 18% 72%, rgba(229,165,58,0.38), transparent 70%);
+    animation: rel-tier2-breathe 8s ease-in-out infinite;
+  }
+  @keyframes rel-tier2-breathe {
+    0%, 100% { opacity: 0.75; transform: scale(1)    translate(0, 0); }
+    50%      { opacity: 1;    transform: scale(1.06) translate(8px, -6px); }
+  }
+
+  /* Tier 3 — orange wave drifting diagonally */
+  .rel-hero.rel-tier-3 .rel-hero-bg::before {
+    background: linear-gradient(110deg, transparent 25%, rgba(255,255,255,0.20) 48%, rgba(255,255,255,0.10) 52%, transparent 75%);
+    background-size: 240% 100%;
+    animation: rel-tier3-wave 9s linear infinite;
+  }
+  @keyframes rel-tier3-wave {
+    from { background-position: 240% 0; }
+    to   { background-position: -40% 0; }
+  }
+
+  /* Tier 4 — sun rays slow rotation */
+  .rel-hero.rel-tier-4 .rel-hero-bg::before {
+    background: conic-gradient(from 0deg at 28% 40%,
+      transparent 0deg, rgba(255,255,255,0.16) 18deg, transparent 38deg,
+      transparent 105deg, rgba(255,255,255,0.12) 125deg, transparent 150deg,
+      transparent 240deg, rgba(255,255,255,0.10) 260deg, transparent 285deg);
+    animation: rel-tier4-rotate 32s linear infinite;
+  }
+  @keyframes rel-tier4-rotate { to { transform: rotate(360deg); } }
+
+  /* Tier 5 — soft sage particles drifting horizontally */
+  .rel-hero.rel-tier-5 .rel-hero-bg::before {
+    background:
+      radial-gradient(14px 14px at 10% 38%, rgba(255,255,255,0.28), transparent 70%),
+      radial-gradient(10px 10px at 38% 70%, rgba(255,255,255,0.22), transparent 70%),
+      radial-gradient(12px 12px at 60% 24%, rgba(255,255,255,0.24), transparent 70%),
+      radial-gradient(8px 8px at 84% 60%, rgba(255,255,255,0.20), transparent 70%);
+    animation: rel-tier5-drift 15s ease-in-out infinite alternate;
+  }
+  @keyframes rel-tier5-drift {
+    from { transform: translateX(-22px); }
+    to   { transform: translateX(22px); }
+  }
+
+  /* Tier 6 — neutral subtle breathing only */
+  .rel-hero.rel-tier-6 .rel-hero-bg::before {
+    background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.14), transparent 75%);
+    animation: rel-tier6-breathe 7s ease-in-out infinite;
+  }
+  @keyframes rel-tier6-breathe {
+    0%, 100% { opacity: 0.5; }
+    50%      { opacity: 1; }
+  }
+
+  /* Tier 7 — fog drifting from left to right */
+  .rel-hero.rel-tier-7 .rel-hero-bg::before {
+    background:
+      radial-gradient(160px 80px at 18% 42%, rgba(255,255,255,0.22), transparent 70%),
+      radial-gradient(200px 95px at 60% 64%, rgba(255,255,255,0.18), transparent 70%),
+      radial-gradient(140px 70px at 92% 30%, rgba(255,255,255,0.16), transparent 70%);
+    background-size: 200% 100%;
+    animation: rel-tier7-fog 18s linear infinite;
+  }
+  @keyframes rel-tier7-fog {
+    from { background-position: 200% 0; }
+    to   { background-position: -40% 0; }
+  }
+
+  /* Tier 8 — slow snowfall */
+  .rel-hero.rel-tier-8 .rel-hero-bg::before {
+    background:
+      radial-gradient(2px 2px at 8% -2%, rgba(255,255,255,0.85), transparent 60%),
+      radial-gradient(1.5px 1.5px at 22% -2%, rgba(255,255,255,0.7), transparent 60%),
+      radial-gradient(2px 2px at 38% -2%, rgba(255,255,255,0.8), transparent 60%),
+      radial-gradient(1.5px 1.5px at 54% -2%, rgba(255,255,255,0.75), transparent 60%),
+      radial-gradient(2px 2px at 70% -2%, rgba(255,255,255,0.85), transparent 60%),
+      radial-gradient(1.5px 1.5px at 84% -2%, rgba(255,255,255,0.7), transparent 60%),
+      radial-gradient(2px 2px at 95% -2%, rgba(255,255,255,0.75), transparent 60%);
+    background-size: 100% 220%;
+    animation: rel-tier8-snow 11s linear infinite;
+  }
+  @keyframes rel-tier8-snow {
+    from { background-position: 0 -10%; }
+    to   { background-position: 0 220%; }
+  }
+
+  /* Tier 9 — dark shadow blobs morphing */
+  .rel-hero.rel-tier-9 .rel-hero-bg::before {
+    background:
+      radial-gradient(220px 130px at 28% 38%, rgba(0,0,0,0.40), transparent 70%),
+      radial-gradient(180px 110px at 72% 62%, rgba(0,0,0,0.32), transparent 70%);
+    animation: rel-tier9-morph 10s ease-in-out infinite alternate;
+  }
+  @keyframes rel-tier9-morph {
+    from { transform: translate(-18px, -10px) scale(1); }
+    to   { transform: translate(18px, 12px)   scale(1.08); }
+  }
+
+  /* Tier 10 — flame glow rising + ember sparks */
+  .rel-hero.rel-tier-10 .rel-hero-bg::before {
+    background:
+      radial-gradient(circle at 18% 105%, rgba(255,80,0,0.50), transparent 50%),
+      radial-gradient(circle at 78% 105%, rgba(200,30,30,0.45), transparent 50%),
+      radial-gradient(circle at 50% 110%, rgba(255,120,0,0.35), transparent 60%);
+    animation: rel-tier10-flame 1.6s ease-in-out infinite alternate;
+  }
+  .rel-hero.rel-tier-10 .rel-hero-bg::after {
+    background:
+      radial-gradient(2px 2px at 18% 95%, rgba(255,180,80,0.95), transparent 60%),
+      radial-gradient(1.5px 1.5px at 38% 88%, rgba(255,150,60,0.85), transparent 60%),
+      radial-gradient(2.5px 2.5px at 58% 92%, rgba(255,200,100,0.9), transparent 60%),
+      radial-gradient(1.5px 1.5px at 78% 86%, rgba(255,170,70,0.85), transparent 60%),
+      radial-gradient(2px 2px at 88% 94%, rgba(255,190,90,0.9), transparent 60%);
+    background-size: 100% 220%;
+    animation: rel-tier10-ember 4.5s linear infinite;
+  }
+  @keyframes rel-tier10-flame {
+    from { opacity: 0.55; transform: scaleY(0.92); }
+    to   { opacity: 1;    transform: scaleY(1.10); }
+  }
+  @keyframes rel-tier10-ember {
+    from { background-position: 0 0%;    opacity: 0.85; }
+    to   { background-position: 0 -160%; opacity: 0.4; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rel-hero,
+    .rel-hero-bg,
+    .rel-hero-bg::before,
+    .rel-hero-bg::after { animation: none !important; }
+  }
+
   /* ─── OCEAN bars (v4 evidence style) ─── */
   .ocean-wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; align-items: start; }
   .ocean-bars { display: flex; flex-direction: column; gap: 14px; }
@@ -516,6 +853,13 @@
     .ocean-wrap { grid-template-columns: 1fr; }
     .attachment-wrap { grid-template-columns: 1fr; }
     .intimacy-wrap { grid-template-columns: 1fr; }
+    .rel-hero { padding: 40px 28px; }
+    .rel-hero-grid { grid-template-columns: 1fr; gap: 28px; text-align: center; }
+    .rel-hero-content { text-align: left; }
+    .rel-hero-reason { margin-left: auto; margin-right: auto; }
+    .rel-hero-dims { grid-template-columns: repeat(5, 1fr); gap: 8px; }
+    .rel-hero-dim-label { font-size: 10px; }
+    .rel-hero-dim-val { font-size: 16px; }
     .subtext-head, .subtext-row { grid-template-columns: 1fr; gap: 6px; }
     .topic-row { grid-template-columns: 1fr; gap: 12px; }
     .theatre-act { grid-template-columns: 1fr; }
@@ -769,6 +1113,7 @@
 <section class="toc" id="toc">
   <div class="toc-label">{{L.toc_label}}</div>
   <div class="toc-grid">
+    <a class="toc-item" href="#verdict" data-flavor="other-only"><span class="toc-num star">★</span><span class="toc-title">{{L.nav_verdict}}</span></a>
     <a class="toc-item" href="#portrait" data-flavor="shared"><span class="toc-num">01</span><span class="toc-title">{{L.sec_19_title}}</span></a>
     <a class="toc-item" href="#zodiac" data-flavor="other-only"><span class="toc-num">02</span><span class="toc-title">{{L.sec_06_title}}</span></a>
     <a class="toc-item" href="#intimacy" data-flavor="other-only"><span class="toc-num">03</span><span class="toc-title">{{L.sec_05_title}}</span></a>
@@ -804,6 +1149,31 @@
     <a class="toc-item" href="#life-timeline" data-flavor="self-only"><span class="toc-num star">S·5</span><span class="toc-title">{{L.sec_self_timeline_title}}</span></a>
   </div>
 </section>
+
+<!-- ═══ 00 关系总评 (Relationship Verdict) ═══ -->
+<section class="rel-hero {{D.rel_hero_tier_class}}" id="verdict" data-flavor="other-only">
+  <div class="rel-hero-bg" aria-hidden="true"></div>
+  <div class="rel-hero-kicker">{{L.rel_hero_kicker}} · {{D.rel_hero_tier_name}}</div>
+  <div class="rel-hero-grid">
+    <div class="rel-hero-score-block">
+      <div class="rel-hero-icon">{{D.rel_hero_icon}}</div>
+      <div class="rel-hero-score">{{D.rel_hero_score}}<span class="rel-hero-unit">{{L.rel_hero_unit}}</span></div>
+      <div class="rel-hero-tier-name">{{D.rel_hero_tier_name}}</div>
+    </div>
+    <div class="rel-hero-content">
+      <h2 class="rel-hero-label">{{D.rel_hero_label}}</h2>
+      <p class="rel-hero-reason">{{D.rel_hero_reason}}</p>
+      <div class="rel-hero-dims">
+        <div class="rel-hero-dim"><div class="rel-hero-dim-label">{{L.intimacy_trust}}</div><div class="rel-hero-dim-val">{{D.intimacy_trust}}</div><div class="rel-hero-dim-track"><div class="rel-hero-dim-fill" style="width:{{D.intimacy_trust}}%;"></div></div></div>
+        <div class="rel-hero-dim"><div class="rel-hero-dim-label">{{L.intimacy_dependence}}</div><div class="rel-hero-dim-val">{{D.intimacy_dependence}}</div><div class="rel-hero-dim-track"><div class="rel-hero-dim-fill" style="width:{{D.intimacy_dependence}}%;"></div></div></div>
+        <div class="rel-hero-dim"><div class="rel-hero-dim-label">{{L.intimacy_density}}</div><div class="rel-hero-dim-val">{{D.intimacy_density}}</div><div class="rel-hero-dim-track"><div class="rel-hero-dim-fill" style="width:{{D.intimacy_density}}%;"></div></div></div>
+        <div class="rel-hero-dim"><div class="rel-hero-dim-label">{{L.intimacy_depth}}</div><div class="rel-hero-dim-val">{{D.intimacy_depth}}</div><div class="rel-hero-dim-track"><div class="rel-hero-dim-fill" style="width:{{D.intimacy_depth}}%;"></div></div></div>
+        <div class="rel-hero-dim"><div class="rel-hero-dim-label">{{L.intimacy_stability}}</div><div class="rel-hero-dim-val">{{D.intimacy_stability}}</div><div class="rel-hero-dim-track"><div class="rel-hero-dim-fill" style="width:{{D.intimacy_stability}}%;"></div></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ═══ 19 人物画像 ═══ -->
 <section class="section" id="portrait" data-flavor="shared">
   <div class="section-header">
