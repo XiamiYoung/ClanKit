@@ -1,0 +1,13 @@
+{
+  "id": "agent-recommendation",
+  "version": 6,
+  "builtin": true,
+  "description": "When the user asks something outside your own domain or persona AND another installed agent is a clear better fit, recommend that agent. Load this skill any time you are about to say 'this isn't my field' / 'I don't really know this' / 'not in my character' — there may be a better-suited specialist already installed in this app.",
+  "tools": [
+    {
+      "id": "list_agents",
+      "file": "tool.js",
+      "class": "ListAgentsTool"
+    }
+  ]
+}

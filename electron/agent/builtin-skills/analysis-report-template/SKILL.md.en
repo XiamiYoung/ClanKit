@@ -1,0 +1,144 @@
+---
+name: analysis-report-template
+description: Persona-analysis HTML report template (warm editorial style). Rendered via render_persona_report tool — just pass the sections + stats objects from extract_sections. The tool auto-computes all D scalars and generates all 27 HTML fragments internally.
+---
+
+# Persona Report Template
+
+## 🚨 Rules of use (read first)
+
+**The only correct way to produce an HTML report is to call the `render_persona_report` tool.**
+
+The tool automatically handles:
+- Computing 55 D scalars from sections data (message stats, MBTI axes, intimacy dims, chart data, etc.)
+- Generating 27 HTML fragments from sections data (28-dim deep analysis, 10 theatre acts, 20 quotes, etc.)
+- Reading template.html + strings.json for template substitution
+- Validating DOM element counts
+- Writing the final HTML file
+
+### ❌ Forbidden
+
+1. **Do NOT generate D scalars or HTML fragments yourself** — the tool auto-generates them.
+2. **Do NOT Read template.html / strings.json** — the tool reads them.
+3. **Do NOT emit large HTML strings in your response to Write** — the tool writes the file.
+4. **Do NOT write `.py` / `.js` / `.ps1` / `.sh` scripts** to process the template.
+5. **Do NOT use file_operation to write an HTML report** — call render_persona_report.
+
+### ✅ Correct flow
+
+```
+1. analyze_agent_history(action="analyze_all")        # if not analyzed
+2. analyze_agent_history(action="extract_sections")   # produces sections + stats, cached to disk
+3. render_persona_report({
+     sections: <sections object from extract_sections>,
+     stats: <stats object from extract_sections>
+   })
+4. Report: tool's returned file path + size + validation result
+```
+
+### 🛟 Fallback flow (if you lose the sections object)
+
+If your `extract_sections` response got truncated or you can no longer reference the `sections`/`stats` objects, **call `render_persona_report` with no arguments**. The tool will auto-load the latest `sections` + `stats` from the extract_sections cache on disk and render from there. The response will say `Source: sections auto-loaded from extract_sections cache`.
+
+You must still have run `extract_sections` first — the cache is what that step writes.
+
+### 📁 Output path
+
+- If the user has set an AI Doc folder (DoCPath), the report is written to `<DoCPath>/<AgentName>_report.html` — visible to the user alongside their notes.
+- If DoCPath is empty, the tool falls back to `<dataPath>/agent-artifacts/agents/<agentId>.report.html` (internal).
+
+You don't need to move the file yourself — the tool writes to the right place.
+
+---
+
+## Tool parameters
+
+| Param | Type | Required | Description |
+|---|---|---|---|
+| `sections` | object | ⚠️ Recommended | The sections object from extract_sections (19 keys). Omit to auto-load from cache. |
+| `stats` | object | No | The stats object from extract_sections. Omit to auto-load from cache. |
+| `agent_name` | string | No | Override agent display name; default: context.agentName |
+| `language_override` | string | No | `"zh"` or `"en"` to override language setting |
+
+### The 19 section keys
+
+`persona_card` · `dialogue_theatre` · `subtext_decoder` · `interaction_tips` · `topic_preferences` · `signals` · `best_communication_times` · `expected_next` · `trajectory` · `character_portrait` · `surprising_contradiction` · `compatibility` · `key_quotes` · `gift_suggestions` · `health_index` · `growth_suggestions` · `ocean` · `mbti` · `attachment`
+
+### Stats object fields
+
+`total_messages` · `date_range {first, last}` · `senders {name: count}` · `monthly_activity {"YYYY-MM": count}` · `avg_message_length`
+
+---
+
+## Design language (baked into template CSS — untouchable)
+
+Warm cream editorial — Coral `#CC785C` + Forest green `#3B6E6A` + Amber `#B57E3A` + Cream `#F0E9DD`. Serif headings + sans body.
+
+**Your job is not visuals** — just pass sections + stats data; the tool handles everything.
+
+---
+
+## What the tool auto-generates
+
+All of the following are computed/generated internally from sections/stats data. **You do NOT provide these:**
+
+### 55 D scalars (auto-computed)
+- Message stats: totals, sender counts, percentages, avg length
+- Time span: years, first/last year, peak year
+- Intimacy 5 dimensions: total, trust, dependency, density, depth, stability
+- Chemistry triplet, zodiac quadruplet
+- MBTI type + 4 axis percentages + dominant labels
+- Attachment triplet
+- Character portrait, surprising contradiction
+- Health score, signal counts
+- Donut chart params, length distribution
+- Chart JSON data (yearly trend, hourly heatmap, weekday, health trend)
+
+### 27 HTML fragments (auto-generated)
+- `hero_badges` (5-10) — from keywords + MBTI + attachment type
+- `deep_analysis_body` (28 dim-rows) — 28-dim deep analysis mapped from MBTI/OCEAN/attachment/portrait data
+- `ocean_bars` (5) + `ocean_details` (6) — from OCEAN Big Five
+- `theatre_acts` (10) — from dialogue_theatre
+- `subtext_rows` (6) — from subtext_decoder
+- `mode_rows` (4) — communication mode distribution
+- `topic_cloud` (6-14) — from topic_preferences
+- `emotion_cards` (3) — positive/stress/baseline
+- `relation_modes` (3-6) — from interaction_tips
+- `timeline_rows` (4-6) — from monthly_activity timeline
+- `do_items` (4) / `dont_items` (4) — from interaction_tips
+- `topic_loves/neutral/avoid` — from topic_preferences
+- `signal_green/yellow/red_items` (5 each) — from signals
+- `best_times` (3) — from best_communication_times
+- `next_predictions` (4) — from expected_next
+- `ways_body` (10) — from growth_suggestions + interaction_tips
+- `trajectory_cards` (3) — from trajectory
+- `compat_rows` (8) — from compatibility
+- `quotes_grid` (20) — from key_quotes
+- `gift_rows` (5-8) — from gift_suggestions
+- `growth_cards` (6) — from growth_suggestions
+
+---
+
+## Language handling
+
+The tool reads UI strings from strings.json automatically based on `config.language`. The text content in sections data should match the analysis language.
+
+---
+
+## Reporting
+
+The tool returns a JSON summary: `filePath`, `sizeKB`, `countWarnings`. Relay the path and size to the user.
+
+---
+
+## Hard constraint summary
+
+- ❌ Generate D scalars or HTML fragments yourself (tool auto-generates)
+- ❌ Read template.html / strings.json (tool does this)
+- ❌ Write .py / .js / .ps1 / .sh scripts
+- ❌ Write .html files (tool does this)
+- ❌ Use file_operation to write reports
+- ❌ Emit large HTML in your response
+- ✅ Pass complete sections object (19 section keys)
+- ✅ Pass stats object (message statistics)
+- ✅ Ensure extract_sections has completed successfully

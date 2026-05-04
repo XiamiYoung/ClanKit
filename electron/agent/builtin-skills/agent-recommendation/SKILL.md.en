@@ -1,0 +1,70 @@
+---
+name: Agent Recommendation
+description: You MUST immediately call load_skill('agent-recommendation') when (1) the user's question is OUTSIDE your domain / persona / capabilities, OR (2) you are about to say "I'm not a X", "this isn't my field", "I don't know much about this", "I've never done this". This skill checks which other installed agent in ClanKit is a better fit and shows you how to output the recommendation button. **Do NOT reply "I can't help" first and then offer to find someone — load the skill FIRST.**
+---
+
+# Agent Recommendation
+
+ClanKit typically has multiple installed agents, each with their own domain and persona. When a user asks something clearly outside **your** lane, instead of stumbling through a second-rate answer, hand them off to a more suitable peer.
+
+## When to use this skill
+
+Load this skill and call `list_agents` whenever:
+- The user's question is **clearly outside your domain / persona / capabilities** (e.g. a travel guide asked about coding, an engineer asked for deep psychotherapy, a fictional character asked for real-world live data).
+- You are about to write "I'm not really the right person for this" or "this isn't my field".
+- You can sense that a focused specialist agent would do this better than you.
+
+Do NOT load for:
+- Questions that fall within your own domain (even tangentially) — answer yourself, it reads more coherent.
+- Same domain you already recommended in the previous turn — once is enough; do not keep redirecting.
+- After the user explicitly says "just answer me yourself".
+
+## Workflow
+
+1. **Call `list_agents`** with no parameters. The tool returns ALL installed specialist agents (id + name + description). Match semantically in your head ("travel" should match "vacation", "旅游" should match "旅行" agent).
+2. **Pick at most one** agent whose description is a strong topical match. If nothing is a clear fit, do NOT recommend — just acknowledge the boundary in your own voice and stop.
+3. **Output the recommendation tag** inline:
+   ```
+   <recommend-agent id="THE_AGENT_UUID" reason="one short sentence in the user's language about why this agent fits"/>
+   ```
+4. **Stay in character**: wrap the tag with one or two sentences in **your own voice** — own the boundary, name the agent, say what they bring, drop the tag. A travel guide might say "Maps are my thing, but code I've never touched. ClanKit has X who actually does this for a living."
+
+## Hard rules
+
+- **Never invent agent ids.** Only use ids returned by `list_agents` in the current turn.
+- **Never recommend more than one agent per reply.**
+- **Never recommend the same agent across consecutive turns.** Once is enough; if the user wants more they will click the button.
+- **If the user pushes back** ("just answer me yourself"), stop recommending and try your best.
+- The `reason` text and your surrounding sentences must be **in the user's language** AND **in your own persona's voice** (not generic AI assistant tone).
+- **Never recommend yourself.**
+
+## Examples
+
+### Example 1: Generalist (Clank) handing off depth
+
+User: "I want to spend 7 days in Japan"
+
+Clank, after `list_agents` finds Marco:
+> 7 days in Japan covers one or two regions comfortably. Marco has actually been to 60+ countries as a travel writer — he'll give you month-by-month route advice that I can only sketch.
+>
+> <recommend-agent id="MARCO-UUID" reason="travel writer, 60+ countries, actionable route advice"/>
+
+### Example 2: Character agent hitting a domain mismatch
+
+User to **Marco** (travel writer): "Can you write a polished exec summary for my board deck?"
+
+Marco, after `list_agents` finds Wes:
+> Trip reports and itineraries — yes. Boardroom prose — that's not my register. Wes has spent 20 years inside corporate writing; he'll get the tone right in one pass.
+>
+> <recommend-agent id="WES-UUID" reason="20 years of corporate writing, exec-summary fluent"/>
+>
+> If you want me to draft the *trip* part of an offsite summary, though, that's right in my lane.
+
+### Example 3: No match — own it honestly
+
+User to **Mike** (fitness coach): "Can you walk me through filing a small-claims lawsuit?"
+
+Mike, after `list_agents` returns no legal / paralegal agent:
+> Lawsuits are way out of my lane, and there's no legal agent installed here. I can keep you sane while you grind through the paperwork, but for the actual filing you want a real legal resource.
+
+(does NOT emit a `<recommend-agent/>` tag)

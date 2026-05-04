@@ -1,0 +1,144 @@
+---
+name: analysis-report-template
+description: 人格分析 HTML 报告模板（暖米编辑风）。通过 render_persona_report 工具渲染。你只需传入 extract_sections 返回的 sections + stats 对象，工具会自动计算所有标量数据并生成全部 27 个 HTML 片段。
+---
+
+# 人格分析报告模板
+
+## 🚨 使用规则（必读）
+
+**渲染 HTML 报告的唯一正确方式是调用 `render_persona_report` 工具。**
+
+工具内部会自动完成：
+- 从 sections 数据计算 55 个 D 标量（消息统计、MBTI 轴线、亲密度维度、图表数据等）
+- 从 sections 数据生成 27 个 HTML 片段（28 维深度分析、10 幕对话剧场、20 条语录等）
+- 读取 template.html + strings.json 进行模板替换
+- 校验 DOM 元素数量
+- 写入最终 HTML 文件
+
+### ❌ 严禁
+
+1. **禁止自己生成 D 标量或 HTML 片段** — 工具会自动生成。
+2. **禁止 Read template.html / strings.json** — 工具会自动读。
+3. **禁止在响应里 emit 大段 HTML 去 Write** — 工具会负责写文件。
+4. **禁止写 .py / .js / .ps1 / .sh 脚本**来处理模板。
+5. **禁止用 file_operation 写 HTML 报告** — 必须调用 render_persona_report。
+
+### ✅ 正确流程
+
+```
+1. analyze_agent_history(action="analyze_all")        # 若未分析
+2. analyze_agent_history(action="extract_sections")   # 得到 sections + stats，并自动缓存到磁盘
+3. render_persona_report({
+     sections: <extract_sections 返回的 sections 对象>,
+     stats: <extract_sections 返回的 stats 对象>
+   })
+4. 汇报：工具返回的文件路径 + 大小 + 校验结果
+```
+
+### 🛟 回退流程（丢失 sections 对象时使用）
+
+如果 extract_sections 的响应被截断，或你已经无法在 context 中找回 sections/stats 对象，**直接调用 `render_persona_report` 不传任何参数**。工具会自动从磁盘上的 extract_sections 缓存读取最新的 sections + stats 并渲染。返回消息里会出现 `Source: sections auto-loaded from extract_sections cache`。
+
+前提仍然是先跑过 extract_sections——缓存就是那一步写的。
+
+### 📁 输出路径
+
+- 如果用户配置了 AI Doc 目录（DoCPath），报告会写到 `<DoCPath>/<AgentName>_report.html`，用户能在自己的笔记旁边直接看到。
+- 如果 DoCPath 为空，回退到 `<dataPath>/agent-artifacts/agents/<agentId>.report.html`（内部目录）。
+
+你**不需要自己搬文件**，工具会直接写到正确位置。
+
+---
+
+## 工具参数
+
+| 参数 | 类型 | 必须 | 说明 |
+|---|---|---|---|
+| `sections` | object | ⚠️ 建议传 | extract_sections 返回的 sections 对象（19 个分区键）。省略时自动从缓存读取。|
+| `stats` | object | 否 | extract_sections 返回的 stats 对象。省略时自动从缓存读取。|
+| `agent_name` | string | 否 | 覆盖代理显示名称，默认使用上下文中的 agentName |
+| `language_override` | string | 否 | `"zh"` 或 `"en"`，覆盖语言设置 |
+
+### sections 对象的 19 个分区键
+
+`persona_card` · `dialogue_theatre` · `subtext_decoder` · `interaction_tips` · `topic_preferences` · `signals` · `best_communication_times` · `expected_next` · `trajectory` · `character_portrait` · `surprising_contradiction` · `compatibility` · `key_quotes` · `gift_suggestions` · `health_index` · `growth_suggestions` · `ocean` · `mbti` · `attachment`
+
+### stats 对象的字段
+
+`total_messages` · `date_range {first, last}` · `senders {name: count}` · `monthly_activity {"YYYY-MM": count}` · `avg_message_length`
+
+---
+
+## 设计语言（由模板 CSS 固化，你不能改）
+
+暖米编辑风 — 珊瑚 `#CC785C` + 森林绿 `#3B6E6A` + 琥珀 `#B57E3A` + 奶油底 `#F0E9DD`。衬线标题 + 无衬线正文。
+
+**你的工作与视觉无关**——只需传入 sections + stats 数据，视觉由工具自动处理。
+
+---
+
+## 工具内部自动生成的内容
+
+以下内容全部由工具从 sections/stats 数据自动计算和生成，**你不需要提供**：
+
+### 55 个 D 标量（自动计算）
+- 消息统计：总数、双方消息数、占比、平均长度
+- 时间跨度：年数、首末年份、峰值年份
+- 亲密度五维：总分、信任、依赖、密度、深度、稳定
+- 关系化学反应三元组、星座四元组
+- MBTI 类型 + 四轴百分比 + 主导标签
+- 依恋类型三元组
+- 人物画像、意外矛盾
+- 健康指数、信号灯计数
+- 甜甜圈图参数、消息长度分布
+- 图表数据 JSON（年趋势、小时热力图、星期分布、健康趋势）
+
+### 27 个 HTML 片段（自动生成）
+- `hero_badges` (5-10) — 来自 keywords + MBTI + 依恋类型
+- `deep_analysis_body` (28 dim-rows) — 28 维深度分析，映射自 MBTI/OCEAN/依恋/画像等
+- `ocean_bars` (5) + `ocean_details` (6) — 来自 OCEAN 五因素
+- `theatre_acts` (10) — 来自 dialogue_theatre
+- `subtext_rows` (6) — 来自 subtext_decoder
+- `mode_rows` (4) — 沟通模式分布
+- `topic_cloud` (6-14) — 来自 topic_preferences
+- `emotion_cards` (3) — 正向/压力/基线情绪
+- `relation_modes` (3-6) — 来自 interaction_tips
+- `timeline_rows` (4-6) — 来自 monthly_activity 时间线
+- `do_items` (4) / `dont_items` (4) — 来自 interaction_tips
+- `topic_loves/neutral/avoid` — 来自 topic_preferences
+- `signal_green/yellow/red_items` (各 5) — 来自 signals
+- `best_times` (3) — 来自 best_communication_times
+- `next_predictions` (4) — 来自 expected_next
+- `ways_body` (10) — 来自 growth_suggestions + interaction_tips
+- `trajectory_cards` (3) — 来自 trajectory
+- `compat_rows` (8) — 来自 compatibility
+- `quotes_grid` (20) — 来自 key_quotes
+- `gift_rows` (5-8) — 来自 gift_suggestions
+- `growth_cards` (6) — 来自 growth_suggestions
+
+---
+
+## 语言处理
+
+工具会自动按 `config.language` 查 `strings.json` 的 UI 字符串。sections 数据中的文本语言应与分析时的语言一致。
+
+---
+
+## 完成后的汇报
+
+工具返回 JSON 含 `filePath / sizeKB / countWarnings`。把路径和大小直接转述给用户。
+
+---
+
+## 硬约束汇总
+
+- ❌ 自己生成 D 标量或 HTML 片段（工具自动生成）
+- ❌ Read template.html / strings.json（工具会读）
+- ❌ Write .py / .js / .ps1 / .sh 脚本
+- ❌ Write .html 文件（工具会写）
+- ❌ 用 file_operation 写报告
+- ❌ emit 大段 HTML 在响应里
+- ✅ 传入完整的 sections 对象（19 个分区键）
+- ✅ 传入 stats 对象（消息统计数据）
+- ✅ 确保 extract_sections 已成功执行

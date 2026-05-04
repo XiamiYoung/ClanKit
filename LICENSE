@@ -1,0 +1,72 @@
+ClanKit Community License
+Copyright (c) 2026 ClanKit
+
+Permission is hereby granted to any individual to view, download, and use
+this software, subject to the following conditions:
+
+1. PERMITTED USES
+   - Personal use on your own devices, including use as a tool in the
+     course of your own paid work (e.g. freelance, employment, research),
+     provided the software itself is not being productized or resold.
+   - Internal use by an individual or organization for their own workflows.
+   - Viewing and studying the source code for educational purposes.
+   - Submitting bug reports and contributing improvements via pull requests.
+
+2. PROHIBITED USES
+   The following are strictly prohibited without prior written permission
+   from the copyright holder:
+
+   a) Productization — Offering this software, in whole or in part, as a
+      hosted service, SaaS, or as a component embedded in a product or
+      service that is made available to third parties, whether for a fee
+      or free of charge.
+
+   b) Redistribution — Copying, publishing, distributing, sublicensing,
+      or making this software available to third parties in any form,
+      modified or unmodified, including repackaging as another application.
+
+   c) Derivative Commercial Products — Creating applications, plugins, or
+      tools based on this source code for commercial distribution.
+
+3. TRADEMARKS
+   This license does not grant any rights to use the name "ClanKit", its
+   logo, or any related trademarks, trade names, or branding. Any use of
+   these marks requires separate written permission.
+
+4. CONTRIBUTIONS
+   By submitting a pull request, contributing code, or otherwise providing
+   any work for inclusion in this project, you agree that:
+
+   a) You grant the copyright holder a perpetual, worldwide, non-exclusive,
+      royalty-free, irrevocable license to use, reproduce, modify,
+      distribute, sublicense, and relicense your contribution under any
+      terms, including but not limited to the current license, other open
+      source licenses, proprietary licenses, or commercial offerings.
+
+   b) The copyright holder may adjust or change the license terms of this
+      project in the future as deemed necessary, and such changes apply to
+      your past and future contributions.
+
+   c) You represent that your contribution is your original work and that
+      you have the legal right to grant the above license.
+
+   d) Your contribution is provided "as is" without warranty of any kind.
+
+5. NO WARRANTY
+   This software is provided "as is", without warranty of any kind.
+   The copyright holder is not liable for any damages arising from the
+   use of this software.
+
+6. TERMINATION
+   Any violation of this license automatically terminates your rights
+   under it.
+
+7. RESERVATION OF RIGHTS
+   All rights not expressly granted in this license are reserved by the
+   copyright holder. Nothing in this license shall be construed as granting
+   any right by implication, estoppel, or otherwise.
+
+8. COMMERCIAL LICENSING
+   For commercial use, partnerships, or redistribution rights, please
+   open an issue in the project repository with the label
+   "commercial-license".

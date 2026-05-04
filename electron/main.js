@@ -1,0 +1,753 @@
+const path = require('path')
+const fs = require('fs')
+const { v4: uuidv4 } = require('uuid')
+const pdfParse = require('pdf-parse')
+const mammoth = require('mammoth')
+
+// Helper to get provider config by type from the new providers array
+function getProviderByType(config, type) {
+  if (config.providers && Array.isArray(config.providers)) {
+    return config.providers.find(p => p.type === type && p.apiKey)
+  }
+  return null
+}
+
+// Get provider config by ID (uuid)
+function getProviderById(config, id) {
+  if (config.providers && Array.isArray(config.providers)) {
+    return config.providers.find(p => p.id === id)
+  }
+  return null
+}
+
+// Build provider client config from provider object
+function buildProviderClientConfig(provider, model = null) {
+  if (!provider) return null
+  
+  const isOpenAI = provider.type !== 'anthropic' && provider.type !== 'openrouter' && provider.type !== 'google'
+
+  const cfg = {
+    provider: {
+      id: provider.id,
+      type: provider.type,
+      name: provider.name,
+      baseURL: provider.baseURL,
+      apiKey: provider.apiKey,
+      model: model || provider.model,
+      settings: provider.settings || {},
+    },
+  }
+
+  if (isOpenAI) {
+    cfg.defaultProvider = 'openai'
+    cfg._resolvedProvider = 'openai'
+    if (provider.type !== 'openai') cfg._directAuth = true
+  } else {
+    cfg.defaultProvider = provider.type
+    cfg._resolvedProvider = provider.type
+  }
+  
+  return cfg
+}
+
+// Suppress libsignal verbose warnings — they use console.warn internally
+const originalWarn = console.warn
+console.warn = function (...args) {
+  if (args[0]?.includes?.('Closing open session')) return
+  originalWarn.apply(console, args)
+}
+
+// Point Chromium's fontconfig at our bundled fonts.conf BEFORE electron is
+// required -- this is the only hook that runs before Chromium initialises its
+// font subsystem. On Linux this makes Segoe UI Emoji available so the
+// renderer can display emoji without any user system changes.
+if (process.platform === 'linux') {
+  process.env.FONTCONFIG_FILE = path.join(__dirname, 'fonts.conf')
+}
+
+const { app, BrowserWindow, ipcMain, dialog, shell, screen, protocol, net, session, Menu } = require('electron')
+const http = require('http')
+const os = require('os')
+const { execFile, spawn } = require('child_process')
+const crypto = require('crypto')
+const { logger } = require('./logger')
+const imBridge = require('./im-bridge')
+const { mcpManager } = require('./agent/mcp/McpManager')
+const ipcWindow = require('./ipc/window')
+let ipcAgent = null
+
+logger.info('=== ClanKit starting ===')
+
+// Process-level safety net: a thrown error from an async tool, native addon
+// (sherpa-onnx, better-sqlite3, etc.), or third-party callback that escapes
+// our try/catches would otherwise terminate the main process. Log and survive.
+// Note: this cannot stop a true native abort() / segfault in a Node addon —
+// those bypass V8 entirely. But it does catch async exceptions and unhandled
+// promise rejections that previously killed the app silently.
+process.on('uncaughtException', (err) => {
+  logger.error('[uncaughtException]', err?.message || err, err?.stack || '')
+})
+process.on('unhandledRejection', (reason) => {
+  logger.error('[unhandledRejection]', reason?.message || reason, reason?.stack || '')
+})
+
+// Dev mode: run-electron.js sets ELECTRON_DEV=true
+const isDev = process.env.ELECTRON_DEV === 'true'
+
+// --- Storage ----------------------------------------------------------------
+// dataStore.js is the SINGLE source of truth for all paths.
+// Shorthand accessor — available after ensureDataDir().
+const ds = require('./lib/dataStore')
+function p() { return ds.paths() }
+
+
+// --- Memory directory helpers ------------------------------------------------
+
+/** Ensure per-agent memory directories exist. Returns { memDir, logsDir }. */
+function ensureAgentMemoryDirs(agentId) {
+  const memDir  = path.join(p().AGENT_MEMORY_DIR, agentId)
+  const logsDir = path.join(memDir, 'memory')
+  fs.mkdirSync(logsDir, { recursive: true })
+  return { memDir, logsDir }
+}
+
+/** Ensure user memory directory exists. Returns userDir path. */
+function ensureUserMemoryDir(userId) {
+  const userDir = path.join(p().USER_MEMORY_DIR, userId)
+  fs.mkdirSync(userDir, { recursive: true })
+  return userDir
+}
+
+/** Read a memory file. Returns null if missing. */
+function readMemoryFile(filePath) {
+  try {
+    if (fs.existsSync(filePath)) return fs.readFileSync(filePath, 'utf8')
+  } catch (err) {
+    logger.error('readMemoryFile error', err.message)
+  }
+  return null
+}
+
+/** Append text to a memory file (creates if missing). */
+function appendMemoryFile(filePath, text) {
+  try {
+    fs.mkdirSync(path.dirname(filePath), { recursive: true })
+    fs.appendFileSync(filePath, text, 'utf8')
+  } catch (err) {
+    logger.error('appendMemoryFile error', err.message)
+  }
+}
+
+/** Append a memory entry to USER.md (shared across agents) or MEMORY.md (per-agent). */
+function appendMemoryEntry(agentId, userId, target, section, entry) {
+  try {
+    let filePath
+    if (target === 'user') {
+      const userDir = path.join(p().USER_MEMORY_DIR, userId)
+      fs.mkdirSync(userDir, { recursive: true })
+      filePath = path.join(userDir, 'USER.md')
+    } else {
+      const agentDir = path.join(p().AGENT_MEMORY_DIR, agentId)
+      fs.mkdirSync(agentDir, { recursive: true })
+      filePath = path.join(agentDir, 'MEMORY.md')
+    }
+
+    // Ensure file exists with header
+    if (!fs.existsSync(filePath)) {
+      const header = target === 'user'
+        ? `# User Profile\n> Auto-generated by ClanKit\n\n`
+        : `# Knowledge Base\n> Auto-generated by ClanKit\n\n`
+      fs.writeFileSync(filePath, header, 'utf8')
+    }
+
+    // Append under section header (create section if missing)
+    let content = fs.readFileSync(filePath, 'utf8')
+    const sectionHeader = `## ${section}`
+    if (!content.includes(sectionHeader)) {
+      content += `\n${sectionHeader}\n\n`
+    }
+    content += `- ${entry}\n`
+    fs.writeFileSync(filePath, content, 'utf8')
+  } catch (err) {
+    logger.error('appendMemoryEntry error', err.message)
+  }
+}
+
+/** Get today's and yesterday's dated log paths for an agent. */
+function getAgentLogPaths(agentId) {
+  const { logsDir } = ensureAgentMemoryDirs(agentId)
+  const now   = new Date()
+  const today = now.toISOString().slice(0, 10)
+  const yest  = new Date(now - 86400000).toISOString().slice(0, 10)
+  return {
+    todayPath:     path.join(logsDir, `${today}.md`),
+    yesterdayPath: path.join(logsDir, `${yest}.md`),
+  }
+}
+
+// --- Env-backed path accessors -----------------------------------------------
+// These three paths are stored in config.json under CLANKIT_DATA_PATH.
+function getEnvPaths() {
+  const cfg = readJSON(p().CONFIG_FILE, {})
+  return {
+    skillsPath:   cfg.skillsPath   || '',
+    DoCPath:      cfg.DoCPath      || '',
+    artifactPath: cfg.artifactPath || cfg.artyfactPath || '',
+  }
+}
+
+
+function ensureDataDir() {
+  ds.init()
+}
+
+// Delegate to dataStore.readJSON so CONFIG_FILE reads transparently decrypt
+// safeStorage-protected fields (apiKey, smtp.pass). Other files pass through
+// unchanged.
+function readJSON(file, fallback) {
+  return ds.readJSON(file, fallback)
+}
+
+// Delegate to dataStore.writeJSON so CONFIG_FILE writes transparently encrypt
+// sensitive fields. Other files pass through unchanged.
+function writeJSON(file, data) {
+  ensureDataDir()
+  ds.writeJSON(file, data)
+}
+
+// --- Atomic async JSON write (write to unique .tmp then rename) ---------------
+async function writeJSONAtomic(file, data, _retries = 2) {
+  const dir = path.dirname(file)
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
+  const tmp = file + `.tmp.${process.pid}.${Date.now()}`
+  try {
+    await fs.promises.writeFile(tmp, JSON.stringify(data, null, 2), 'utf8')
+    await fs.promises.rename(tmp, file)
+  } catch (err) {
+    // Clean up orphaned tmp file
+    try { await fs.promises.unlink(tmp) } catch {}
+    // Retry on ENOENT or EPERM (filesystem race)
+    if (_retries > 0 && (err.code === 'ENOENT' || err.code === 'EPERM')) {
+      await new Promise(r => setTimeout(r, 50))
+      return writeJSONAtomic(file, data, _retries - 1)
+    }
+    throw err
+  }
+}
+
+async function readJSONAsync(file, fallback) {
+  try {
+    const raw = await fs.promises.readFile(file, 'utf8')
+    return JSON.parse(raw)
+  } catch {
+    return fallback
+  }
+}
+
+
+
+// --- Default Data -----------------------------------------------------------
+const DEFAULT_CONFIG = {
+  providers: [],
+  utilityModel: {
+    provider: '',
+    model:    '',
+  },
+  defaultProvider:   'anthropic',
+  systemPrompt:      '',
+  skillsPath:        '',
+  DoCPath:           '',
+  artifactPath:      '',
+  maxOutputTokens: 32768,
+  newsFeeds: [],
+  sandboxConfig: {
+    defaultMode: 'sandbox',
+    sandboxAllowList: [],
+    dangerBlockList: [
+      { id: 'danger-1', pattern: 'rm -rf *', description: 'Recursive force delete' },
+      { id: 'danger-2', pattern: 'sudo *', description: 'Superuser commands' },
+      { id: 'danger-3', pattern: 'curl * | *sh', description: 'Remote script execution' },
+      { id: 'danger-4', pattern: 'curl * | bash', description: 'Remote bash execution' },
+      { id: 'danger-5', pattern: 'wget * | bash', description: 'Remote bash execution' },
+      { id: 'danger-6', pattern: ':(){ :|:& };:', description: 'Fork bomb' },
+      { id: 'danger-7', pattern: 'dd if=/dev/zero *', description: 'Disk wipe' },
+      { id: 'danger-8', pattern: 'mkfs.*', description: 'Format filesystem' },
+    ]
+  },
+  telemetryOptOut: false,
+  notifications: {
+    enabled: true,
+    silent:  false,
+  },
+}
+
+
+// --- Main Window ------------------------------------------------------------
+let mainWindow
+
+// Manual maximize state — managed by ipc/window.js (setMaximizeState/getMaximizeState)
+// ipcWindow is required at module top-level (safe — ds.paths() only used when handlers fire)
+
+function createWindow() {
+  const { width: screenW, height: screenH } = screen.getPrimaryDisplay().workAreaSize
+  const winW = Math.round(screenW * 4 / 5)
+  const winH = Math.round(screenH * 4 / 5)
+
+  mainWindow = new BrowserWindow({
+    icon: app.isPackaged
+      ? path.join(process.resourcesPath, 'icon.ico')
+      : path.join(__dirname, '../public/icon.png'),
+    width: Math.round(screenW * 0.7),
+    height: Math.round(screenH * 0.7),
+    x: Math.round((screenW - screenW * 0.7) / 2),
+    y: Math.round((screenH - screenH * 0.7) / 2),
+    minWidth: 600,
+    minHeight: 400,
+    frame: false,
+    fullscreen: false,
+    maximizable: true,
+    autoHideMenuBar: true,
+    titleBarStyle: 'hidden',
+    transparent: true,
+    backgroundColor: '#00000000',
+    hasShadow: false,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+      webviewTag: true,
+      spellcheck: true
+    }
+  })
+
+  // Publish to shared windowRef so extracted IPC modules can access it
+  require('./lib/windowRef').set(mainWindow)
+
+  // In dev, forward renderer console output to the main-process terminal so
+  // `npm run dev` shows everything in one place. Production builds skip this
+  // (renderer logs stay in DevTools to avoid leaking debug info to user logs).
+  if (isDev) {
+    const LEVEL = ['LOG', 'WARN', 'ERROR', 'INFO']
+    mainWindow.webContents.on('console-message', (_e, level, message, line, sourceId) => {
+      const tag = LEVEL[level] || `L${level}`
+      const src = sourceId ? sourceId.split('/').pop() + ':' + line : ''
+      console.log(`[renderer ${tag}] ${message}${src ? '  (' + src + ')' : ''}`)
+    })
+  }
+
+  mainWindow.once('ready-to-show', () => { mainWindow.maximize(); mainWindow.show() })
+
+  if (isDev) {
+    mainWindow.loadURL('http://localhost:5173')
+  } else {
+    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
+  }
+  mainWindow.on('closed', () => {
+    mainWindow = null
+    require('./lib/windowRef').set(null)
+  })
+
+  // Window maximize state — tracked manually because Electron's isMaximized()
+  // returns false on secondary monitors when moved there via custom setBounds drag.
+  mainWindow.on('maximize', () => {
+    ipcWindow.setMaximizeState(true, ipcWindow.getMaximizeState()._preMaximizeBounds)
+    mainWindow?.webContents.send('window:maximized', true)
+  })
+  mainWindow.on('unmaximize', () => {
+    ipcWindow.setMaximizeState(false, null)
+    mainWindow?.webContents.send('window:maximized', false)
+  })
+  mainWindow.on('enter-full-screen', () => { mainWindow?.webContents.send('window:maximized', true) })
+  mainWindow.on('leave-full-screen', () => { mainWindow?.webContents.send('window:maximized', false) })
+  
+  // Custom titlebar double-click handler - resize to 70%
+  const titleBarHeight = 40
+  const notifier = require('./lib/notifier')
+  notifier.setFocus(true)
+  mainWindow.on('blur',  () => notifier.setFocus(false))
+  mainWindow.on('focus', () => notifier.setFocus(true))
+  let _lastClickTime = 0
+  mainWindow.on('touch-start', (e) => {
+    const now = Date.now()
+    if (now - _lastClickTime < 300) {
+      const bounds = mainWindow.getBounds()
+      if (bounds.y <= titleBarHeight || e.getPosition()[1] <= titleBarHeight) {
+        const screen = require('electron').screen.getDisplayMatching(mainWindow.getBounds())
+        const screenBounds = screen.workArea
+        const newWidth = Math.round(screenBounds.width * 0.7)
+        const newHeight = Math.round(screenBounds.height * 0.7)
+        mainWindow.setBounds({
+          x: Math.round(screenBounds.x + (screenBounds.width - newWidth) / 2),
+          y: Math.round(screenBounds.y + (screenBounds.height - newHeight) / 2),
+          width: newWidth,
+          height: newHeight
+        })
+      }
+    }
+    _lastClickTime = now
+  })
+  
+  // Also handle double-click on titlebar area via webContents
+  mainWindow.webContents.on('input-event', (event, input) => {
+    if (input.type === 'mouseDoubleClick' && input.mouseY <= 40) {
+      const screen = require('electron').screen.getDisplayMatching(mainWindow.getBounds())
+      const screenBounds = screen.workArea
+      const newWidth = Math.round(screenBounds.width * 0.7)
+      const newHeight = Math.round(screenBounds.height * 0.7)
+      mainWindow.setBounds({
+        x: Math.round(screenBounds.x + (screenBounds.width - newWidth) / 2),
+        y: Math.round(screenBounds.y + (screenBounds.height - newHeight) / 2),
+        width: newWidth,
+        height: newHeight
+      })
+    }
+  })
+  ipcWindow._attachMinibarMovedGuard(mainWindow)
+
+  // -- Grant microphone access for voice calls --
+  mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
+    if (permission === 'media') { callback(true); return }
+    callback(true) // allow other permissions too (clipboard, etc.)
+  })
+
+  // -- Set spellcheck language --
+  mainWindow.webContents.session.setSpellCheckerLanguages(['en-US'])
+
+  // -- Right-click context menu with spell check + standard edit actions --
+  mainWindow.webContents.on('context-menu', (event, params) => {
+    const menuItems = []
+
+    // Spell check suggestions (if the right-clicked word is misspelled)
+    if (params.misspelledWord && params.dictionarySuggestions.length > 0) {
+      for (const suggestion of params.dictionarySuggestions.slice(0, 5)) {
+        menuItems.push({
+          label: suggestion,
+          click: () => mainWindow.webContents.replaceMisspelling(suggestion)
+        })
+      }
+      menuItems.push({ type: 'separator' })
+      menuItems.push({
+        label: 'Add to Dictionary',
+        click: () => mainWindow.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord)
+      })
+      menuItems.push({ type: 'separator' })
+    }
+
+    // Standard edit actions
+    if (params.isEditable) {
+      menuItems.push(
+        { label: 'Undo',      role: 'undo',      enabled: params.editFlags.canUndo },
+        { label: 'Redo',      role: 'redo',      enabled: params.editFlags.canRedo },
+        { type: 'separator' },
+        { label: 'Cut',       role: 'cut',       enabled: params.editFlags.canCut },
+        { label: 'Copy',      role: 'copy',      enabled: params.editFlags.canCopy },
+        { label: 'Paste',     role: 'paste',     enabled: params.editFlags.canPaste },
+        { label: 'Delete',    role: 'delete',    enabled: params.editFlags.canDelete },
+        { type: 'separator' },
+        { label: 'Select All', role: 'selectAll', enabled: params.editFlags.canSelectAll }
+      )
+    } else if (params.selectionText) {
+      // Non-editable area with selection: show Copy
+      menuItems.push(
+        { label: 'Copy', role: 'copy', enabled: params.editFlags.canCopy }
+      )
+    }
+
+    if (menuItems.length > 0) {
+      const menu = Menu.buildFromTemplate(menuItems)
+      menu.popup()
+    }
+  })
+
+  // -- Prevent Electron from navigating away from the app --
+  // Block ALL navigations that would leave the SPA. file:// drops are forwarded
+  // as attachments; http(s) links are opened in the system browser instead.
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    // Allow same-origin dev-server reloads
+    const currentURL = mainWindow.webContents.getURL()
+    if (currentURL && url.startsWith(new URL(currentURL).origin)) return
+
+    event.preventDefault()
+
+    if (url.startsWith('file://')) {
+      logger.info('Intercepted file drop navigation:', url)
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('file-dropped', url)
+      }
+    } else if (url.startsWith('http://') || url.startsWith('https://')) {
+      logger.info('Intercepted external link navigation, opening in browser:', url)
+      shell.openExternal(url).catch(err => logger.error('openExternal failed:', err.message))
+    } else {
+      logger.warn('Blocked navigation to unsupported URL:', url)
+    }
+  })
+}
+
+// Register vault-asset:// protocol to serve local vault files (images, etc.)
+// Must be registered before app is ready.
+protocol.registerSchemesAsPrivileged([{
+  scheme: 'vault-asset',
+  privileges: { bypassCSP: true, supportFetchAPI: true, stream: true }
+}])
+
+// Required for Windows toast notifications: without an AppUserModelID, Electron
+// notifications silently fail on Windows 10/11 (especially in dev runs). In
+// packaged builds the AUMID must match build.appId so the Start Menu shortcut
+// supplies the branded display name + icon for the toast header. In dev there
+// is no shortcut, so Windows shows whatever AUMID we set — use the friendly
+// product name so the toast header reads "ClanKit" rather than the raw AUMID.
+try { app.setName('ClanKit') } catch {}
+if (process.platform === 'win32') {
+  try { app.setAppUserModelId(app.isPackaged ? 'com.clankit.app' : 'ClanKit') } catch {}
+}
+
+app.whenReady().then(async () => {
+  // Handle vault-asset:// requests -> serve files from disk
+  // URL format: vault-asset:///absolute/path/to/file
+  protocol.handle('vault-asset', (request) => {
+    const filePath = decodeURIComponent(new URL(request.url).pathname)
+    return net.fetch('file://' + filePath)
+  })
+
+  ensureDataDir()
+
+  // Initialize local RAG modules (path-only, no model loading).
+  //
+  // Embedding model resolution order:
+  //   1. BUNDLED — production: process.resourcesPath/models  (set in
+  //      electron-builder extraResources). Dev: <projectRoot>/electron/models/
+  //      so a developer who's run `node scripts/prepare-embedding-model.js`
+  //      sees the same code path as a packaged install.
+  //   2. USER DATA — {DATA_DIR}/models — back-compat for users who downloaded
+  //      under the old flow; new installs should never need this.
+  const localEmbedding = require('./lib/localEmbedding')
+  const localVectorStore = require('./lib/localVectorStore')
+  const isPackaged = (require('electron').app).isPackaged
+  const bundledModelsDir = isPackaged
+    ? path.join(process.resourcesPath, 'models')
+    : path.join(__dirname, 'models')
+  localEmbedding.init(ds.paths().MODELS_DIR, bundledModelsDir)
+  localVectorStore.init(ds.paths().DATA_DIR)
+
+
+  // One-shot agents.json + souls/ → agents.db migration. No-op after first run.
+  try {
+    const { migrate: migrateAgents } = require('./migrations/agentsToSqlite')
+    migrateAgents(ds.paths().DATA_DIR)
+  } catch (err) {
+    logger.error('[main] agents.db migration failed:', err.message, err.stack)
+    // Do not block app startup — Phase 3 will cut IPC over to AgentStore;
+    // until then, store:get-agents still falls back to agents.json on disk.
+  }
+
+  // One-shot tasks/plans/runs JSON → tasks.db migration. No-op after first run.
+  try {
+    const { migrate: migrateTasks } = require('./migrations/tasksToSqlite')
+    migrateTasks(ds.paths().DATA_DIR)
+  } catch (err) {
+    logger.error('[main] tasks.db migration failed:', err.message, err.stack)
+  }
+
+  // One-shot chats/* JSON → chats.db migration. No-op after first run.
+  try {
+    const { migrate: migrateChats } = require('./migrations/chatsToSqlite')
+    migrateChats(ds.paths().DATA_DIR)
+  } catch (err) {
+    logger.error('[main] chats.db migration failed:', err.message, err.stack)
+  }
+
+  createWindow()
+
+  // ── Lazy local file server for HTML preview (started on first use) ──
+  const MIME_MAP = { '.html': 'text/html', '.htm': 'text/html', '.css': 'text/css', '.js': 'application/javascript', '.mjs': 'application/javascript', '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.svg': 'image/svg+xml', '.webp': 'image/webp', '.ico': 'image/x-icon', '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.mp4': 'video/mp4', '.webm': 'video/webm', '.mp3': 'audio/mpeg', '.pdf': 'application/pdf' }
+  let _htmlServer = null
+  function _ensureHtmlServer() {
+    if (_htmlServer) return Promise.resolve(_htmlServer.address().port)
+    return new Promise((resolve) => {
+      _htmlServer = http.createServer((req, res) => {
+        let filePath = decodeURIComponent(req.url.replace(/\?.*$/, ''))
+        if (process.platform === 'win32' && /^\/[A-Za-z]:/.test(filePath)) filePath = filePath.slice(1)
+        fs.readFile(filePath, (err, data) => {
+          if (err) { res.writeHead(404); res.end('Not found'); return }
+          const ext = path.extname(filePath).toLowerCase()
+          res.writeHead(200, { 'Content-Type': MIME_MAP[ext] || 'application/octet-stream', 'Cache-Control': 'no-store' })
+          res.end(data)
+        })
+      })
+      _htmlServer.listen(0, '127.0.0.1', () => {
+        logger.info(`[HtmlPreview] local file server on port ${_htmlServer.address().port}`)
+        resolve(_htmlServer.address().port)
+      })
+    })
+  }
+  ipcMain.handle('html-preview:port', () => _ensureHtmlServer())
+  ipcMain.handle('app:get-locale', () => app.getLocale())
+
+  // Register all IPC handlers (must be after dataStore.init() and createWindow())
+  ipcAgent = require('./ipc').registerAll({ DEFAULT_CONFIG, imBridge, mcpManager }).ipcAgent
+
+  // Anonymous install telemetry (async, non-blocking, silent on failure)
+  require('./lib/telemetry').sendInstallPing().catch(() => {})
+
+  // Auto-update: first check 30s after app ready (avoid cold-start contention).
+  // No periodic polling — users restart the app often enough; manual check
+  // available from Settings page in the meantime.
+  setTimeout(() => {
+    require('./updater').check({ trigger: 'auto' }).catch(err => {
+      logger.warn('[updater] startup check threw', err?.message)
+    })
+  }, 30_000)
+
+  // ── Built-in skills: seed missing skills from source tree into user skillsDir ──
+  // Runs after IPC registration so the first scan-dir call picks them up.
+  try {
+    const builtinSkills = require('./lib/builtinSkills')
+    const startupCfg = readJSON(p().CONFIG_FILE, {})
+    const startupLang = startupCfg.language || 'en'
+    let startupSkillsDir = (startupCfg.skillsPath || '').trim()
+    if (startupSkillsDir.startsWith('~/') || startupSkillsDir === '~') {
+      startupSkillsDir = path.join(require('os').homedir(), startupSkillsDir.slice(1))
+    }
+    if (!startupSkillsDir) startupSkillsDir = path.join(p().DATA_DIR, 'skills')
+
+    const { seeded, builtinIds } = builtinSkills.ensureBuiltinSkills(startupSkillsDir, startupLang)
+
+    // First-time agent assignment: if any built-in skill was just seeded AND we
+    // have never assigned them to agents before, push their ids into every
+    // existing agent's requiredSkillIds. Guarded by a config flag so users who
+    // intentionally remove the skill from an agent don't see it come back.
+    if (seeded.length > 0 && !startupCfg.builtinSkillsAssignedOnce) {
+      const { getInstance: getAgentStore } = require('./agent/AgentStore')
+      builtinSkills.seedBuiltinSkillsIntoAgents(getAgentStore(p().DATA_DIR), builtinIds)
+      startupCfg.builtinSkillsAssignedOnce = true
+      writeJSON(p().CONFIG_FILE, startupCfg)
+    }
+  } catch (err) {
+    logger.error('[Startup] ensureBuiltinSkills failed:', err.message)
+  }
+
+  // Refresh LiteLLM model catalog in background (best-effort)
+  require('./agent/modelDefaults').refreshFromRemote(p().DATA_DIR).catch(() => {})
+
+  // ── Clean up stale 'running' run entries from a previous session ────────────
+  try {
+    const { getInstance: getTaskStore } = require('./agent/TaskStore')
+    const taskStore = getTaskStore(p().DATA_DIR)
+    const stale = taskStore.listRuns({ limit: 1000 }).filter(r => r.status === 'running')
+    for (const run of stale) {
+      taskStore.saveRun({
+        ...run,
+        status: 'error',
+        completedAt: Date.now(),
+        error: 'Interrupted by app restart',
+      })
+    }
+    if (stale.length > 0) {
+      logger.info(`[main] cleaned up ${stale.length} stale 'running' run(s) from previous session`)
+    }
+  } catch (err) {
+    logger.warn('Failed to clean up stale run entries:', err.message)
+  }
+
+  // ── Task Scheduler ──────────────────────────────────────────────────────────
+  const taskScheduler = require('./task-scheduler')
+  taskScheduler.init(() => p().DATA_DIR, () => mainWindow, () => p().SETTINGS_DIR)
+
+  // ── IM Bridge ──────────────────────────────────────────────────────────────
+  // setMainWindow is synchronous and fast — do it immediately so the bridge
+  // has the window reference before any IPC arrives.
+  // imBridge.start() can take 1-2s (Telegram/WhatsApp session restore), so
+  // defer it past the current event loop tick to avoid blocking main startup.
+  const _imCfg = readJSON(p().CONFIG_FILE, {})
+  imBridge.setMainWindow(mainWindow)
+  if (_imCfg.im?.telegram?.enabled || _imCfg.im?.whatsapp?.enabled || _imCfg.im?.feishu?.enabled || _imCfg.im?.teams?.enabled) {
+    setImmediate(() => imBridge.start(_imCfg))
+  }
+
+  // Background: index any chats not yet in the search index
+  setImmediate(() => {
+    ipcAgent._runStartupIndexRecovery().catch(err =>
+      logger.error('[Startup] index recovery error', err.message)
+    )
+  })
+
+
+
+  // -- Content Security Policy --
+  // Only apply restrictive CSP to the app's own pages, not to external sites
+  // loaded inside <webview> (they need their own CSS/JS/fonts to render properly).
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const url = details.url || ''
+    // drawio-frame.html needs its own permissive CSP -- never override it
+    const isDrawioFrame = url.includes('drawio-frame.html')
+    const isAppPage = !isDrawioFrame && (url.startsWith('http://localhost:') || url.startsWith('file://'))
+    if (isAppPage) {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': [
+            "default-src 'self';" +
+            " script-src 'self';" +
+            " style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;" +
+            " font-src 'self' data: https://fonts.gstatic.com;" +
+            " img-src 'self' data: blob: https: vault-asset:;" +
+            " connect-src 'self' https: http://localhost:* ws://localhost:*;" +
+            " media-src 'self' data: blob:;" +
+            " worker-src 'self' blob:;"
+          ]
+        }
+      })
+    } else {
+      callback({ responseHeaders: details.responseHeaders })
+    }
+  })
+
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  })
+})
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') app.quit()
+})
+
+// Cleanup must complete before Electron actually quits, otherwise child
+// processes (MCP servers, Python STT, IM bridges) can keep file handles on
+// the install dir open and stall an NSIS update. Pattern: preventDefault on
+// the first quit attempt, run cleanup with hard timeouts, then re-quit —
+// the reentry guard lets the second quit pass through.
+let _cleaningUp = false
+app.on('before-quit', (e) => {
+  if (_cleaningUp) return
+  e.preventDefault()
+  _cleaningUp = true
+
+  const withTimeout = (p, ms, label) =>
+    Promise.race([
+      Promise.resolve(p).catch(err => logger.error(`[quit] ${label} error:`, err?.message || err)),
+      new Promise(resolve => setTimeout(() => {
+        logger.warn(`[quit] ${label} cleanup timed out after ${ms}ms — forcing quit`)
+        resolve()
+      }, ms)),
+    ])
+
+  if (ipcAgent) {
+    for (const [key, loop] of ipcAgent.activeLoops) {
+      try { loop.stop() } catch {}
+    }
+    ipcAgent.activeLoops.clear()
+    ipcAgent.activeLoopMeta.clear()
+  }
+
+  Promise.all([
+    withTimeout(require('./ipc/voice').stopLocalServer(), 2000, 'voice'),
+    withTimeout(mcpManager.stopAll(), 3000, 'mcp'),
+    withTimeout(Promise.resolve().then(() => imBridge.stop()), 1000, 'imBridge'),
+  ]).finally(() => {
+    app.quit()
+  })
+})
+

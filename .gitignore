@@ -1,0 +1,86 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-electron/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Environment files (keep .env.example as template)
+.env
+.env.local
+.env.development
+.env.production
+.env.staging
+.env*.local
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Claude Code local settings
+.claude/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Electron
+release/
+dist-release/
+electron/build-config.json
+electron/build-config.dev.json
+electron/build-config.prod.json
+electron/.backup/
+electron-compiled/
+
+# Backup files
+*.bak
+*.bak*
+
+# docs (local notes — not tracked)
+docs/
+
+# git worktrees (isolated workspaces)
+.worktrees/
+
+# Scripts (ignore all except whitelisted)
+scripts/*
+!scripts/run-electron.js
+!scripts/compile-bytecode.js
+!scripts/after-pack.js
+!scripts/check-models-staleness.js
+!scripts/update-models.js
+!scripts/prepare-embedding-model.js
+!scripts/recorder/
+!scripts/migrate-productivity-mode.js
+!scripts/update-clank-builtin-prompt.js
+!scripts/__tests__/
+
+# Bundled embedding model — ~449 MB, fetched at build time via prepare-models
+electron/models/
+
+# Model staleness check flag (dev-only)
+.models-stale
+
+# Compiled Go binaries for distribution (Go source lives in the ClankCore repo)
+resources/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.Python
+
+# playwright
+.playwright-mcp/
+
+# jsc
+*.jsc

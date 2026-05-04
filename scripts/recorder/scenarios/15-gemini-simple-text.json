@@ -1,0 +1,62 @@
+{
+  "name": "15-gemini-simple-text",
+  "description": "Gemini provider: plain text response. Proves Gemini SSE translation (candidates/parts/finishReason → Anthropic-style events).",
+  "model": "gemini-2.0-flash",
+  "loopConfigOverrides": {
+    "provider": {
+      "type": "google",
+      "apiKey": "mock-key",
+      "model": "gemini-2.0-flash"
+    }
+  },
+  "messages": [
+    { "role": "user", "content": "Say hello." }
+  ],
+  "enabledAgents": [],
+  "enabledSkills": [],
+  "agentPrompts": {},
+  "llmResponses": [
+    [
+      {
+        "event": "message",
+        "data": {
+          "candidates": [{
+            "content": {
+              "parts": [{ "text": "Hello" }],
+              "role": "model"
+            },
+            "finishReason": ""
+          }]
+        }
+      },
+      {
+        "event": "message",
+        "data": {
+          "candidates": [{
+            "content": {
+              "parts": [{ "text": " there!" }],
+              "role": "model"
+            },
+            "finishReason": ""
+          }]
+        }
+      },
+      {
+        "event": "message",
+        "data": {
+          "candidates": [{
+            "content": {
+              "parts": [],
+              "role": "model"
+            },
+            "finishReason": "STOP"
+          }],
+          "usageMetadata": {
+            "promptTokenCount": 15,
+            "candidatesTokenCount": 3
+          }
+        }
+      }
+    ]
+  ]
+}

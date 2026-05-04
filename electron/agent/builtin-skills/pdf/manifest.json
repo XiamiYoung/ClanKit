@@ -1,0 +1,6 @@
+{
+  "id": "pdf",
+  "version": 1,
+  "builtin": true,
+  "description": "PDF processing — read, create, merge, split, OCR, watermark, encrypt PDF files"
+}

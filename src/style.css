@@ -1,0 +1,355 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --primary:       #1A1A1A;
+    --primary-hover: #333333;
+    --accent:        #007AFF;
+    --accent-hover:  #0056CC;
+    --accent-light:  rgba(0, 122, 255, 0.08);
+    --bg-main:       #F2F2F7;
+    --bg-card:       #FFFFFF;
+    --bg-sidebar:    #FFFFFF;
+    --bg-hover:      #F5F5F5;
+    --text-primary:  #1A1A1A;
+    --text-secondary:#6B7280;
+    --text-muted:    #9CA3AF;
+    --border:        #E5E5EA;
+    --border-light:  #F0F0F0;
+    --shadow:        rgba(0, 0, 0, 0.04);
+    --shadow-hover:  rgba(0, 0, 0, 0.08);
+    --radius-sm:     8px;
+    --radius-md:     12px;
+    --radius-lg:     16px;
+    --radius-xl:     20px;
+    --radius-full:   9999px;
+
+    /* ── Global font-size scale ────────────────────────────────────────────
+       All views should use these via var() or rem. Changing the html
+       font-size (currently 125% = 20px) rescales everything.             */
+    --fs-page-title: 1.5rem;    /* page headings */
+    --fs-section:    1.25rem;   /* section headers */
+    --fs-subtitle:   1.0625rem; /* card titles, strong labels */
+    --fs-body:       0.9375rem; /* primary body text */
+    --fs-secondary:  0.875rem;  /* secondary / supporting text */
+    --fs-caption:    0.8125rem; /* captions, badges, hints */
+    --fs-small:      0.75rem;   /* fine print */
+  }
+
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* ── Global font scale ───────────────────────────────────────────────────
+     Breakpoint-stepped scaling:
+     < 1920px → 16px (base, graceful fallback)
+     1920px+  → 18px (HD 1080p, primary target)
+     2560px+  → 20px (4K / large display)
+     All rem-based Tailwind utilities and var(--fs-*) tokens scale automatically. */
+  html {
+    font-size: 100%;
+  }
+
+  /* HD (1920px+): 18px — primary target */
+  @media (min-width: 1920px) {
+    html { font-size: 112.5%; }
+  }
+
+  /* 4K (2560px+): 20px — large display target */
+  @media (min-width: 2560px) {
+    html { font-size: 125%; }
+  }
+
+  html, body, #app {
+    height: 100%;
+    overflow: hidden;
+    background-color: transparent;
+  }
+
+  body {
+    font-size: 1rem;
+    font-family: 'Inter', 'Noto Sans', system-ui, -apple-system, sans-serif,
+      'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', emoji;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Inter', 'Figtree', system-ui, -apple-system, sans-serif,
+      'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', emoji;
+    letter-spacing: -0.02em;
+  }
+
+  /* Custom scrollbar — thin & minimal */
+  ::-webkit-scrollbar               { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track         { background: transparent; }
+  ::-webkit-scrollbar-thumb         { background: #D1D1D6; border-radius: 9999px; }
+  ::-webkit-scrollbar-thumb:hover   { background: #A1A1AA; }
+  ::-webkit-scrollbar-thumb:active  { background: #71717A; }
+
+  /* Code block syntax highlighting */
+  pre code.hljs {
+    background: transparent !important;
+    padding: 0 !important;
+  }
+}
+
+@layer components {
+  /* Card surface */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
+  }
+
+  /* Chat message animation */
+  .msg-enter-active {
+    animation: msgIn 200ms ease-out;
+  }
+  @keyframes msgIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Prose styles for markdown rendering inside chat bubbles */
+  .prose-clankit {
+    color: var(--text-primary);
+    line-height: 1.65;
+    font-size: var(--fs-body);
+  }
+  .prose-clankit h1,
+  .prose-clankit h2,
+  .prose-clankit h3 {
+    font-family: 'Inter', 'Figtree', system-ui, sans-serif;
+    color: var(--text-primary);
+    font-weight: 600;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+  }
+  .prose-clankit h1 { font-size: var(--fs-section); }
+  .prose-clankit h2 { font-size: var(--fs-subtitle); }
+  .prose-clankit h3 { font-size: var(--fs-body); }
+  .prose-clankit p  { margin-bottom: 0.75rem; }
+  .prose-clankit ul,
+  .prose-clankit ol {
+    margin-left: 1.25rem;
+    margin-bottom: 0.75rem;
+  }
+  .prose-clankit ul { list-style-type: disc; }
+  .prose-clankit ol { list-style-type: decimal; }
+  .prose-clankit a  { color: var(--accent); text-decoration: underline; }
+  .prose-clankit a:hover { color: var(--accent-hover); }
+  .prose-clankit blockquote {
+    border-left: 3px solid var(--border);
+    padding-left: 0.75rem;
+    color: var(--text-muted);
+    font-style: italic;
+    margin: 0.75rem 0;
+  }
+  .prose-clankit code:not(pre code) {
+    background: var(--accent-light);
+    color: var(--accent);
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .prose-clankit pre {
+    background: #1C1C1E;
+    color: #E5E5EA;
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    overflow-x: auto;
+    margin-bottom: 0.75rem;
+    border: 1px solid #2C2C2E;
+  }
+  .prose-clankit pre code {
+    font-size: var(--fs-secondary);
+    font-family: 'JetBrains Mono', monospace;
+    color: inherit;
+  }
+  /* Wrap tables so they scroll horizontally on narrow windows */
+  .prose-clankit table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    border-collapse: collapse;
+    margin-bottom: 0.75rem;
+    font-size: var(--fs-secondary);
+  }
+  .prose-clankit th {
+    background: #F9F9F9;
+    color: var(--text-secondary);
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    border: 1px solid var(--border);
+  }
+  .prose-clankit td {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border);
+  }
+  .prose-clankit img    { border-radius: var(--radius-md); max-width: 100%; margin: 0.5rem 0; }
+  .prose-clankit hr     { border-color: var(--border); margin: 1rem 0; }
+  .prose-clankit strong { font-weight: 600; }
+  .prose-clankit em     { font-style: italic; }
+
+  /* Legacy alias */
+  .prose-botanic { @apply prose-clankit; }
+
+  /* ── Modal Dialogs ──────────────────────────────────────────────────────── */
+  .modal-dialog-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-dialog-container {
+    width: min(26.25rem, 90vw);
+    background: #0F0F0F;
+    border: 1px solid #2A2A2A;
+    border-radius: 1rem;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.5);
+    overflow: hidden;
+    animation: modal-dialog-enter 0.2s ease-out;
+  }
+  @keyframes modal-dialog-enter {
+    from { opacity: 0; transform: scale(0.95) translateY(8px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .modal-dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #1F1F1F;
+  }
+  .modal-dialog-title {
+    font-family: 'Inter', sans-serif;
+    font-size: var(--fs-subtitle);
+    font-weight: 700;
+    color: #FFFFFF;
+    margin: 0;
+  }
+  .modal-dialog-close-btn {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: #6B7280;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .modal-dialog-close-btn:hover {
+    background: #1F1F1F;
+    color: #FFFFFF;
+  }
+  .modal-dialog-body {
+    padding: 1rem 1.25rem;
+  }
+  .modal-dialog-input {
+    width: 100%;
+    padding: 0.625rem 0.875rem;
+    border: 1px solid #2A2A2A;
+    border-radius: 0.625rem;
+    font-family: 'Inter', sans-serif;
+    font-size: var(--fs-body);
+    color: #FFFFFF;
+    background: #1A1A1A;
+    outline: none;
+    resize: none;
+    line-height: 1.5;
+    box-sizing: border-box;
+    transition: border-color 0.15s;
+  }
+  .modal-dialog-input::placeholder {
+    color: #4B5563;
+  }
+  .modal-dialog-input:focus {
+    border-color: #4B5563;
+  }
+  .modal-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem 1rem;
+  }
+
+  /* ── For backward compatibility ──────────────────────────────────────── */
+  .rename-backdrop { @apply modal-dialog-backdrop; }
+  .rename-modal { @apply modal-dialog-container; }
+  .rename-header { @apply modal-dialog-header; }
+  .rename-title { @apply modal-dialog-title; }
+  .rename-close-btn { @apply modal-dialog-close-btn; }
+  .rename-body { @apply modal-dialog-body; }
+  .rename-input { @apply modal-dialog-input; }
+  .rename-actions { @apply modal-dialog-actions; }
+  @keyframes rename-enter {
+    from { opacity: 0; transform: scale(0.95) translateY(8px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+
+  /* Busy indicator bouncing dots */
+  .busy-dot {
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: busyBounce 1s ease-in-out infinite;
+  }
+  @keyframes busyBounce {
+    0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+    40%           { transform: translateY(-0.4rem); opacity: 1; }
+  }
+
+}
+
+/* Streaming equalizer bars - outside @layer so specificity applies */
+.streaming-bar {
+  display: inline-block;
+  width: 0.2rem;
+  border-radius: 2px;
+  background: var(--accent);
+  animation: eqPulse 0.8s ease-in-out infinite alternate;
+}
+@keyframes eqPulse {
+  0%   { height: 0.3rem; opacity: 0.4; }
+  100% { height: 1rem;   opacity: 1; }
+}
+
+/* Agent progress spinning animation */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Force white text inside user chat bubbles */
+.user-content,
+.user-content *,
+.user-content p,
+.user-content strong,
+.user-content em,
+.user-content code,
+.user-content li,
+.user-content h1,
+.user-content h2,
+.user-content h3 {
+  color: #ffffff !important;
+}

@@ -1,0 +1,23 @@
+{
+  "id": "analysis-report-template",
+  "version": 41,
+  "builtin": true,
+  "description": "Persona-analysis HTML report template. Ships template.html (warm editorial style, 27 sections + TOC), strings.json (zh/en), and the render_persona_report tool. Normally pass sections + stats from extract_sections, but the tool will auto-load them from the extract_sections cache if you omit them (weak-model safety net). Output goes to the user's aidoc folder (DoCPath) when set. Accepts both array-shape and dict-shape senders/monthly_activity stats.",
+  "tools": [
+    {
+      "id": "render_persona_report",
+      "file": "tool.js",
+      "class": "RenderReportTool"
+    }
+  ],
+  "modelHints": {
+    "extract_sections": {
+      "strategy": "chat",
+      "comment": "Pure schema transformation (narrative -> JSON). A chat model is faster and more JSON-compliant than a reasoner, which wastes thinking tokens and often truncates mid-output."
+    },
+    "analyze_all": {
+      "strategy": "reasoner",
+      "comment": "Real character analysis over tens of thousands of messages. A reasoner model produces deeper insight."
+    }
+  }
+}

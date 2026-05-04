@@ -1,0 +1,81 @@
+{
+  "name": "13-openai-simple-text",
+  "description": "OpenAI-compat provider: plain text response via chat.completions stream. Proves the OpenAI event translation layer emits correct Anthropic-style chunks.",
+  "model": "gpt-4o",
+  "loopConfigOverrides": {
+    "provider": {
+      "type": "openai",
+      "apiKey": "mock-key",
+      "baseURL": "http://127.0.0.1:9823",
+      "model": "gpt-4o"
+    },
+    "defaultProvider": "openai",
+    "_resolvedProvider": "openai"
+  },
+  "messages": [
+    { "role": "user", "content": "Say hello." }
+  ],
+  "enabledAgents": [],
+  "enabledSkills": [],
+  "agentPrompts": {},
+  "llmResponses": [
+    [
+      {
+        "event": "message",
+        "data": {
+          "id": "chatcmpl-mock-01",
+          "object": "chat.completion.chunk",
+          "model": "gpt-4o",
+          "choices": [{
+            "index": 0,
+            "delta": { "role": "assistant", "content": "" },
+            "finish_reason": null
+          }]
+        }
+      },
+      {
+        "event": "message",
+        "data": {
+          "id": "chatcmpl-mock-01",
+          "object": "chat.completion.chunk",
+          "model": "gpt-4o",
+          "choices": [{
+            "index": 0,
+            "delta": { "content": "Hello" },
+            "finish_reason": null
+          }]
+        }
+      },
+      {
+        "event": "message",
+        "data": {
+          "id": "chatcmpl-mock-01",
+          "object": "chat.completion.chunk",
+          "model": "gpt-4o",
+          "choices": [{
+            "index": 0,
+            "delta": { "content": "!" },
+            "finish_reason": null
+          }]
+        }
+      },
+      {
+        "event": "message",
+        "data": {
+          "id": "chatcmpl-mock-01",
+          "object": "chat.completion.chunk",
+          "model": "gpt-4o",
+          "choices": [{
+            "index": 0,
+            "delta": {},
+            "finish_reason": "stop"
+          }]
+        }
+      },
+      {
+        "event": "message",
+        "data": "[DONE]"
+      }
+    ]
+  ]
+}

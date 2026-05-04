@@ -1,0 +1,184 @@
+{
+  "name": "clankit",
+  "version": "0.0.6",
+  "description": "ClanKit - Multi-LLM Desktop Application",
+  "license": "SEE LICENSE IN LICENSE",
+  "main": "electron/main.js",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "concurrently \"vite\" \"wait-on tcp:5173 && node scripts/run-electron.js\" \"node scripts/check-models-staleness.js\"",
+    "prod": "cross-env CLANKIT_ENV=prod concurrently \"vite\" \"wait-on tcp:5173 && node scripts/run-electron.js\" \"node scripts/check-models-staleness.js\"",
+    "build": "vite build",
+    "preview": "vite preview",
+    "electron": "node scripts/run-electron.js",
+    "prepare-models": "node scripts/prepare-embedding-model.js",
+    "dist:win": "npm run prepare-models && npm run build && npx electron-builder --win --publish=never",
+    "dist:mac": "npm run prepare-models && npm run build && npx electron-builder --mac --publish=never",
+    "dist:all": "npm run prepare-models && npm run build && npx electron-builder --win --mac --publish=never",
+    "bundle:mcporter": "cd ../mcporter && node_modules/.bin/tsc -p tsconfig.build.json && cd ../ClanKit && node_modules/.bin/esbuild ../mcporter/src/index.ts --bundle --format=esm --platform=node --main-fields=module,main \"--banner:js=import { createRequire as __cjsRequire } from 'module'; const require = __cjsRequire(import.meta.url);\" --outfile=electron/agent/mcp/mcporter-bundle.mjs",
+    "update-models": "node scripts/update-models.js"
+  },
+  "build": {
+    "appId": "com.clankit.app",
+    "productName": "ClanKit",
+    "directories": {
+      "output": "dist-release"
+    },
+    "publish": {
+      "provider": "generic",
+      "url": "https://releases.clankit.app/stable",
+      "channel": "latest"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "!electron/build-config.dev.json",
+      "!electron/models/**",
+      "package.json"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "electron/fonts.conf",
+      "node_modules/better-sqlite3/**/*",
+      "node_modules/koffi/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "build/icons/icon.png",
+        "to": "icon.png"
+      },
+      {
+        "from": "build/icons/icon.ico",
+        "to": "icon.ico"
+      },
+      {
+        "from": "electron/models",
+        "to": "models",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icons/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "ClanKit",
+      "deleteAppDataOnUninstall": false
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "category": "public.app-category.developer-tools",
+      "icon": "build/icons/icon.png"
+    },
+    "dmg": {
+      "title": "ClanKit",
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    },
+    "icon": "build/icons/icon.png"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@babylonjs/core": "^8.52.1",
+    "@babylonjs/loaders": "^8.52.1",
+    "@dicebear/avataaars": "^9.3.2",
+    "@dicebear/collection": "^9.4.0",
+    "@dicebear/core": "^9.3.2",
+    "@google/genai": "^1.46.0",
+    "@huggingface/transformers": "^3.8.1",
+    "@larksuiteoapi/node-sdk": "^1.59.0",
+    "@tiptap/extension-color": "^3.20.1",
+    "@tiptap/extension-highlight": "^3.20.1",
+    "@tiptap/extension-image": "^3.20.1",
+    "@tiptap/extension-placeholder": "^3.20.0",
+    "@tiptap/extension-table": "^3.20.1",
+    "@tiptap/extension-table-cell": "^3.20.1",
+    "@tiptap/extension-table-header": "^3.20.1",
+    "@tiptap/extension-table-row": "^3.20.1",
+    "@tiptap/extension-text-align": "^3.20.1",
+    "@tiptap/extension-text-style": "^3.20.1",
+    "@tiptap/extension-underline": "^3.20.1",
+    "@tiptap/starter-kit": "^3.20.0",
+    "@tiptap/vue-3": "^3.20.0",
+    "@whiskeysockets/baileys": "^7.0.0-rc.9",
+    "adm-zip": "^0.5.16",
+    "better-sqlite3": "^12.8.0",
+    "docx": "^9.6.0",
+    "dompurify": "^3.1.0",
+    "electron-updater": "^6.8.3",
+    "exceljs": "^4.4.0",
+    "highlight.js": "^11.9.0",
+    "js-tiktoken": "^1.0.21",
+    "js-yaml": "^4.1.1",
+    "koffi": "^2.15.5",
+    "mammoth": "^1.12.0",
+    "marked": "^12.0.0",
+    "minisearch": "^7.2.0",
+    "node-cron": "^3.0.3",
+    "node-telegram-bot-api": "^0.67.0",
+    "nodemailer": "^8.0.1",
+    "openai": "^6.24.0",
+    "pdf-parse": "^1.1.1",
+    "picomatch": "^4.0.4",
+    "pptxgenjs": "^4.0.1",
+    "pptxtojson": "^1.12.1",
+    "qrcode": "^1.5.4",
+    "sherpa-onnx-node": "1.13.0",
+    "turndown": "^7.2.2",
+    "turndown-plugin-gfm": "^1.0.2",
+    "uuid": "^9.0.0",
+    "vectra": "^0.14.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.4",
+    "@vue/test-utils": "^2.4.6",
+    "autoprefixer": "^10.4.19",
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^31.0.0",
+    "electron-builder": "^26.8.1",
+    "esbuild": "^0.27.3",
+    "happy-dom": "^20.8.4",
+    "pinia": "^2.1.7",
+    "postcss": "^8.4.38",
+    "sharp": "^0.34.5",
+    "tailwindcss": "^3.4.3",
+    "vite": "^5.2.0",
+    "vitest": "^4.1.0",
+    "vue": "^3.4.21",
+    "vue-router": "^4.3.0",
+    "wait-on": "^7.2.0"
+  }
+}

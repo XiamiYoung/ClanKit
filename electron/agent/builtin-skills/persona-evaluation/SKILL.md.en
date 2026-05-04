@@ -1,0 +1,379 @@
+---
+name: persona-evaluation
+description: Persona analysis and evaluation framework for deep character profiling. Use when analyzing a person's personality from chat history, generating a persona prompt for an agent, evaluating an existing agent's personality depth, or producing a structured character report. Provides OCEAN (Big Five), MBTI, attachment style, core needs rubrics with evidence standards, Speech DNA templates, and a dual-mode strategy (evidence-based for imported history, inference-based for descriptions).
+---
+
+# Persona Evaluation Framework
+
+This skill provides a standardized, evidence-driven framework for analyzing and constructing human-like persona definitions. It serves two use cases:
+
+1. **Analysis Mode** — Evaluate a real person from chat history (used by the Analyst agent)
+2. **Generation Mode** — Construct a vivid persona prompt for a new agent (used during agent creation)
+
+---
+
+## Part 1: Personality Assessment Dimensions
+
+### 1.1 Big Five (OCEAN)
+
+Score each dimension on a 1–10 scale. Every score MUST cite behavioral evidence.
+
+| Dimension | High Pole | Low Pole | What to Look For |
+|-----------|-----------|----------|-----------------|
+| **Openness** | Curious, creative, unconventional | Practical, routine-oriented, conventional | Topic diversity, willingness to explore hypotheticals, vocabulary richness, reaction to new ideas |
+| **Conscientiousness** | Organized, disciplined, goal-driven | Flexible, spontaneous, casual | Message structure, follow-through on commitments, planning language, attention to detail |
+| **Extraversion** | Energetic, talkative, socially assertive | Reserved, reflective, low-key | Message frequency, conversation initiation rate, enthusiasm markers, group vs 1-on-1 preference |
+| **Agreeableness** | Warm, cooperative, conflict-avoidant | Blunt, competitive, challenging | Conflict style, compliment frequency, accommodation vs pushback ratio, empathy markers |
+| **Neuroticism** | Emotionally reactive, anxious, moody | Calm, stable, resilient | Emotional volatility across conversations, catastrophizing, reassurance-seeking, stress language |
+
+**Evidence Standard:**
+- Analysis Mode: minimum 3 behavioral instances per dimension, citing message IDs
+- Generation Mode: minimum 1 concrete behavioral scenario per dimension
+
+**Common Pitfalls:**
+- Don't confuse politeness (cultural norm) with high Agreeableness
+- Don't confuse brevity (communication style) with Introversion
+- Don't confuse structured messages (professional context) with high Conscientiousness
+- In CJK conversations, emoji/sticker frequency is a stronger Extraversion signal than word count
+
+### 1.2 MBTI Cognitive Functions
+
+Assess each axis with specific evidence. Argue for a single type but acknowledge borderline cases.
+
+| Axis | Indicators |
+|------|-----------|
+| **E/I** (Energy) | Conversation initiation rate, response latency, message-burst patterns, topic breadth vs depth |
+| **S/N** (Information) | Concrete details vs abstract concepts, past-experience references vs future-possibility language, practical vs theoretical framing |
+| **T/F** (Decision) | Logic-first vs people-first language in disagreements, "because it works" vs "because it matters", criticism style |
+| **J/P** (Lifestyle) | Closure-seeking vs open-ended, planning language, deadline attitude, comfort with ambiguity |
+
+**Judgment Traps:**
+- IxxJ vs IxxP: Look at how they handle open-ended questions — J types push for resolution, P types explore
+- ExTJ vs ExFJ: Both can be assertive — distinguish by WHAT they organize around (systems vs people)
+- xNFP vs xNFJ: Both care deeply — distinguish by whether they resist structure (P) or create it (J)
+
+### 1.3 Attachment Style
+
+| Style | Behavioral Markers |
+|-------|-------------------|
+| **Secure** | Comfortable expressing needs, tolerates disagreement without withdrawal, balanced initiation/response ratio, direct about boundaries |
+| **Anxious-Preoccupied** | Over-initiates contact, seeks reassurance, reads into response delays, high emotional reactivity to perceived distance |
+| **Dismissive-Avoidant** | Deflects emotional topics, maintains distance when others get close, intellectualizes feelings, rarely initiates vulnerable conversations |
+| **Fearful-Avoidant** | Oscillates between closeness and withdrawal, unpredictable engagement patterns, simultaneous desire for and fear of intimacy |
+
+**Evidence Requirements:**
+- At least 2 distinct relationship dynamics observed (not just one conversation partner)
+- Note: chat context biases attachment signals — a person may appear Anxious with a romantic partner but Secure with friends
+
+### 1.4 Core Motivational Needs
+
+Identify the top 2–3 from this list, with behavioral evidence:
+
+| Need | Behavioral Signals |
+|------|-------------------|
+| **Belonging** | Seeks inclusion, references group identity, discomfort with exclusion, "we" language |
+| **Autonomy** | Resists control, values independence, pushback on unsolicited advice, self-reliance language |
+| **Recognition** | Shares achievements, seeks validation, responds strongly to praise or its absence |
+| **Safety** | Risk-averse language, catastrophizing, seeks certainty, uncomfortable with ambiguity |
+| **Mastery** | Skill-building focus, competitive with self, deep-dives into topics, frustrated by superficiality |
+| **Connection** | Emotional disclosure, asks personal questions, remembers details about others, reciprocal vulnerability |
+
+---
+
+## Part 2: Speech DNA Template
+
+Speech DNA converts linguistic analysis into executable prompt constraints. Use this template when embedding speech patterns into an agent's system prompt.
+
+### 2.1 Structural Elements
+
+```markdown
+### Speech DNA
+
+**Catchphrases / Signature Expressions:**
+- "[exact phrase 1]" — used when [context]
+- "[exact phrase 2]" — used when [context]
+- "[exact phrase 3]" — used when [context]
+
+**Sentence Rhythm:**
+- Average message length: [short/medium/long]
+- Multi-message bursts: [frequent/occasional/rare]
+- Preferred structure: [declarative/interrogative/exclamatory mix]
+
+**Emotion Encoding Table:**
+| Emotion | Expression Pattern |
+|---------|-------------------|
+| Happy | [specific markers: emoji, exclamation, word choice] |
+| Anxious | [specific markers: ellipsis, hedging, repetition] |
+| Irritated | [specific markers: short sentences, sarcasm, specific words] |
+| Affectionate | [specific markers: diminutives, pet names, tone shifts] |
+
+**Forbidden Expressions:**
+- Never says: "[specific phrase or pattern]" — because [reason]
+- Never uses: "[specific style element]" — because [reason]
+
+**Humor Style:** [self-deprecating / sarcastic / pun-based / absurdist / deadpan / none]
+
+**Punctuation Habits:**
+- Sentence enders: [period/exclamation/ellipsis/none — with frequency]
+- Emphasis method: [caps/repetition/emoji/bold]
+```
+
+### 2.2 Evidence Sources
+
+- **Analysis Mode:** Extract from `speechDnaExtractor` output — n-gram frequencies, emoji stats, punctuation analysis, reply latency distribution
+- **Generation Mode:** Infer from character description — cultural background, education level, age, social context → plausible speech patterns
+
+---
+
+## Part 3: Persona Architecture
+
+When constructing or evaluating a persona, use these 8 structural sections:
+
+### 3.1 Identity Card
+A 50-word self-introduction written **in the character's own voice**. This anchors tone and self-perception. Not a third-person description — first-person, natural, as if the person were introducing themselves to a stranger.
+
+### 3.2 Mental Models
+3–5 core beliefs that drive behavior. Format: "They believe [X], so when facing [Y], they always [Z]."
+These are the roots — surface behavior is the leaves. Getting these right makes everything else consistent.
+
+### 3.3 Decision Heuristics
+5–7 IF→THEN behavioral rules covering real scenarios the person encounters. Each rule describes a **strategy**, not a scripted line. Must cover:
+- Praised → how they respond to compliments
+- Challenged → how they handle pushback
+- Asked for help → how they evaluate requests
+- Silence/awkwardness → how they fill or tolerate dead air
+- Sensitive topic hit → how they deflect or engage
+- Commitment requested → how they handle responsibility
+- Forced to choose → what they optimize for
+
+### 3.4 Core Tensions
+1–2 internal contradictions. Format: "On one hand [X], on the other hand [Y] — this causes them to [observable behavior] in [specific situations]."
+Characters without contradictions feel flat. Real people have competing drives.
+
+### 3.5 Speech DNA
+(See Part 2 template above)
+
+### 3.6 Relationship Map
+Different behaviors toward different relationship types:
+- Authority / superiors
+- Peers / friends
+- Subordinates / juniors
+- Strangers
+- Intimate partners / close family
+
+### 3.7 Honest Boundaries
+What this person doesn't know, can't do, or won't pretend about. Domains where they redirect rather than fabricate. This prevents the "omniscient character" problem.
+
+### 3.8 Evidence Index (Analysis Mode only)
+Audit trail linking each claim to source messages. Format:
+```
+Claim: [observation]
+Dimension: [which extractor produced this]
+Verdict: mental_model | heuristic
+Evidence: [m12, m45, m89]
+Confidence: 0.0–1.0
+```
+
+---
+
+## Part 3B: Social-Sharing Analysis Dimensions
+
+These dimensions add social media shareability to the report — screenshot-friendly, fun, conversation-starting. Place them in the first half of the report.
+
+### 3B.0 Hero Verdict (Eye-catching first screen)
+
+**This is the very first thing the reader sees.** It must grab attention — one glance should tell them what kind of relationship this is.
+
+Output to `persona_card.relationship_verdict`:
+
+```json
+{
+  "label": "<pick ONE from the 10 candidates of the matching tier below>",
+  "reason": "<one sentence explaining the score; must cite at least 2 dimension sub-scores>"
+}
+```
+
+**The score is auto-pulled from `intimacy_score.total` — don't re-state it.** You pick `label` based on the conversation's actual vibe from the matching tier's 10 candidates. `reason` must reference ≥2 dimension sub-scores, e.g. "Trust 80 and Stability 75 push the total up, but Emotional Depth at 45 caps the ceiling."
+
+#### 10 tiers (auto-classified by total score)
+
+| Score | Tier | Candidate labels (pick ONE) |
+|-------|------|----------------------------|
+| **95–100** 🌟 Off the charts | Soulmates / Ride or die / Two peas in a pod / Joined at the hip / Match made in heaven / Thick as thieves / Inseparable / Kindred spirits / Lifelong bond / Built for each other |
+| **85–94** 💛 Bosom buddies | Closer than family / Trust them with my life / Tell each other everything / Found my person / Day-one friends / Heart-to-heart confidants / True blue / Down to the bone / Best friends forever / Brothers in arms |
+| **75–84** 🧡 Tight crew | Tight-knit / Always in sync / Click instantly / On the same page / Real ones / Solid friendship / Like-minded crew / Vibe perfectly / See eye to eye / Get each other completely |
+| **65–74** ☀️ Genuinely friendly | Good friends / Get along great / Easy company / On the same wavelength / Genuine connection / Glad to see them / Solid rapport / Comfortable together / Mutual respect / Bring out the best |
+| **55–64** 🌿 Friendly enough | Friendly acquaintances / Long-time familiars / Hang out occasionally / On good terms / Casual buddies / Easygoing rapport / Decent chemistry / Cordial and warm / Comfortable but not close / Friendly without depth |
+| **45–54** 🤝 Acquaintances | Mere acquaintances / Polite strangers / Nodding terms / Surface-level only / Hi-and-bye / Cordial coworkers / Small talk and that's it / Know the name, not the soul / Show face and move on / Civil but distant |
+| **35–44** 🌫️ Drifting | Drifting apart / Lost touch / Going through the motions / Not what it used to be / Talking past each other / Quietly fading / One-sided effort / Forced politeness / Read receipts only / Distance creeping in |
+| **25–34** ❄️ Cold and distant | Practically strangers / Strangers in the same room / Bare minimum civility / Mutual avoidance / Just a name in contacts / Nothing left to say / Cold-shoulder default / Ghosted long ago / Frozen out / Dead silence between us |
+| **15–24** 🌑 Friction-heavy | Rub each other wrong / Can't stand each other / Walking on eggshells / Passive-aggressive vibes / Forced smiles only / Eye-roll territory / Bad chemistry / Tense whenever close / Awkward every time / Bickering nonstop |
+| **0–14** 🔥 Burned bridges | Sworn enemies / Bad blood / Blocked and deleted / Burn the bridge / Mortal enemies / Done forever / Won't share a room / Toxic history / Don't say their name / Dead to me |
+
+**Selection principle:** don't just pick by score — pick by the actual vibe of the conversation. Two relationships at 78 might warrant very different labels: "Tell each other everything" emphasizes information flow, "Joined at the hip" emphasizes physical presence. Read the dialogue tone, then pick.
+
+**Reason writing:** one sentence, citing ≥2 dimension sub-scores. Template: `<high dim>` pulls the total up, but `<low dim>` caps the ceiling — fill in real sub-scores.
+
+### 3B.1 Intimacy Score
+
+5 dimensions scored 1-100 each, displayed as a radar chart.
+
+| Dimension | Evidence Sources | High Signal | Low Signal |
+|-----------|-----------------|------------|-----------|
+| **Trust** | Sharing private info, seeking advice, vulnerability | Shares family/financial/emotional struggles | Only safe topics |
+| **Dependency** | Consulting on decisions, daily coordination | "What do you think?" "Help me check" | Never asks for input |
+| **Interaction Density** | Message frequency, reply speed, initiation ratio | Daily multi-round chats, instant replies | Weekly, day-delayed |
+| **Emotional Depth** | Emotional language ratio, care expressions, conflict depth | Direct emotional expression, deep conflict resolution | Pure information exchange |
+| **Stability** | Year-over-year consistency, conflict recovery speed | Years unbroken, quick repair after fights | Hot and cold, long gaps |
+
+**Total** = weighted average (Trust 25% + Emotional Depth 25% + Stability 20% + Density 15% + Dependency 15%)
+
+### 3B.2 Constellation Inference
+
+**Purely for entertainment, clearly labeled "fun inference".** Maps OCEAN scores + behavioral patterns to zodiac signs. See the Chinese version (SKILL.md.zh) for the full mapping table.
+
+Output: `Inferred sign: XX (match XX%)` with 2-3 matching evidence points and 1 non-matching point.
+
+### 3B.3 Relationship Chemistry
+
+Classify into 1-2 of: Complementary 🔄, Mirror 🪞, Mentor 🎓, Comrade ⚔️, Anchor ⚓. See Chinese version for full definitions.
+
+### 3B.4 Dialogue Theatre
+
+**Core highlight section: 10-20 real dialogue examples across the relationship timeline.**
+
+Selection criteria:
+- 3-8 messages each with full context
+- Cover at least 4 different years/stages
+- Each tagged with: date, scene category, analysis
+- 10 examples = 10 different personality facets
+
+Scene categories (cover at least 8): First interaction, Showing care, Conflict, Vulnerability, Excitement, Humor, Silence & repair, Daily routine, Turning point, Trust upgrade.
+
+Format per example:
+```
+━━ Act N: [Scene Title] ━━
+📅 [Date]  🏷️ [Category]
+[Full dialogue with timestamps and senders]
+💡 Analysis: [What this reveals and why it matters]
+```
+
+---
+
+## Part 3C: Relationship with User — Deep Analysis
+
+**This is not supplementary — it's as important as "who this person is."** Users don't just want to understand a person; they want to understand "what's really going on between us."
+
+### 3C.1 Relationship Temperature Curve
+
+Track warming/cooling over time. For each phase: interaction density change (backed by message volume data), key triggering event (with dialogue quote), relationship texture label (tentative / honeymoon / stable / distant / reconnecting).
+
+### 3C.2 Interaction Role Analysis
+
+Analyze what role each person plays across 5 dimensions: conversation initiator, topic driver, emotional supporter, decision maker, stability anchor. **Crucially: find moments where roles SWITCHED** — "early on you asked them for tech advice, later they came to you for AI help." Role shifts are evidence of relationship deepening.
+
+### 3C.3 Relationship Turning Points (minimum 3)
+
+Each turning point requires: time, event, dialogue evidence (3+ messages of context), what changed after, before-vs-after behavioral contrast.
+
+### 3C.4 The Unspoken
+
+Analyze what's MISSING: topics never discussed, emotions never expressed, boundaries never crossed. Does the absence say something about them, about the user, or about the relationship?
+
+---
+
+## Part 3D: Minimum Content Requirements
+
+| Section | Minimum |
+|---------|---------|
+| Persona card (intimacy + constellation + chemistry) | Must output ALL items |
+| Dialogue Theatre | **≥10 examples** (≥15 if >2000 msgs). Each with 3+ dialogue lines + analysis |
+| Key Quotes | **≥12 quotes** across ≥4 time periods, each with date and scene tag |
+| Personality (OCEAN/MBTI/Attachment) | ≥2 behavioral evidence per dimension |
+| Relationship with User section | **≥800 words**: temperature curve + role analysis + 3 turning points + the unspoken |
+| Character Portrait | **≥300 words** narrative, open with a scene not a label |
+| Most Surprising Contradiction | **≥150 words**, cite 2+ dialogue excerpts as both sides |
+
+---
+
+## Part 3E: Cache Handling Strategy
+
+`analyze_agent_history(action="analyze_all")` caches results. On cache hit (`cached: true`), the tool returns `cache_info` with `cached_at`, `file_size_kb`, `file_path`, `source_messages`, `last_run_duration_sec` (actual previous runtime), and `saved_time_label` (formatted string like "~25 min" or "~40s").
+
+**Use `saved_time_label` verbatim. Do not make up time estimates.** Data volume varies hugely — 500 msgs might rerun in 40s, 128k msgs might need 25 min.
+
+**When cache hits, DO NOT silently use it. ASK the user first:**
+
+```
+📁 Found cached analysis for this agent
+
+- Generated: {cached_at}
+- Based on {source_messages} messages
+- Cache size: {file_size_kb} KB
+- Location: {file_path}
+
+Using cache gives an instant report. Re-analyzing would take approximately {saved_time_label} (based on the previous actual run).
+
+Choose:
+  1. Use cache (recommended — data unchanged, consistent output)
+  2. Re-analyze (overwrites cache — choose if you want a fresh angle)
+  3. Show summary only (preview cached content without generating full report)
+```
+
+Behavior per user choice:
+
+| Choice | Action |
+|--------|--------|
+| Use cache | Generate the full 24-section HTML report from the `analysis` field |
+| Re-analyze | Call again with `force_refresh=true` |
+| Summary only | Extract first ~500 chars of `analysis` + cache_info metadata |
+
+**Auto force-refresh triggers** (even if user didn't say "re-run"):
+- User says "unsatisfied" / "redo" / "different angle"
+- User explicitly asks for a new framework/perspective
+- User has rejected prior analysis 2+ times
+
+Cache invalidates automatically when `totalMessages` or `lastTimestamp` changes (new messages imported). Users can manually delete `agent-artifacts/{type}/{agentId}.analysis.json` to purge.
+
+---
+
+## Part 4: Dual-Mode Strategy
+
+### Analysis Mode (chat history available)
+
+When analyzing from real chat data:
+1. All claims must cite ≥2 message IDs as evidence
+2. Claims are classified by Triple Verification:
+   - **Cross-Domain Reproduction**: Does this pattern appear in ≥2 different contexts/topics?
+   - **Generative Power**: Can this claim predict behavior in a new situation?
+   - **Exclusivity**: Is this distinctive to this person, or would it apply to anyone?
+3. Claims passing 3/3 → `mental_model` (highest confidence, becomes core identity)
+4. Claims passing 1–2/3 → `heuristic` (behavioral pattern, used in decision rules)
+5. Claims passing 0/3 → rejected (too generic or unsubstantiated)
+
+### Generation Mode (description only)
+
+When constructing from a text description:
+1. Each section must contain ≥1 concrete behavioral scenario (not abstract traits)
+2. Mental Models must use the "believes X → therefore Y → always Z" causal chain format
+3. Core Tensions must be genuinely contradictory (not just "sometimes X, sometimes Y")
+4. Speech DNA should be inferred from: cultural background, education, age, social role, personality type
+5. Mark confidence as `inferred` rather than `observed`
+
+---
+
+## Part 5: Confidence Signals
+
+Every report section should include a confidence indicator:
+
+| Level | Label | Meaning |
+|-------|-------|---------|
+| 5/5 | **Robust** | ≥5 cross-domain evidence instances |
+| 4/5 | **Strong** | 3–4 evidence instances, consistent pattern |
+| 3/5 | **Moderate** | 2 instances or single-domain pattern |
+| 2/5 | **Tentative** | 1 instance or inferred from related evidence |
+| 1/5 | **Speculative** | No direct evidence, extrapolated from personality model |
+
+Format in reports: `Confidence: 4/5 · Evidence: 7 quotes`
+
+This allows readers to instantly distinguish well-supported conclusions from LLM extrapolations.

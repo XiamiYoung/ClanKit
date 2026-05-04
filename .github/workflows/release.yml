@@ -1,0 +1,145 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      r2_prefix:
+        description: 'R2 path prefix (use "staging" for dry runs, "stable" for production)'
+        required: true
+        default: 'staging'
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  R2_PREFIX: ${{ github.event.inputs.r2_prefix || 'stable' }}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: npm ci
+
+      # Cache the ~449MB sentence-transformers ONNX model between runs so we
+      # don't redownload from HuggingFace on every release. Keyed on the
+      # download script's contents — bump the script (URL/file list change)
+      # → cache invalidates automatically.
+      - name: Cache embedding model
+        uses: actions/cache@v4
+        with:
+          path: electron/models/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+          key: embedding-model-${{ hashFiles('scripts/prepare-embedding-model.js') }}
+
+      - name: Prepare embedding model
+        shell: bash
+        run: npm run prepare-models
+
+      # Reconstruct gitignored build-config.prod.json from secrets at build time.
+      # The runtime app reads releaseFeedUrl out of this file.
+      - name: Write build-config.prod.json
+        shell: bash
+        env:
+          API_BASE_URL:               ${{ secrets.API_BASE_URL }}
+          GOOGLE_OAUTH_CLIENT_ID:     ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          SIGNING_SALT:               ${{ secrets.SIGNING_SALT }}
+          RELEASE_FEED_URL:           https://releases.clankit.app/stable
+        run: |
+          cat > electron/build-config.prod.json <<EOF
+          {
+            "apiBaseUrl": "${API_BASE_URL}",
+            "googleOAuthClientId": "${GOOGLE_OAUTH_CLIENT_ID}",
+            "googleOAuthClientSecret": "${GOOGLE_OAUTH_CLIENT_SECRET}",
+            "signingSalt": "${SIGNING_SALT}",
+            "mockBackend": false,
+            "releaseFeedUrl": "${RELEASE_FEED_URL}"
+          }
+          EOF
+
+      - name: Build Windows
+        run: npm run build && npx electron-builder --win --publish never
+
+      - name: Upload to R2
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID:     ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION:    auto
+          R2_ENDPOINT:           ${{ secrets.R2_ENDPOINT }}
+        run: |
+          aws s3 cp dist-release/ "s3://clankit-releases/${R2_PREFIX}/" \
+            --recursive --endpoint-url "$R2_ENDPOINT" \
+            --exclude '*' \
+            --include '*.exe' \
+            --include '*.exe.blockmap' \
+            --include 'latest.yml'
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: npm ci
+
+      - name: Cache embedding model
+        uses: actions/cache@v4
+        with:
+          path: electron/models/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+          key: embedding-model-${{ hashFiles('scripts/prepare-embedding-model.js') }}
+
+      - name: Prepare embedding model
+        run: npm run prepare-models
+
+      - name: Write build-config.prod.json
+        env:
+          API_BASE_URL:               ${{ secrets.API_BASE_URL }}
+          GOOGLE_OAUTH_CLIENT_ID:     ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+          SIGNING_SALT:               ${{ secrets.SIGNING_SALT }}
+          RELEASE_FEED_URL:           https://releases.clankit.app/stable
+        run: |
+          cat > electron/build-config.prod.json <<EOF
+          {
+            "apiBaseUrl": "${API_BASE_URL}",
+            "googleOAuthClientId": "${GOOGLE_OAUTH_CLIENT_ID}",
+            "googleOAuthClientSecret": "${GOOGLE_OAUTH_CLIENT_SECRET}",
+            "signingSalt": "${SIGNING_SALT}",
+            "mockBackend": false,
+            "releaseFeedUrl": "${RELEASE_FEED_URL}"
+          }
+          EOF
+
+      - name: Build macOS
+        run: npm run build && npx electron-builder --mac --publish never
+
+      - name: Upload to R2
+        env:
+          AWS_ACCESS_KEY_ID:     ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION:    auto
+          R2_ENDPOINT:           ${{ secrets.R2_ENDPOINT }}
+        run: |
+          aws s3 cp dist-release/ "s3://clankit-releases/${R2_PREFIX}/" \
+            --recursive --endpoint-url "$R2_ENDPOINT" \
+            --exclude '*' \
+            --include '*.dmg' \
+            --include '*.dmg.blockmap' \
+            --include '*-mac.zip' \
+            --include '*-mac.zip.blockmap' \
+            --include 'latest-mac.yml'

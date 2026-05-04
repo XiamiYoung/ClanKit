@@ -1,0 +1,375 @@
+---
+name: ClanKit 配置管理
+description: |
+  调用 manage_agents / manage_tasks / manage_tools / manage_mcp / manage_knowledge 之前，**必须先 load_skill 这个技能**。它教你：
+  (1) 数字人 / 用户画像 / 系统数字人 / 用户智能体 的术语映射（type=system 还是 user，默认 system）；
+  (2) 创建数字人时无需读 config.json —— 省略 providerId/modelId，工具会自动从 utilityModel 填默认值；
+  (3) 任务 / 计划的最新 schema（无 agentInputs、无 step.label、schedule 是对象格式）；
+  (4) 工具 / MCP / 知识库的 manage_* action 用法（已不再用 file_operation 写 JSON）。
+  触发场景任意一条命中即必须加载：用户要"创建/添加/修改/删除/列出"任何 智能体 / 数字人 / 用户画像 / 任务 / 计划 / 分类 / 工具 / MCP / 知识库。不加载就动手是错误。
+---
+
+# ClanKit 配置管理
+
+你正在管理 ClanKit 桌面应用的配置文件。本技能提供所有权威的路径、数据格式和编辑规则。请严格遵循，不要臆造字段名或文件结构。
+
+## 数据目录
+
+所有配置文件都存放在 ClanKit 数据目录下。该目录的绝对路径会出现在你的系统提示词中的 `CLANKIT DATA DIRECTORY: <路径>` 这一行。在本技能里，我们用 `<DATA_DIR>` 代指这个路径。永远不要猜测该路径。
+
+## 标准工作流
+
+ClanKit 的所有配置项都通过专用的 `manage_*` 工具管理，**不再使用 `file_operation` 读写任何配置 JSON / DB 文件**：
+
+| 类型 | 用什么工具 |
+|---|---|
+| 数字人 / 用户画像 | `manage_agents` |
+| 任务 / 计划 | `manage_tasks` |
+| 工具（HTTP / code / prompt / SMTP） | `manage_tools` |
+| MCP 服务器 | `manage_mcp` |
+| 知识库（KB 创建、删除、改名） | `manage_knowledge` |
+| 知识库内的文档增删 / 搜索 | `knowledge_manage`（这是另一个 always-on 工具，不在本 skill 内） |
+
+**禁止行为**：
+- ❌ `file_operation` 读写 `agents.json` / `tasks.json` / `plans.json`（已被 SQLite 取代，文件不存在）
+- ❌ `file_operation` 读写 `tools.json` / `mcp-servers.json` / `knowledge.json`（请用对应的 `manage_*` 工具）
+- ❌ `execute_shell` 调 sqlite3 / cat / 直接 fs 操作 ClanKit 配置
+
+新条目的 UUID 由工具自动生成。已有 id 不要改写。所有 `manage_*` 改完后 UI 会自动刷新，不需要让用户手动刷。
+
+## 1. 工具 — 用 `manage_tools` 工具
+
+触发场景："添加一个工具"、"创建一个工具"、"改一下这个工具" 等。
+
+工具有四种类型：`http`、`code`、`prompt`、`smtp`。如果用户没指定类型，要主动询问。
+
+### 创建工具 — `action: "create_tool"`
+
+```json
+{
+  "action": "create_tool",
+  "tool": {
+    "name": "天气接口",
+    "description": "获取某城市的当前天气",
+    "category": "APIs",
+    "type": "http",
+    "method": "GET",
+    "endpoint": "https://api.example.com/weather?city={city}",
+    "headers": { "Authorization": "Bearer $API_KEY" },
+    "bodyTemplate": "{}"
+  }
+}
+```
+
+`id` 通常由工具自动生成（取 name 小写，非字母数字字符替换为连字符，如 `"Weather API"` → `"weather-api"`）。如果 name 完全是中文 / 日文 / 韩文（推导不出 ASCII id），工具会自动生成 `tool-xxxxxxxx` 格式的兜底 id。**也可以在调用时显式传 `tool.id` 字段覆盖自动推导**（例如 `"id": "weather-cn"` 配合 `"name": "天气查询"`）。重复 id 会报错。
+
+GET / HEAD / DELETE 请求的 `bodyTemplate` 字段省略即可，工具会自动填 `"{}"`；POST / PUT / PATCH 自己填 JSON 模板。
+
+### 各类型必需字段
+
+**`http`**：`method`（GET/POST/PUT/PATCH/DELETE）、`endpoint`（URL，用 `{placeholder}` 标参数）、`headers`、`bodyTemplate`（GET 用 `"{}"`）。
+
+**`code`**：`language`（`"javascript"` / `"python"` / `"bash"`）、`code`。
+
+**`prompt`**：`promptText`。
+
+**`smtp`**：无额外字段（使用 app 配置里的邮件凭据）。
+
+### 公共字段
+- `name`（必填）
+- `type`（必填）
+- `description`、`category`（可选）
+
+### 修改 / 删除 / 查询
+
+```json
+{ "action": "update_tool", "tool": { "id": "weather-api", "description": "新描述" } }
+{ "action": "delete_tool", "id": "weather-api" }
+{ "action": "list_tools" }
+{ "action": "list_tools", "type": "http" }       // 按类型过滤
+{ "action": "list_tools", "category": "APIs" }   // 按分类过滤
+{ "action": "get_tool", "id": "weather-api" }
+```
+
+`__deletedBuiltins` 是工具删除追踪用的内部字段，工具会自动保护，不会让你误改。
+
+## 2. MCP 服务器 — 用 `manage_mcp` 工具
+
+触发场景："添加一个 MCP 服务器"、"装一个 MCP"、"配置 XX MCP" 等。
+
+### 创建 MCP server — `action: "create_server"`
+
+```json
+{
+  "action": "create_server",
+  "server": {
+    "name": "Filesystem",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/some/path"],
+    "env": {},
+    "description": "读写本地文件系统"
+  }
+}
+```
+
+规则：
+- `command` 是可执行程序，`args` 是传给它的参数列表
+- **API 密钥等敏感信息放到 `env` 里，不要放 `args`**
+- `id` 自动生成（UUID）
+
+### 修改 / 删除 / 查询
+
+```json
+{ "action": "update_server", "server": { "id": "<uuid>", "args": ["新参数"] } }
+{ "action": "delete_server", "id": "<uuid>" }
+{ "action": "list_servers" }
+{ "action": "get_server", "id": "<uuid> 或 name 字符串" }   // 按 id 或 name 都行
+```
+
+## 3. 数字人 / 用户画像 — 用 `manage_agents` 工具
+
+ClanKit 的术语：
+- **数字人**（系统数字人 / 系统智能体）= `type: "system"`：用户和它对话或 @ 调用的 AI 角色（翻译、代码审查、旅行助手等专业 agent 都属于数字人）。
+- **用户画像**（用户智能体 / user persona）= `type: "user"`：代表用户本人的人格实体，用于角色扮演或代替用户发言。
+
+触发场景：
+- "创建一个智能体" / "添加一个数字人" / "做一个会 XX 的助手" / "新增一个 agent" → **默认是数字人，`type: "system"`**
+- "创建一个用户画像" / "我的人格" / "代表我的 persona" → 才是 `type: "user"`
+
+用户没明确说"用户画像"时，**永远当作数字人来建（system）**。
+
+存放在 SQLite (`agents.db`)，不再是 `agents.json`。请使用 `manage_agents` 工具。
+
+### 创建智能体 — `action: "create_agent"`
+
+调用：
+```json
+{
+  "action": "create_agent",
+  "agent": {
+    "type": "system",
+    "name": "代码审查员",
+    "description": "审查代码中的 bug 和风格问题",
+    "prompt": "你是一位资深工程师，负责审查代码的 bug、安全性和代码风格。",
+    "providerId": "<provider-id>",
+    "modelId": "<model-id>",
+    "requiredToolIds": [],
+    "requiredSkillIds": [],
+    "requiredMcpServerIds": [],
+    "requiredKnowledgeBaseIds": [],
+    "categoryIds": []
+  }
+}
+```
+
+规则：
+- **`type` 默认 `"system"`**（即数字人）。只有用户明确说"用户画像 / 用户智能体 / user persona / 代表我 / 我的人格"才用 `"user"`。
+- **provider 和 model：** 用户没指定时**直接省略 `providerId` 和 `modelId` 字段**，工具会自动从 `config.utilityModel` 填默认值。不要再去 `file_operation` 读 `config.json` 取这俩值，工具内部会处理。用户明确指定了别的 provider/model 才传。
+- 四个 `required*Ids` 数组用户没指定就填 `[]`（空数组表示继承默认）。
+- `id`、`createdAt`、`updatedAt`、`isBuiltin` 由工具自动生成 —— 不要传。
+- `type` 创建后**不可修改**。如果选错了，必须 `delete_agent` + `create_agent` 重建。
+
+### 修改智能体 — `action: "update_agent"`
+
+调用必须传 `agent.id`。其它字段只传你要改的，其余字段会保留：
+```json
+{
+  "action": "update_agent",
+  "agent": { "id": "<agent-id>", "prompt": "新的 prompt 内容" }
+}
+```
+
+`type`、`createdAt`、`isBuiltin` 不可改。内置 agent（Clank、DocMaster、Analyst）的 `prompt` 等字段可以改，但不能删除。
+
+### 删除智能体 — `action: "delete_agent"`
+
+```json
+{ "action": "delete_agent", "id": "<agent-id>" }
+```
+
+内置 agent 不能删 —— 工具会返回错误。
+
+### 查询 — `list_agents` / `get_agent`
+
+```json
+{ "action": "list_agents", "kind": "system" }   // kind 可选: system/user，省略返回全部
+{ "action": "get_agent", "id": "<agent-id>" }
+```
+
+需要按名字找 id 时，先 `list_agents` 拿到结果再匹配。
+
+### 分类 — `create_category` / `update_category` / `delete_category` / `list_categories`
+
+```json
+{ "action": "create_category", "category": { "type": "system", "name": "助理", "emoji": "🤖" } }
+{ "action": "list_categories", "kind": "system" }
+```
+
+写完后：告诉用户在 **智能体** 页面会自动刷新（无需手动刷新 —— SQLite 已实时持久化）。
+
+## 4. 知识库 — 用 `manage_knowledge` 工具
+
+触发场景："创建一个知识库"、"加一个 RAG 索引"、"删除某知识库"、"列出知识库" 等。
+
+⚠️ **作用域限制**：本工具只管 **KB 本身的创建 / 删除 / 改名 / 查询**。要往 KB 里**加文档 / 删文档 / 检索内容**，请用另一个 always-on 工具 `knowledge_manage`（不在本 skill 里）。
+
+### 创建 KB — `action: "create_kb"`
+
+```json
+{
+  "action": "create_kb",
+  "kb": {
+    "name": "AWS 术语库",
+    "description": "AWS 服务名、产品别名、官方文档术语对照"
+  }
+}
+```
+
+工具会同时：
+1. 调 `localVectorStore.createKnowledgeBase` 创建空向量索引
+2. 在 `knowledge.json` 里注册该 KB 并默认 `enabled: true`
+3. 返回包含自动生成 UUID 的 KB 对象
+
+### 修改 / 删除 / 查询
+
+```json
+{ "action": "update_kb", "kb": { "id": "<kbId>", "name": "新名字", "description": "新描述" } }
+{ "action": "delete_kb", "id": "<kbId>" }   // 同时删向量索引和 knowledge.json 里的注册
+{ "action": "list_kbs" }
+{ "action": "get_kb", "id": "<kbId>" }
+```
+
+## 5. 任务 — 用 `manage_tasks` 工具
+
+触发场景："创建一个任务"、"添加一个任务模板"、"把这个存成可以重复运行的任务" 等。
+
+任务存放在 SQLite (`tasks.db`)，**不再是 `tasks.json`**。请使用 `manage_tasks` 工具。
+
+### 创建任务 — `action: "create_task"`
+
+```json
+{
+  "action": "create_task",
+  "task": {
+    "name": "总结文章",
+    "description": "把一篇文章浓缩成 3 条要点",
+    "icon": "📋",
+    "prompt": "总结一下这篇文章：{input}",
+    "categoryId": null
+  }
+}
+```
+
+规则：
+- `name`（必填，最长 80 字符）。
+- `prompt`（必填）：任务执行时的指令模板。可以用 `{占位符}` 标记参数。
+- `description` / `icon` / `categoryId` 可选。`icon` 默认是 ✍️。
+- **任务不再有 `agentInputs` 字段**。要在多个 agent 间分发，是在 plan 的 step 里用 `defaultAgentIds` 设置（见第 6 节）。
+- `categoryId` 引用一个 task 分类的 id 。要先 `list_task_categories` 查 id，没有合适的就用 `create_task_category` 新建。
+
+### 修改 / 删除 / 查询
+
+```json
+{ "action": "update_task", "task": { "id": "<task-id>", "prompt": "新 prompt" } }
+{ "action": "delete_task", "id": "<task-id>" }
+{ "action": "list_tasks" }
+{ "action": "get_task", "id": "<task-id>" }
+```
+
+`update_task` 是软删除友好的合并 —— 你只传想改的字段，其它字段保留。`delete_task` 是软删除（数据库标记 `deleted_at`，不会物理删除）。
+
+### 任务分类 — `create_task_category` / `delete_task_category` / `list_task_categories`
+
+```json
+{ "action": "create_task_category", "category": { "name": "新闻", "emoji": "📰" } }
+{ "action": "list_task_categories" }
+```
+
+写完后：告诉用户 **任务** 页面会自动刷新。
+
+## 6. 计划 — 还是 `manage_tasks` 工具
+
+触发场景："创建一个计划"、"把这个设置成每天运行"、"把这几个任务串起来" 等。
+
+计划存放在 SQLite (`tasks.db`)。
+
+### 创建计划 — `action: "create_plan"`
+
+```json
+{
+  "action": "create_plan",
+  "plan": {
+    "name": "每日新闻摘要",
+    "description": "每天早上抓取并总结新闻",
+    "icon": "📰",
+    "categoryId": null,
+    "steps": [
+      {
+        "taskId": "<task-id>",
+        "defaultAgentIds": ["<agent-id>"],
+        "promptOverride": "",
+        "dependsOn": [],
+        "runCondition": "always"
+      }
+    ],
+    "permissionMode": "all_permissions",
+    "allowList": [],
+    "schedule": {
+      "type": "cron",
+      "cron": "0 8 * * *",
+      "timezone": "Asia/Shanghai",
+      "enabled": true
+    },
+    "enabled": true
+  }
+}
+```
+
+规则：
+- **每个 step 必须有 `taskId` 和 `defaultAgentIds`**（至少 1 个 agent）。
+- step 没有 `label`、没有 `agentAssignments` 字段 —— 删掉了。多 agent 直接列到 `defaultAgentIds` 里。
+- `promptOverride`：可选，如果想覆盖任务原本的 prompt，填这里；不需要就留空字符串。
+- `dependsOn`: `[]` 表示并行 step；`["<另一个 stepId>"]` 表示要等那个 step 完成再跑。
+- `runCondition`：`"always"` / `"on_success"` / `"on_failure"` 之一。
+- 查 `taskId` / agent id：分别用 `manage_tasks list_tasks` 和 `manage_agents list_agents`。
+- `permissionMode`：`"all_permissions"`（默认，可以用所有工具）/ `"inherit"`（继承默认 agent 设置）/ `"chat_only"`（只允许聊天，不能调工具）。
+- `allowList`：仅 `permissionMode != "all_permissions"` 时使用，每条是 `{pattern, description}`。
+
+### schedule 字段
+
+`schedule` 是一个 **对象**，不是字符串：
+- `type: "manual"` — 手动触发（默认）。其它字段忽略。
+- `type: "once"` — 一次性，要填 `runAt` ISO 8601 字符串（如 `"2026-05-10T08:00:00Z"`）和 `timezone`。
+- `type: "cron"` — 周期触发，要填 `cron` 表达式和 `timezone`。
+
+`enabled: true/false` 控制是否启用调度（即使 schedule 配置好了，`enabled: false` 也不会自动跑）。
+
+也可以直接传一个 cron 字符串作为 `schedule`，工具会自动包成 `{type: "cron", cron, enabled: true}`。
+
+### 修改 / 删除 / 查询
+
+```json
+{ "action": "update_plan", "plan": { "id": "<plan-id>", "schedule": {"type":"manual"} } }
+{ "action": "delete_plan", "id": "<plan-id>" }
+{ "action": "list_plans" }
+{ "action": "get_plan", "id": "<plan-id>" }
+```
+
+### 计划分类 — `create_plan_category` / `delete_plan_category` / `list_plan_categories`
+
+和 task 分类用法相同。
+
+写完后：告诉用户 **计划** 页面会自动刷新。
+
+## 每次操作的收尾
+
+工具调用成功后，用一句话确认你做了什么。UI 会自动刷新，不需要让用户手动刷。例如：
+> "已经在 'APIs' 分类下添加了 Weather API 工具。"
+
+## 禁止事项
+
+- 不要碰 `<DATA_DIR>/config.json`，除非用户明确要求修改应用设置 —— 它里面有 API 密钥（且会自动加密）。**特别注意：创建数字人时不需要先读 config.json 拿默认 provider/model，`manage_agents` 工具会自动从 utilityModel 填**。
+- 未经用户明确确认，不要删除任何条目。
+- **不要 `file_operation` 读写任何 ClanKit 配置文件**（`tools.json` / `mcp-servers.json` / `knowledge.json` / `agents.json` / `tasks.json` / `plans.json`）—— 全部走对应的 `manage_*` 工具。
+- **不要 `execute_shell` 调用 sqlite3 / cat / fs 工具操作 ClanKit 配置** —— 同上。
+- 引用其他实体时（taskId、agentId、kbId 等），不要猜 id —— 用对应的 `list_*` action 查出来。
