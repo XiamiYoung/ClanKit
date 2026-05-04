@@ -1,6 +1,6 @@
 {
   "name": "clankit",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "ClanKit - Multi-LLM Desktop Application",
   "license": "SEE LICENSE IN LICENSE",
   "main": "electron/main.js",
