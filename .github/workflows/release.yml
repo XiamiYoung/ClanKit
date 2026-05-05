@@ -143,3 +143,74 @@ jobs:
             --include '*-mac.zip' \
             --include '*-mac.zip.blockmap' \
             --include 'latest-mac.yml'
+
+  cleanup:
+    name: Prune R2
+    needs: [build-windows, build-macos]
+    # Only run on stable releases. Staging dry-runs leave their own files alone.
+    if: ${{ (github.event.inputs.r2_prefix || 'stable') == 'stable' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prune old stable versions and wipe staging
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID:     ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION:    auto
+          R2_ENDPOINT:           ${{ secrets.R2_ENDPOINT }}
+          KEEP:                  '10'
+        run: |
+          set -euo pipefail
+
+          echo "=== Pruning stable/ to latest $KEEP versions ==="
+          versions=$(aws s3 ls "s3://clankit-releases/stable/" \
+            --endpoint-url "$R2_ENDPOINT" \
+            | awk '{print $4}' \
+            | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' \
+            | sort -uV || true)
+
+          if [ -z "$versions" ]; then
+            echo "No versioned files found in stable/, skipping prune."
+          else
+            count=$(echo "$versions" | wc -l)
+            echo "Found $count versions:"
+            echo "$versions"
+
+            if [ "$count" -le "$KEEP" ]; then
+              echo "Within retention window ($count <= $KEEP), nothing to prune."
+            else
+              delete_count=$((count - KEEP))
+              delete_versions=$(echo "$versions" | head -n "$delete_count")
+              echo "Deleting $delete_count old versions:"
+              echo "$delete_versions"
+
+              delete_re=$(echo "$delete_versions" | sed 's/\./\\./g' | paste -sd '|' -)
+
+              aws s3 ls "s3://clankit-releases/stable/" \
+                --endpoint-url "$R2_ENDPOINT" \
+                | awk '{print $4}' \
+                | while read -r file; do
+                    [ -z "$file" ] && continue
+                    case "$file" in latest*.yml) continue ;; esac
+                    file_v=$(echo "$file" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)
+                    [ -z "$file_v" ] && continue
+                    if echo "$file_v" | grep -qE "^(${delete_re})$"; then
+                      echo "  rm stable/$file"
+                      aws s3 rm "s3://clankit-releases/stable/$file" \
+                        --endpoint-url "$R2_ENDPOINT"
+                    fi
+                  done
+            fi
+          fi
+
+          echo ""
+          echo "=== Wiping staging/ (validated by this stable release) ==="
+          staging_listing=$(aws s3 ls "s3://clankit-releases/staging/" \
+            --endpoint-url "$R2_ENDPOINT" || true)
+          if [ -n "$staging_listing" ]; then
+            aws s3 rm "s3://clankit-releases/staging/" --recursive \
+              --endpoint-url "$R2_ENDPOINT"
+            echo "staging/ cleared."
+          else
+            echo "staging/ already empty."
+          fi
