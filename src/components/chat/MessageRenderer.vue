@@ -792,7 +792,13 @@ function renderMarkdown(text) {
   try {
     // Strip DeepSeek-style tool execution log blocks: [Tool execution log from this response: ... ]
     // Match from the marker to either a standalone ] line or end of string
-    const stripped = String(text).replace(/\n?\[Tool execution log[\s\S]*?(?:\n\]|$)/g, '').trim()
+    let stripped = String(text).replace(/\n?\[Tool execution log[\s\S]*?(?:\n\]|$)/g, '')
+    // Strip Qwen3 / Ollama-style inline thinking blocks: <think>...</think>.
+    // Some thinking models emit their internal monologue inline in delta.content
+    // (rather than via reasoning_content). It's not user-facing — and during
+    // streaming the closing tag may not have arrived yet, so also strip an
+    // unterminated trailing <think>... so the wavebar doesn't render raw thoughts.
+    stripped = stripped.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/<think>[\s\S]*$/i, '').trim()
     const withRecommendButtons = expandRecommendAgentTags(stripped)
     const clean = stripBase64(withRecommendButtons)
     const raw = marked.parse(clean, { breaks: true, gfm: true })

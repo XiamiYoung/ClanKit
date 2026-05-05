@@ -19,7 +19,11 @@ class OpenAIClient {
     // _directAuth: use standard Bearer auth (DeepSeek, direct OpenAI endpoints).
     if (config._directAuth) {
       const directURL = baseURL.endsWith('/v1') ? baseURL : baseURL + '/v1'
-      this.client = new OpenAI({ baseURL: directURL, apiKey })
+      // OpenAI SDK requires a non-empty apiKey string at construction even when
+      // the upstream server (Ollama, local LLM gateways) ignores Bearer auth.
+      // Send a placeholder so the SDK doesn't throw before the request even
+      // leaves the process — Ollama discards the header server-side.
+      this.client = new OpenAI({ baseURL: directURL, apiKey: apiKey || 'ollama-no-auth' })
     } else {
       this.client = new OpenAI({
         baseURL: baseURL + '/proxy/openai/v1',

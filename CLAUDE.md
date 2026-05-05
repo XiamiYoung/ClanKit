@@ -416,7 +416,7 @@ Do NOT write task state to files on disk — it conflicts across concurrent term
 
 ## Lessons Learned
 
-The rolling log lives in [`LESSONS.md`](./LESSONS.md) and is imported automatically below. Append new entries there, not here. After any user correction, add a rule to LESSONS.md that prevents the same mistake.
+The rolling log lives in [`LESSONS.md`](./LESSONS.md) and is imported automatically below. Append new entries there, not here. After any user correction, add a rule to LESSONS.md that prevents the same mistake. Long incident war stories live in [`LESSONS-ARCHIVE.md`](./LESSONS-ARCHIVE.md) (NOT auto-imported) — consult on demand.
 
 @LESSONS.md
 

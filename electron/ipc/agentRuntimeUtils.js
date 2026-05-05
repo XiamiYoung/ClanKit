@@ -33,7 +33,13 @@ function resolveProviderCreds(cfg, providerType) {
 
 function isProviderActive(cfg, providerType) {
   if (cfg.providers && Array.isArray(cfg.providers)) {
-    return cfg.providers.some(item => (item.type === providerType || item.id === providerType) && item.apiKey)
+    return cfg.providers.some(item => {
+      const matches = item.type === providerType || item.id === providerType
+      if (!matches) return false
+      // Ollama runs locally with no auth — apiKey is optional.
+      if (item.type === 'ollama') return true
+      return !!item.apiKey
+    })
   }
   // Legacy single-provider-per-type object format ({ anthropic: {...}, openai: {...} })
   // is no longer in use — credentials live exclusively in cfg.providers[].
@@ -159,7 +165,9 @@ function validateLoopConfig(cfg) {
     const baseURL = cfg.openaiBaseURL || cfg.openai?.baseURL || cfg.baseURL || ''
     const apiKey = cfg.openaiApiKey || cfg.openai?.apiKey || cfg.apiKey || ''
     if (!baseURL) return `Provider "${providerType}" is missing baseURL`
-    if (!apiKey) return `Provider "${providerType}" is missing apiKey`
+    // Ollama runs locally with no auth — apiKey is optional. Every other
+    // OpenAI-compatible provider still requires it.
+    if (!apiKey && providerType !== 'ollama') return `Provider "${providerType}" is missing apiKey`
     return null
   }
 

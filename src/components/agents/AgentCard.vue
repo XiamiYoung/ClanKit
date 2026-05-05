@@ -270,8 +270,11 @@ const isProviderInactive = computed(() => {
   const provider = configStore.config.providers?.find(p => p.id === props.agent.providerId || p.type === props.agent.providerId)
   // "Inactive" now means: provider's apiKey was cleared / provider was deleted.
   // The user no longer has to flip an explicit isActive flag to "activate" a
-  // provider — credentials alone make it usable.
-  return !provider?.apiKey
+  // provider — credentials alone make it usable. Ollama is the exception:
+  // it runs locally with no auth, so an empty apiKey is fine.
+  if (!provider) return true
+  if (provider.type === 'ollama') return false
+  return !provider.apiKey
 })
 
 // Show "no provider" warning when an agent has no provider/model set.

@@ -48,10 +48,23 @@ function _ensureSubscription(chatsStore) {
       // Don't update msg.timestamp here — keep the creation-time stamp so
       // ORDER BY ts preserves chronological insertion order even if other
       // messages were interleaved during the stream.
-      if (!msg.content) {
+      // Empty-check uses a copy with <think>...</think> blocks stripped so a
+      // thinking-only response from Qwen3 (or any other thinking model that
+      // emits inline <think> blocks) is treated as empty and the placeholder
+      // is removed cleanly.
+      const rawContent = msg.content || ''
+      const visibleContent = rawContent
+        .replace(/<think>[\s\S]*?<\/think>/gi, '')
+        .replace(/<think>[\s\S]*$/i, '')
+        .trim()
+      if (!visibleContent) {
         // Empty greeting — drop the placeholder so the chat doesn't show a blank bubble.
         const idx = chat.messages.indexOf(msg)
         if (idx >= 0) chat.messages.splice(idx, 1)
+      } else if (visibleContent !== rawContent) {
+        // Strip thinking blocks from persisted content so reloads render clean.
+        msg.content = visibleContent
+        msg.segments = [{ type: 'text', content: visibleContent }]
       }
       _activeMsgIdByChat.delete(chatId)
       _inFlight.delete(chatId)

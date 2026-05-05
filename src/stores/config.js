@@ -327,7 +327,8 @@ export const useConfigStore = defineStore('config', () => {
   // there; we don't gate the picker on a separate "active" flag.
   const activeProviders = computed(() => {
     return config.value.providers
-      .filter(p => p.apiKey)
+      // Ollama runs locally with no auth — apiKey is optional.
+      .filter(p => p.apiKey || p.type === 'ollama')
       .map(p => p.id)
   })
 

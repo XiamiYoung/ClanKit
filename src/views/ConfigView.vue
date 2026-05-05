@@ -600,7 +600,7 @@
                   </div>
 
                   <!-- Credentials -->
-                  <div class="form-section-subheader">
+                  <div v-if="selectedProvider.type !== 'ollama'" class="form-section-subheader">
                     <div class="section-icon-sm" style="width: 1.25rem; height: 1.25rem;">
                       <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 0.75rem; height: 0.75rem;">
                         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
@@ -608,7 +608,7 @@
                     </div>
                     {{ t('config.credentials') }}
                   </div>
-                  <div class="form-group">
+                  <div v-if="selectedProvider.type !== 'ollama'" class="form-group">
                     <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.25rem;">
                       <label class="form-label" style="margin:0;">{{ t('config.apiKey') }}</label>
                       <a
@@ -618,7 +618,6 @@
                         @click.prevent="openUrl(configStore.PROVIDER_PRESETS[selectedProvider.type].apiKeyUrl)"
                       >{{ t('onboarding.getApiKey') }} →</a>
                     </div>
-                    <p v-if="selectedProvider.type === 'ollama'" class="hint" style="margin-bottom:0.4rem;">Ollama runs locally — no API key required. Leave blank.</p>
                     <p v-if="selectedProvider.type === 'doubao'" class="hint" style="margin-bottom:0.4rem;">模型 ID 请填写火山方舟控制台创建的推理接入点 ID（格式：ep-xxxxxxxxxx-xxxxx）</p>
                     <div class="apikey-privacy-notice">
                       <svg class="apikey-privacy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -703,11 +702,11 @@
                   <template v-else>
                     <div class="test-connection-row">
                       <div>
-                        <p class="hint" style="margin-top:2px;">{{ selectedProviderModels.length > 0 ? t('config.modelsLoaded', '', { count: selectedProviderModels.length }) : t('config.enterApiKeyFetchModels') }}</p>
+                        <p class="hint" style="margin-top:2px;">{{ selectedProviderModels.length > 0 ? t('config.modelsLoaded', '', { count: selectedProviderModels.length }) : (selectedProvider.type === 'ollama' ? t('config.fetchModels') : t('config.enterApiKeyFetchModels')) }}</p>
                       </div>
                       <div style="display: flex; gap: 0.375rem; align-items: center;">
                         <AppTooltip :text="providerModelsFetching ? t('config.fetching') : t('config.fetchModels')">
-                          <AppButton size="icon" @click="fetchProviderModels" :disabled="providerModelsFetching || !selectedProvider.apiKey || (selectedProvider.type !== 'google' && !selectedProvider.baseURL && !configStore.PROVIDER_PRESETS[selectedProvider.type]?.defaultBaseURL)" :loading="providerModelsFetching"><svg v-if="!providerModelsFetching" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-5.88"/></svg></AppButton>
+                          <AppButton size="icon" @click="fetchProviderModels" :disabled="providerModelsFetching || (selectedProvider.type !== 'ollama' && !selectedProvider.apiKey) || (selectedProvider.type !== 'google' && !selectedProvider.baseURL && !configStore.PROVIDER_PRESETS[selectedProvider.type]?.defaultBaseURL)" :loading="providerModelsFetching"><svg v-if="!providerModelsFetching" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-5.88"/></svg></AppButton>
                         </AppTooltip>
                         <AppTooltip v-if="selectedProviderModels.length > 0 && providerHasMissingContext" :text="t('config.aiFillContext')">
                           <AppButton size="icon" @click="enrichProviderContext" :disabled="providerContextEnriching" :loading="providerContextEnriching"><svg v-if="!providerContextEnriching" style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4m0 12v4m-7.07-3.93l2.83-2.83m8.48-8.48l2.83-2.83M2 12h4m12 0h4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83"/></svg></AppButton>
@@ -3998,6 +3997,10 @@ const canTestNew = computed(() => {
     return !!(selectedProvider.value.apiKey && effectiveTestModel.value)
   }
   const hasBaseURL = !!(selectedProvider.value.baseURL || configStore.PROVIDER_PRESETS[selectedProvider.value.type]?.defaultBaseURL)
+  // Ollama runs locally with no auth — apiKey is optional.
+  if (selectedProvider.value.type === 'ollama') {
+    return !!(hasBaseURL && effectiveTestModel.value)
+  }
   return !!(selectedProvider.value.apiKey && hasBaseURL && effectiveTestModel.value)
 })
 
@@ -4234,7 +4237,12 @@ async function testProviderNew() {
 }
 
 async function fetchProviderModels() {
-  if (!selectedProvider.value || !selectedProvider.value.apiKey) {
+  if (!selectedProvider.value) {
+    providerModelsFetchError.value = 'Enter API key first.'
+    return
+  }
+  // Ollama runs locally with no auth — apiKey is optional.
+  if (selectedProvider.value.type !== 'ollama' && !selectedProvider.value.apiKey) {
     providerModelsFetchError.value = 'Enter API key first.'
     return
   }

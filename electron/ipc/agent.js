@@ -1553,22 +1553,41 @@ Keep the tone natural, never robotic, never generic. Do NOT use markdown heading
       })
       await stream.finalMessage()
     } else {
+      const modelLower = String(loopCfg.customModel || '').toLowerCase()
+      const isQwen3 = modelLower.includes('qwen3') || modelLower.includes('qwen-3')
+      const userMsg = isQwen3 ? 'Greet me now. /no_think' : 'Greet me now.'
+
       const { OpenAIClient } = require('../agent/core/OpenAIClient')
       const oaiClient = new OpenAIClient({ ...loopCfg, _scenario: 'agent-greeting' })
       const client = oaiClient.getClient()
+
+      // Some local models (qwen3.5:9b on Ollama, etc.) emit raw chat-template
+      // special tokens or fall back into drafting scratchpad after their first
+      // valid completion. Stop on the common end-of-turn markers to prevent
+      // runaway output. Cheap no-op for well-behaved providers.
+      const STOP_MARKERS = ['<|endoftext|>', '<|im_start|>', '<|im_end|>', '<|eot_id|>']
+      let stopped = false
       const stream = await client.chat.completions.create({
         model: loopCfg.customModel,
-        ...oaiClient.tokenLimit(512),
+        ...oaiClient.tokenLimit(1024),
         stream: true,
+        stop: STOP_MARKERS,
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: 'Greet me now.' },
+          { role: 'user', content: userMsg },
         ],
       }, { signal: abort.signal })
       for await (const chunk of stream) {
         if (abort.signal.aborted) break
-        const delta = chunk.choices?.[0]?.delta?.content
-        if (delta) send({ type: 'delta', text: delta })
+        if (stopped) break
+        let delta = chunk.choices?.[0]?.delta?.content
+        if (delta) {
+          for (const marker of STOP_MARKERS) {
+            const idx = delta.indexOf(marker)
+            if (idx >= 0) { delta = delta.slice(0, idx); stopped = true; break }
+          }
+          if (delta) send({ type: 'delta', text: delta })
+        }
       }
     }
 
@@ -2476,8 +2495,12 @@ Rules:
 
 ipcMain.handle('agent:test-provider', async (_, { provider, apiKey, baseURL, utilityModel }) => {
   try {
-    if (!apiKey || !utilityModel) {
-      return { success: false, error: 'Missing required fields (apiKey, utilityModel)' }
+    if (!utilityModel) {
+      return { success: false, error: 'Missing required field: utilityModel' }
+    }
+    // Ollama runs locally with no auth — apiKey is optional.
+    if (!apiKey && provider !== 'ollama') {
+      return { success: false, error: 'Missing required field: apiKey' }
     }
 
     if (provider === 'google') {

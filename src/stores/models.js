@@ -93,7 +93,9 @@ export const useModelsStore = defineStore('models', () => {
 
   async function fetchModelsForProvider(providerId) {
     const provider = _getProviderConfig(providerId)
-    if (!provider?.apiKey) return false
+    if (!provider) return false
+    // Ollama runs locally and requires no API key; every other provider does.
+    if (provider.type !== 'ollama' && !provider.apiKey) return false
 
     const resolvedId = provider.id
     const type = provider.type
@@ -152,6 +154,17 @@ export const useModelsStore = defineStore('models', () => {
         if (!window.electronAPI?.fetchOpenAIModels || !baseURL) return false
         const result = await window.electronAPI.fetchOpenAIModels({
           apiKey: provider.apiKey, baseURL, type: 'openai',
+        })
+        if (!result.success) return false
+        models = result.models
+
+      } else if (type === 'ollama') {
+        // Ollama exposes OpenAI-compatible /v1/models. No auth — apiKey can be empty.
+        const preset = configStore.PROVIDER_PRESETS?.[type]
+        const baseURL = provider.baseURL || preset?.defaultBaseURL
+        if (!window.electronAPI?.fetchOpenAIModels || !baseURL) return false
+        const result = await window.electronAPI.fetchOpenAIModels({
+          apiKey: provider.apiKey || '', baseURL, type: 'openai',
         })
         if (!result.success) return false
         models = result.models
