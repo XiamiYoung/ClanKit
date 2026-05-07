@@ -11,9 +11,7 @@ Built with Electron and Vue 3. Runs Anthropic, OpenRouter, OpenAI-compatible, De
 ## Demo
 
 <a href="https://youtu.be/CFOSY6yZ54o" title="Watch the ClanKit demo on YouTube">
-  <img src="https://img.youtube.com/vi/CFOSY6yZ54o/maxresdefault.jpg" alt="Watch the ClanKit demo on YouTube" width="720">
-  <br>
-  <img src="https://img.shields.io/badge/%E2%96%B6%20Watch%20demo-YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="Watch on YouTube">
+  <img src="./docs/screenshots/en/en_video_thumb.png" alt="Watch the ClanKit demo on YouTube" width="720">
 </a>
 
 > Prefer Bilibili? See the [Chinese README](./README.zh-CN.md#demo).

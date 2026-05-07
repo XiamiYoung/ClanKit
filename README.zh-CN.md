@@ -11,9 +11,7 @@
 ## Demo
 
 <a href="https://www.bilibili.com/video/BV1cndPBDE6r/" title="在 Bilibili 观看 ClanKit 演示">
-  <img src="./docs/screenshots/zh/zh_video_screenshots.png" alt="在 Bilibili 观看 ClanKit 演示" width="720">
-  <br>
-  <img src="https://img.shields.io/badge/%E2%96%B6%20%E8%A7%82%E7%9C%8B%E6%BC%94%E7%A4%BA-Bilibili-00A1D6?style=for-the-badge&logo=bilibili&logoColor=white" alt="在 Bilibili 观看">
+  <img src="./docs/screenshots/zh/zh_video_thumb.png" alt="在 Bilibili 观看 ClanKit 演示" width="720">
 </a>
 
 > 想看英文版？请见 [English README](./README.md#demo)。
