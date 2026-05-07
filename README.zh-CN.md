@@ -1,6 +1,6 @@
 # ClanKit
 
-[English](./README.md) | **简体中文**
+[English](./README.md) | **简体中文** | [官方网站](https://clankit.app/)
 
 本地优先的多模型桌面工作台，用于聊天、Agent 协作和工具编排。
 

@@ -1,6 +1,6 @@
 # ClanKit
 
-**English** | [简体中文](./README.zh-CN.md)
+**English** | [简体中文](./README.zh-CN.md) | [Website](https://clankit.app/)
 
 A local-first, multi-LLM desktop workspace for chat, agent collaboration, and tool orchestration.
 
