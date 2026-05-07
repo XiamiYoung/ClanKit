@@ -617,13 +617,19 @@ function goForward() {
 }
 
 // ── Source state ────────────────────────────────────────────────────────────
-const SOURCES = [
-  { key: 'wechat',    labelKey: 'sourceWeChat' },
-  { key: 'imessage', labelKey: 'sourceIMessage' },
-  { key: 'whatsapp', labelKey: 'sourceWhatsApp' },
-  { key: 'text',     labelKey: 'sourceText' },
-]
-const source = ref('wechat')
+// Order depends on locale: Chinese users see WeChat first, others see WhatsApp first.
+// iMessage and Paste Text are always the last two.
+const SOURCES = computed(() => {
+  const primary = locale.value === 'zh'
+    ? [{ key: 'wechat', labelKey: 'sourceWeChat' }, { key: 'whatsapp', labelKey: 'sourceWhatsApp' }]
+    : [{ key: 'whatsapp', labelKey: 'sourceWhatsApp' }, { key: 'wechat', labelKey: 'sourceWeChat' }]
+  return [
+    ...primary,
+    { key: 'imessage', labelKey: 'sourceIMessage' },
+    { key: 'text',     labelKey: 'sourceText' },
+  ]
+})
+const source = ref(locale.value === 'zh' ? 'wechat' : 'whatsapp')
 const contactName = ref('')
 const dbDir = ref('')
 const filePath = ref('')

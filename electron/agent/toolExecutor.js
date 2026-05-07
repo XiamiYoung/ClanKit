@@ -38,9 +38,13 @@ function extractBase64Image(text) {
 }
 
 /**
- * Scan text for embedded data:image URIs (e.g. inside JSON), extract them,
- * and replace with a short placeholder. Handles the n8n case where the MCP
- * response is a JSON string containing "data:image/png;base64,<6MB>".
+ * Scan text for embedded image data, extract them, and replace with a short
+ * placeholder. Two cases handled:
+ *   1. data:image/...;base64,... URIs (the n8n case — image is the payload).
+ *   2. Markdown image syntax ![alt](url) — explicit "this is an image" signal
+ *      from the MCP. Plain URLs without markdown wrapping are intentionally
+ *      ignored: data MCPs (Linear/GitHub/Slack) emit avatar/asset URLs as
+ *      JSON metadata that the user did not ask to be displayed.
  */
 function extractEmbeddedImages(text) {
   if (!text || text.length < 100) return { cleaned: text, extracted: [] }
@@ -48,7 +52,7 @@ function extractEmbeddedImages(text) {
   const extracted = []
   let cleaned = text
 
-  // 1. Extract data:image URIs with base64 content (the n8n case)
+  // 1. data:image base64 URIs (n8n-style payload-in-JSON)
   if (text.includes('data:image/')) {
     cleaned = cleaned.replace(/data:(image\/[a-z+]+);base64,([A-Za-z0-9+/=]{1000,})/gi, (match, mimeType, data) => {
       extracted.push({ data, mimeType })
@@ -56,11 +60,19 @@ function extractEmbeddedImages(text) {
     })
   }
 
-  // 2. Extract plain image URLs (http/https) ending with known extensions
-  if (/https?:\/\//.test(cleaned)) {
-    cleaned = cleaned.replace(/(https?:\/\/[^\s"'<>]+\.(?:png|jpe?g|gif|webp|svg|bmp|ico)(?:\?[^\s"'<>]*)?)/gi, (match, url) => {
-      extracted.push({ url })
-      return `[Image: ${url}]`
+  // 2. Markdown image syntax — MCP explicitly signaling "render this".
+  //    Accepts http(s) URLs and data: URIs (latter already handled above
+  //    if base64, but the markdown form would have been left untouched).
+  if (cleaned.includes('![')) {
+    cleaned = cleaned.replace(/!\[[^\]]*\]\((https?:\/\/[^\s)]+|data:image\/[^\s)]+)\)/gi, (match, url) => {
+      if (url.startsWith('data:image/')) {
+        const m = url.match(/^data:(image\/[a-z+]+);base64,(.+)$/i)
+        if (m) extracted.push({ data: m[2], mimeType: m[1] })
+        else return match
+      } else {
+        extracted.push({ url })
+      }
+      return `[Image: ${url.startsWith('data:') ? '(inline)' : url}]`
     })
   }
 

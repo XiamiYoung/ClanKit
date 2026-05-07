@@ -166,8 +166,24 @@ export const useChatsStore = defineStore('chats', () => {
         // Re-check: another path may have set messages while we were loading
         if (chat.messages !== null) return
         if (full && full.messages) {
-          // Strip stale waiting indicators — they were never meant to be persisted
-          chat.messages = full.messages.filter(m => !m.isWaitingIndicator)
+          // Strip stale waiting indicators (defensive — they shouldn't reach disk
+          // since _serializeChat now filters them, but old DBs may have orphans).
+          // ALSO strip "ghost WaitingIndicator orphans": rows where the SQL schema
+          // dropped is_waiting_indicator/streaming/source_user_message_id (those
+          // columns don't exist), leaving a bare role:'assistant' row with empty
+          // content and no agentId/agentName. Tightly scoped so we don't
+          // accidentally remove legitimate empty assistant rows that are tagged
+          // with agentId/agentName from a real agent run.
+          chat.messages = full.messages.filter(m => {
+            if (m.isWaitingIndicator) return false
+            if (m.role !== 'assistant') return true
+            const noContent = !m.content && (!m.segments || m.segments.length === 0)
+            const noAgentTag = !m.agentId && !m.agentName
+            const noError = !m.errorDetail && !m.isError
+            // Orphan signature: assistant + zero content + no agent attribution + not an error
+            if (noContent && noAgentTag && noError) return false
+            return true
+          })
           for (const msg of chat.messages) {
             if (msg.streaming) {
               msg.streaming = false
@@ -989,15 +1005,23 @@ export const useChatsStore = defineStore('chats', () => {
     if (!chat) return null
     // JSON round-trip strips Vue reactive Proxy wrappers
     const raw = JSON.parse(JSON.stringify(chat))
-    // If messages were never loaded (null), persist without them so we don't
-    // overwrite the existing per-chat file with an empty messages array.
+    // If messages were never loaded (null), strip them so the backend skips
+    // appendMessages (store.js gates on Array.isArray && length > 0) and only
+    // runs saveChatMeta. Returning the meta-only payload — instead of null
+    // like we used to — ensures setChatSettings(permissionMode/workingPath/
+    // chatAllowList/etc.) reaches disk even before messages are loaded into
+    // memory. The previous "return null" path silently dropped meta updates.
     if (chat.messages === null) {
       delete raw.messages
-      // For an index-only chat (messages not loaded), we shouldn't write the
-      // per-chat file — only the index. Return null to signal that.
-      return null
+      return raw
     }
-    raw.messages = _truncateToolOutputs(raw.messages)
+    // Drop transient UI-only rows before persistence. WaitingIndicators are
+    // ephemeral pre-response placeholders; the SQL schema in ChatStore has no
+    // is_waiting_indicator / streaming / source_user_message_id columns, so
+    // they round-trip as bare role:'assistant' rows with empty content. Once
+    // agent_start splices the in-memory copy, the orphan disk row resurfaces
+    // on any reload as a phantom empty bubble. Never persist them.
+    raw.messages = _truncateToolOutputs(raw.messages.filter(m => !m.isWaitingIndicator))
     return raw
   }
 
@@ -1216,10 +1240,25 @@ export const useChatsStore = defineStore('chats', () => {
         msg.streaming = false
         if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt
         msg.timestamp = Date.now()
-        if (!msg.content && !(msg.segments || []).some(s => s.type === 'text' && s.content)) {
-          msg.isError = true
-          msg.content = '_No response_'
-          msg.segments = [{ type: 'text', content: '_No response_' }]
+        // Same hasActivity contract as handleChunk's agent_end: text, completed tools,
+        // plan, or any non-step segment counts as activity. Empty placeholder gets
+        // removed unless an explicit error was tagged.
+        const hasActivity = !!(msg.content?.trim()) ||
+          (msg.segments || []).some(s => {
+            if (s.type === 'text') return !!s.content?.trim()
+            if (s.type === 'tool') return s.output !== undefined
+            if (s.type === 'agent_step') return false
+            return true
+          })
+        if (!hasActivity) {
+          if (msg.errorDetail) {
+            msg.isError = true
+            msg.content = `Error: ${msg.errorDetail}`
+            msg.segments = [{ type: 'text', content: msg.content }]
+          } else {
+            const rmIdx = chat.messages.indexOf(msg)
+            if (rmIdx !== -1) chat.messages.splice(rmIdx, 1)
+          }
         }
       }
       debouncedPersistChat(chatId)

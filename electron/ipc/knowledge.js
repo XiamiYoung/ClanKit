@@ -20,6 +20,7 @@ const fh = require('../lib/fileHelpers')
 const localEmbedding = require('../lib/localEmbedding')
 const localVectorStore = require('../lib/localVectorStore')
 const hybridSearch = require('../lib/hybridSearch')
+const { getInstance: getAgentStore } = require('../agent/AgentStore')
 
 // Cache of MiniSearch fulltext indexes keyed by kbId
 const _fulltextCache = new Map()
@@ -325,6 +326,11 @@ function register() {
       if (saved.knowledgeBases) {
         delete saved.knowledgeBases[kbId]
         ds.writeJSON(p().KNOWLEDGE_FILE, saved)
+      }
+
+      if (kbId) {
+        try { getAgentStore(p().DATA_DIR).pruneReferences('knowledge', kbId) }
+        catch (err) { logger.error('knowledge:delete-knowledge-base prune failed', err.message) }
       }
 
       return { success: true }

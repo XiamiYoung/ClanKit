@@ -113,6 +113,13 @@ export const useKnowledgeStore = defineStore('knowledge', () => {
         }
         await loadKnowledgeBases()
         await loadConfig()
+        // Main-process IPC prunes agent references in SQLite; refresh renderer.
+        try {
+          const { useAgentsStore } = await import('./agents')
+          await useAgentsStore().loadAgents()
+        } catch (err) {
+          console.error('[knowledge] post-delete agents refresh failed:', err)
+        }
         return true
       }
       return false

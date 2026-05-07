@@ -46,11 +46,9 @@ class OpenAIClient {
     return c.openaiModel || c.openai?.model || 'gpt-4o'
   }
 
-  /** OpenAI endpoints don't support Opus 4.6 compaction */
-  isOpus46() { return false }
-
-  /** OpenAI endpoints don't support Anthropic thinking blocks */
-  supportsThinking() { return false }
+  // OpenAI-compat endpoints don't use Anthropic-style thinking blocks
+  resolveThinkingConfig() { return null }
+  markThinkingDowngrade() { return null }
 
   /** Get the raw OpenAI SDK client */
   getClient() { return this.client }

@@ -1,10 +1,65 @@
 # ClanKit
 
+**English** | [简体中文](./README.zh-CN.md)
+
 A local-first, multi-LLM desktop workspace for chat, agent collaboration, and tool orchestration.
 
 Built with Electron and Vue 3. Runs Anthropic, OpenRouter, OpenAI-compatible, DeepSeek, Google, and any custom provider you wire up — side by side, in the same app.
 
-> **Status:** Early-stage (v0.0.3). Expect rough edges. Issues and PRs welcome.
+---
+
+## Demo
+
+[![ClanKit demo](https://img.youtube.com/vi/CFOSY6yZ54o/maxresdefault.jpg)](https://youtu.be/CFOSY6yZ54o)
+
+- ▶ English (YouTube): <https://youtu.be/CFOSY6yZ54o>
+- ▶ 中文 (Bilibili): <https://www.bilibili.com/video/BV1cndPBDE6r/>
+
+---
+
+## Features
+
+### Meet your agents. Shape every detail.
+
+![Agent roster](./docs/screenshots/en/agents_en.png)
+
+A roster on one side, full anatomy on the other — every part configurable. Browse every persona at a glance: pinned favourites, recents, and the full library. Switch in one tap.
+
+### Configure every part — visually.
+
+![Agent body view](./docs/screenshots/en/agent_custom_creation_en.png)
+
+Brain · model · voice · memory · skills · tools · MCP · RAG. Click any body part on the anatomy view to jump straight to its config — no buried menus.
+
+### Understand the person, not just the words.
+
+![Persona analysis](./docs/screenshots/en/analysis_2.png)
+
+Once you import a digital twin, persona analysis surfaces values, decision style, emotional tells, recurring concerns, even relationship dynamics. Every claim links back to evidence in the original messages.
+
+### Role-play.
+
+![Role-play](./docs/screenshots/en/roleplay2_en.png)
+
+Drop fictional personas into your own life — and watch the chaos. Mix invented characters with your own user profile, then let them gossip across timelines. Pure absurd-comedy fuel: script ideas, role-play sessions, party games at 2am.
+
+### Pick up the phone and talk to your agent.
+
+![Voice call](./docs/screenshots/en/audio_call_en.png)
+
+Real-time voice for hands-free work. Brainstorm on a walk, dictate a report, run a code review while cooking. Local STT, LLM streaming, on-device synthesis. Push-to-talk or continuous live call mode, group voice with multiple agents on one call, and a searchable transcript that stays after the call.
+
+### One Markdown, two homes that stay in sync.
+
+![Obsidian sync](./docs/screenshots/en/aidoc_obsidian_en.png)
+
+Author drafts inside ClanKit, or open your existing Obsidian vault — same files, same folders, two-way sync. Edit on either side and the other catches up.
+
+### Focus mode — just you, the page, and an agent on call.
+
+![Focus mode](./docs/screenshots/en/focus_mode_en.png)
+
+Hide the navigation, the chat, every panel — the writing surface takes over the screen, and any agent stays one keystroke away.
 
 ---
 
@@ -32,12 +87,6 @@ Built with Electron and Vue 3. Runs Anthropic, OpenRouter, OpenAI-compatible, De
 - Windows and macOS installers
 - Local-first — your data stays on disk, nothing phones home unless you configure it
 - Built-in i18n (English / Chinese)
-
----
-
-## Screenshots
-
-> _Screenshots coming soon._
 
 ---
 

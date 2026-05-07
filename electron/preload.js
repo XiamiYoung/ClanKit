@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     saveConfig:     (config) => ipcRenderer.invoke('mcp:save-config', config),
     testConnection: (config) => ipcRenderer.invoke('mcp:test-connection', config),
     getStatus:      ()       => ipcRenderer.invoke('mcp:get-status'),
+    stopServer:     (id)     => ipcRenderer.invoke('mcp:stop-server', id),
   },
 
   // ── HTTP Tools Management ────────────────────────────────────────────────

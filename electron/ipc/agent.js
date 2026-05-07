@@ -89,6 +89,21 @@ const lastContextSnapshots = new Map() // chatId -> snapshot
 const chatLoadedSkills = new Map()     // chatId -> Map(skillId -> content) — persists load_skill results across turns
 const lastExtractedMsgCount = new Map() // chatId -> message count at last extraction
 const pendingMemoryFacts = new Map()    // chatId -> Array of pending fact objects (medium-confidence)
+// Live chat permission state — Map(chatId → { chatMode, chatAllowList }). Refreshed
+// at every agent:send-message IIFE entry from targetChatMeta AND mutated by
+// agent:update-permission-mode. New AgentLoops created mid-turn (collab rounds,
+// sequential-dispatch's later agents) read from here instead of the stale
+// closure-captured targetChatMeta, so a live mode flip propagates to them too.
+const liveChatPermissionState = new Map()
+function _setLivePermState(chatId, chatMode, chatAllowList) {
+  liveChatPermissionState.set(chatId, {
+    chatMode: chatMode || 'inherit',
+    chatAllowList: Array.isArray(chatAllowList) ? chatAllowList : [],
+  })
+}
+function _getLivePermState(chatId, fallback) {
+  return liveChatPermissionState.get(chatId) || fallback
+}
 
 // ── Loop registry API for non-IPC AgentLoop entry points (IM bridge, future
 // task scheduler, etc). Iron-law three-piece: register before run, unregister
@@ -1230,6 +1245,10 @@ ipcMain.handle('agent:permission-response', (event, chatId, { blockId, decision,
 })
 
 ipcMain.handle('agent:update-permission-mode', (event, chatId, { chatMode, chatAllowList }) => {
+  // Persist the live mode so new AgentLoops created later in this turn
+  // (collab rounds, sequential dispatch later agents) inherit it instead of
+  // the stale closure-captured targetChatMeta from IPC entry.
+  _setLivePermState(chatId, chatMode, chatAllowList)
   // Update all active loops for this chat (exact + group agent loops)
   let updated = false
   const allAutoResolved = []
@@ -1646,10 +1665,14 @@ ipcMain.handle('agent:doc-run', async (event, {
     loopConfig.skillsPath   = fullCfg.skillsPath   || ''
     loopConfig.DoCPath      = fullCfg.DoCPath      || ''
     loopConfig.memoryDir    = ds.paths().MEMORY_DIR
-    // Doc editing is a narrow-scope task — drop tools that are irrelevant here
-    // and that could surprise users if accidentally invoked (memory
-    // mutates long-term agent state; newsfeed is unrelated).
-    loopConfig.excludedToolNames = ['update_memory', 'read_memory', 'fetch_newsfeed']
+    // Doc editing is a narrow-scope task — drop tools that are irrelevant here.
+    // Keep `update_memory` available so the productivity-mode "Tool Lesson
+    // Capture" rule can record reproducible tool-call mistakes (e.g. malformed
+    // <replacement> targets) and avoid them in future doc-edit sessions.
+    // `read_memory` stays excluded: memory is already auto-injected into the
+    // system prompt by systemPromptBuilder, so on-demand search is redundant
+    // for this narrow scope. `fetch_newsfeed` is unrelated to doc editing.
+    loopConfig.excludedToolNames = ['read_memory', 'fetch_newsfeed']
     _injectCachedModelMaxOutputTokens(loopConfig)
 
     // AI Doc embedded chat is always task-driven (read/edit files, fetch external
@@ -2630,6 +2653,14 @@ ipcMain.handle('agent:send-message', async (event, {
   async function runGroupRound(runList, roundMessages, attachments, trackMessages, fullCfg, allLoadedSkills) {
     const baseMessages = [...roundMessages]
 
+    // Bail before emitting any agent_start if the user pressed stop. Without
+    // this, every collab/sequential round after a stop creates a fresh
+    // placeholder bubble that gets killed almost immediately — visible to the
+    // user as ghost / empty bubbles.
+    if (isChatCancelled(chatId)) {
+      return runList.map(run => ({ agentId: run.agentId, agentName: run.agentName, success: false, error: 'Cancelled', text: '' }))
+    }
+
     for (const run of runList) {
       if (!event.sender.isDestroyed()) {
         event.sender.send('agent:chunk', { chatId, chunk: { type: 'agent_start', agentId: run.agentId, agentName: run.agentName } })
@@ -2640,8 +2671,12 @@ ipcMain.handle('agent:send-message', async (event, {
       const loopKey = `${chatId}:${run.agentId}`
       const loopConfig = _normalizeLoopConfig({ ...run.config, agentArtifactsDir: ds.paths().AGENT_ARTIFACTS_DIR }, run.agentId)
       loopConfig.sandboxConfig = fullCfg.sandboxConfig || { defaultMode: 'sandbox', sandboxAllowList: [] }
-      loopConfig.chatPermissionMode = targetChatMeta.permissionMode || 'inherit'
-      loopConfig.chatAllowList = targetChatMeta.chatAllowList || []
+      // Read from live state (updated by agent:update-permission-mode) so a
+      // mid-turn permission flip propagates to NEW loops, not just the ones
+      // already running.
+      const _liveCM = _getLivePermState(chatId, { chatMode: targetChatMeta.permissionMode, chatAllowList: targetChatMeta.chatAllowList })
+      loopConfig.chatPermissionMode = _liveCM.chatMode || 'inherit'
+      loopConfig.chatAllowList = _liveCM.chatAllowList || []
       loopConfig.chatDangerOverrides = targetChatMeta.chatDangerOverrides || []
       loopConfig.maxOutputTokens = targetChatMeta.maxOutputTokens || fullCfg.maxOutputTokens || null
       loopConfig._maxOutputTokensExplicit = !!targetChatMeta.maxOutputTokens
@@ -2828,15 +2863,11 @@ ipcMain.handle('agent:send-message', async (event, {
 
   // ── Collaboration loop ─────────────────────────────────────────────────────
   async function triggerCollaboration(trackMessages, groupAgents, groupIdsArr, allData, fullCfg, iterationCount, prevMsgCount, allLoadedSkills) {
+    if (isChatCancelled(chatId)) return
     const MAX_ITERATIONS = Math.min(100, Math.max(1, targetChatMeta.maxAgentRounds ?? 10))
 
     const newMessages = trackMessages.slice(prevMsgCount)
       .filter(m => m.role === 'assistant' && m.agentId && groupIdsArr.includes(m.agentId) && m.content)
-
-    logger.agent(`[collab-debug] round=${iterationCount} prevMsgCount=${prevMsgCount} trackMessages.length=${trackMessages.length} newMessages.length=${newMessages.length}`, { chatId })
-    for (const nm of newMessages) {
-      logger.agent(`[collab-debug]   newMsg agentId=${nm.agentId} contentLen=${(nm.content || '').length}`, { chatId })
-    }
 
     const nextRespondingSet = new Set()
     for (let msgIdx = 0; msgIdx < newMessages.length; msgIdx++) {
@@ -2855,12 +2886,12 @@ ipcMain.handle('agent:send-message', async (event, {
       }
 
       for (const id of addressees) {
-        if (iterationCount === 0) {
-          nextRespondingSet.add(id)
-        } else {
-          const alreadyRepliedAfter = newMessages.slice(msgIdx + 1).some(m => m.agentId === id)
-          if (!alreadyRepliedAfter) nextRespondingSet.add(id)
-        }
+        // Skip if this addressee already replied AFTER the current message —
+        // covers both collab iter > 0 and iter 0 (where initial sequential
+        // dispatch may have already run multiple addressees, and re-firing
+        // them via collab causes the "double-reply" symptom).
+        const alreadyRepliedAfter = newMessages.slice(msgIdx + 1).some(m => m.agentId === id)
+        if (!alreadyRepliedAfter) nextRespondingSet.add(id)
       }
     }
     if (nextRespondingSet.size === 0) return
@@ -2890,7 +2921,7 @@ ipcMain.handle('agent:send-message', async (event, {
         if (iterationCount >= MAX_ITERATIONS - 2) {
           guidance = [`[WRAP-UP — Round ${iterationCount + 1}/${MAX_ITERATIONS}]`, `Original request: "${originalPrompt}"`, `You are approaching the collaboration limit.`, `Provide your FINAL answer or summary now.`, `Only @mention another agent if there is a critical unresolved blocker — otherwise END without @mention.`, `If you are reviewing work and there are no concrete remaining issues, explicitly say it is approved / complete and STOP without any @mention.`, `Do NOT introduce new topics or expand scope.`].join('\n')
         } else {
-          guidance = [`[CHECKPOINT — Round ${iterationCount + 1}/${MAX_ITERATIONS}]`, `Original request: "${originalPrompt}"`, `Evaluate: is the original task complete?`, `If YES — provide final summary, end WITHOUT @mention.`, `If you are reviewing work and there are no concrete remaining issues, explicitly say it is approved / complete and STOP without any @mention.`, `If something specific remains — state what, @mention the relevant agent for ONLY that item.`, `Do NOT expand scope beyond the original request.`, `Do NOT keep the loop alive with polite follow-ups, generic questions, or "anything else" style prompts.`].join('\n')
+          guidance = [`[CHECKPOINT — Round ${iterationCount + 1}/${MAX_ITERATIONS}]`, `Original request: "${originalPrompt}"`, `Evaluate: is the original task complete?`, `If YES — provide final summary, end WITHOUT @mention.`, `If you are reviewing work and there are no concrete remaining issues, explicitly say it is approved / complete and STOP without any @mention.`, `If something specific remains, OR you are sending the work back to the previous speaker for rework / a follow-up — state what and @mention the relevant agent for ONLY that item. Phrases like "go fix it", "tell me when done", "let me know" without an explicit @mention silently end the conversation even though you expect a reply.`, `Do NOT expand scope beyond the original request.`, `Do NOT keep the loop alive with polite follow-ups, generic questions, or "anything else" style prompts.`].join('\n')
         }
         seqApiMessages[seqApiMessages.length - 1].content += `\n\n${guidance}`
       }
@@ -2900,7 +2931,7 @@ ipcMain.handle('agent:send-message', async (event, {
         const lastMsg = seqApiMessages[seqApiMessages.length - 1]
         seqApiMessages.push({
           role: 'user',
-          content: `${lastMsg.content}\n\n[${agent.name}, you have been addressed above. Write ONLY your own single reply — do NOT write dialogue or lines for any other participant. If you genuinely need another participant's input, end your reply with ${otherNames} to pass the turn. If the topic is concluded, you are giving a final answer, or there is nothing more to discuss, simply end your reply without any @mention — the conversation will close naturally. If you are reviewing work and there are no concrete remaining issues, say it is approved / complete and end without any @mention. Do NOT keep the loop going with generic follow-ups.]`
+          content: `${lastMsg.content}\n\n[${agent.name}, you have been addressed above. Write ONLY your own single reply — do NOT write dialogue or lines for any other participant. If you genuinely need another participant's reply — asking a question, sending work back for rework, or any "let me know when done" / "fix this and tell me" intent — you MUST end your turn with ${otherNames} to pass the turn explicitly. Without an @mention the conversation closes silently, even if your text implies someone should respond ("叫我" / "tell me" / "let me know" alone is NOT enough — the system only routes on explicit @). If the topic is genuinely concluded, you are giving a final answer, or there is nothing more to discuss, simply end your reply without any @mention — the conversation will close naturally. If you are reviewing work and there are no concrete remaining issues, say it is approved / complete and end without any @mention. Do NOT keep the loop going with generic follow-ups.]`
         })
       }
 
@@ -2917,6 +2948,14 @@ ipcMain.handle('agent:send-message', async (event, {
 
   // ── Fire async — return immediately to Vue ─────────────────────────────────
   ;(async () => {
+    // Fresh send clears any stale cancellation flag from a prior aborted turn.
+    // Without this, isChatCancelled stays true (auto-clears after 30s) and the
+    // collaboration loop / sequential dispatch would refuse to run new agents.
+    clearChatCancelled(chatId)
+    // Seed live permission state from the IPC payload. agent:update-permission-mode
+    // mutates this map mid-turn, so any AgentLoop built during this turn reads
+    // the latest mode (not the stale targetChatMeta closure).
+    _setLivePermState(chatId, targetChatMeta?.permissionMode, targetChatMeta?.chatAllowList)
     // Early bail: user may have pressed stop before this IIFE even starts
     if (pendingStops.has(chatId)) {
       pendingStops.delete(chatId)
@@ -3138,7 +3177,22 @@ ipcMain.handle('agent:send-message', async (event, {
         const firstRoundIds = new Set(firstRoundRuns.map(r => r.agentId))
         const remainingRuns = agentRuns.filter(r => !firstRoundIds.has(r.agentId))
         for (const run of remainingRuns) {
+          if (isChatCancelled(chatId)) break
           const seqApiMessages = buildGroupApiMessages(run.agentId, trackMessages, groupAgents, allData.agents, allLoadedSkills)
+          // Inject the same handoff nudge used by the collaboration loop. Without
+          // this, the second sequential agent (e.g. the reviewer) sees the prior
+          // agent's reply but no instruction that "feedback / rework requires
+          // explicit @mention" — they self-impose a "wait quietly" rule and the
+          // chain dies silently.
+          const seqAgent = groupAgents.find(a => a.id === run.agentId)
+          if (seqAgent && seqApiMessages.length > 0 && seqApiMessages[seqApiMessages.length - 1].role === 'assistant') {
+            const otherNames = groupAgents.filter(a => a.id !== run.agentId).map(a => `@${a.name}`).join(' or ')
+            const lastMsg = seqApiMessages[seqApiMessages.length - 1]
+            seqApiMessages.push({
+              role: 'user',
+              content: `${lastMsg.content}\n\n[${seqAgent.name}, you have been addressed above. Write ONLY your own single reply — do NOT write dialogue or lines for any other participant. If you genuinely need another participant's reply — asking a question, sending work back for rework, or any "let me know when done" / "fix this and tell me" intent — you MUST end your turn with ${otherNames} to pass the turn explicitly. Without an @mention the conversation closes silently, even if your text implies someone should respond ("叫我" / "tell me" / "let me know" alone is NOT enough — the system only routes on explicit @). If the topic is genuinely concluded, you are giving a final answer, or there is nothing more to discuss, simply end your reply without any @mention — the conversation will close naturally. If you are reviewing work and there are no concrete remaining issues, say it is approved / complete and end without any @mention. Do NOT keep the loop going with generic follow-ups.]`
+            })
+          }
           await runGroupRound([run], seqApiMessages, [], trackMessages, fullCfg, allLoadedSkills)
         }
       }

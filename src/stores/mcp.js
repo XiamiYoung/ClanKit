@@ -83,24 +83,29 @@ export const useMcpStore = defineStore('mcp', () => {
   }
 
   /**
-   * Delete a server by id. Persists to disk.
+   * Delete a server by id. Persists to disk. The main-process IPC handler
+   * authoritatively prunes stale references from agents in SQLite; we then
+   * refresh the renderer agents store so the UI reflects the cleanup.
    */
   async function deleteServer(id) {
     servers.value = servers.value.filter(s => s.id !== id)
     await persist()
-    // Remove stale references from all agents
     try {
       const { useAgentsStore } = await import('./agents')
-      const agentsStore = useAgentsStore()
-      let affected = 0
-      for (const agent of agentsStore.agents) {
-        if (agent.requiredMcpServerIds?.includes(id)) {
-          agent.requiredMcpServerIds = agent.requiredMcpServerIds.filter(sid => sid !== id)
-          affected++
-        }
-      }
-      if (affected > 0) await agentsStore.persist()
-    } catch {}
+      await useAgentsStore().loadAgents()
+    } catch (err) {
+      console.error('[mcp] post-delete agents refresh failed:', err)
+    }
+  }
+
+  /**
+   * Stop a running MCP server subprocess. Refreshes runningStatus immediately
+   * so the UI doesn't need to wait for the next 5s poll tick.
+   */
+  async function stopServer(id) {
+    const result = await window.electronAPI.mcp.stopServer(id)
+    await loadStatus()
+    return result
   }
 
   /**
@@ -126,6 +131,6 @@ export const useMcpStore = defineStore('mcp', () => {
 
   return {
     servers, runningStatus,
-    loadServers, loadStatus, saveServer, deleteServer, testConnection,
+    loadServers, loadStatus, saveServer, deleteServer, stopServer, testConnection,
   }
 })

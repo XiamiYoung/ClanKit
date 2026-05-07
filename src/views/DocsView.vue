@@ -835,6 +835,12 @@ import hljs from 'highlight.js'
 import DOMPurify from 'dompurify'
 import TurndownService from 'turndown'
 import { gfm } from 'turndown-plugin-gfm'
+import mermaid from 'mermaid'
+import 'katex/dist/katex.min.css'
+import markedKatex from 'marked-katex-extension'
+import markedFootnote from 'marked-footnote'
+
+mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose', fontFamily: 'Inter, sans-serif' })
 import { useObsidianStore } from '../stores/obsidian'
 import { useAgentsStore, BUILTIN_DOC_EDITOR_ID } from '../stores/agents'
 import { useConfigStore } from '../stores/config'
@@ -2369,15 +2375,139 @@ renderer.heading = function (text, level) {
   const id = slugify(text.replace(/<[^>]+>/g, ''))
   return `<h${level} id="${id}">${text}</h${level}>\n`
 }
+// Code renderer: intercept ```mermaid``` blocks; otherwise delegate to highlight.js when language is known.
+renderer.code = function (code, infostring) {
+  const lang = (infostring || '').trim().split(/\s+/)[0]
+  if (lang === 'mermaid') {
+    return `<pre class="mermaid">${_escapeHtml(code)}</pre>`
+  }
+  if (lang && hljs.getLanguage(lang)) {
+    try {
+      const out = hljs.highlight(code, { language: lang }).value
+      return `<pre><code class="hljs language-${lang}">${out}</code></pre>`
+    } catch {}
+  }
+  return `<pre><code>${_escapeHtml(code)}</code></pre>`
+}
 marked.use({ gfm: true, breaks: true, renderer })
+marked.use(markedKatex({ throwOnError: false, nonStandard: true }))
+marked.use(markedFootnote())
+
+function _escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+function _escapeAttr(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+// Strip leading YAML frontmatter and parse simple key:value lines.
+// Returns { meta: {key: value|array} | null, body: stripped markdown }.
+function _extractFrontmatter(md) {
+  const m = md.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/)
+  if (!m) return { meta: null, body: md }
+  const meta = {}
+  for (const line of m[1].split(/\r?\n/)) {
+    const km = line.match(/^([a-zA-Z0-9_-]+)\s*:\s*(.*)$/)
+    if (!km) continue
+    let v = km[2].trim()
+    if (/^\[.*\]$/.test(v)) {
+      v = v.slice(1, -1).split(',').map(s => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean)
+    } else if (/^["'].*["']$/.test(v)) {
+      v = v.slice(1, -1)
+    }
+    meta[km[1]] = v
+  }
+  return { meta, body: md.slice(m[0].length) }
+}
+
+function _renderProperties(meta) {
+  if (!meta || Object.keys(meta).length === 0) return ''
+  const rows = Object.entries(meta).map(([k, v]) => {
+    let val
+    if (Array.isArray(v)) {
+      val = v.map(x => `<span class="prop-tag">${_escapeHtml(String(x))}</span>`).join('')
+    } else {
+      val = `<span class="prop-value">${_escapeHtml(String(v))}</span>`
+    }
+    return `<div class="prop-row"><div class="prop-key">${_escapeHtml(k)}</div><div class="prop-val">${val}</div></div>`
+  }).join('')
+  return `<div class="doc-properties">${rows}</div>\n\n`
+}
+
+// Convert Obsidian-only inline syntax: [[wikilinks]] and ==highlights==.
+// Skips content inside inline code spans (`...`).
+function _transformInline(text) {
+  // Split on inline code so we don't transform inside backticks.
+  const parts = text.split(/(`[^`\n]*`)/)
+  return parts.map((part, i) => {
+    if (i % 2 === 1) return part // odd parts = code spans, leave alone
+    let s = part
+    // [[Page#section|alias]] / [[Page|alias]] / [[Page]]
+    s = s.replace(/\[\[([^\]\n|#^]+)(?:#([^\]\n|]*))?(?:\^[^\]\n|]*)?(?:\|([^\]\n]+))?\]\]/g,
+      (_, target, section, alias) => {
+        const t = target.trim()
+        const display = (alias || target).trim()
+        const sec = section ? ` data-section="${_escapeAttr(section.trim())}"` : ''
+        return `<a class="wikilink" data-target="${_escapeAttr(t)}"${sec} href="#">${_escapeHtml(display)}</a>`
+      })
+    // ==highlight==
+    s = s.replace(/==([^=\n]+)==/g, '<mark>$1</mark>')
+    return s
+  }).join('')
+}
+
+// Obsidian callout: > [!type] Title \n > body...
+// Recognized types: note tip info abstract todo success warning failure danger error question example quote cite bug.
+// Emits pre-rendered HTML so marked passes through unchanged.
+function _preprocessObsidian(md) {
+  const lines = md.split(/\r?\n/)
+  const out = []
+  let inFence = false
+  let i = 0
+  while (i < lines.length) {
+    const line = lines[i]
+    if (/^```/.test(line) || /^~~~/.test(line)) {
+      inFence = !inFence
+      out.push(line); i++; continue
+    }
+    if (inFence) { out.push(line); i++; continue }
+    const calloutMatch = line.match(/^>\s*\[!([\w-]+)\][+-]?\s*(.*)$/)
+    if (calloutMatch) {
+      const type = calloutMatch[1].toLowerCase()
+      const rawTitle = calloutMatch[2].trim()
+      const title = rawTitle || (type.charAt(0).toUpperCase() + type.slice(1))
+      const bodyLines = []
+      i++
+      while (i < lines.length && /^>/.test(lines[i])) {
+        bodyLines.push(lines[i].replace(/^>\s?/, ''))
+        i++
+      }
+      const innerMd = _transformInline(bodyLines.join('\n'))
+      const innerHtml = marked.parse(innerMd)
+      out.push(`<div class="callout callout-${_escapeAttr(type)}" data-callout="${_escapeAttr(type)}">`)
+      out.push(`<div class="callout-title"><span class="callout-icon"></span>${_transformInline(_escapeHtml(title))}</div>`)
+      out.push(`<div class="callout-body">${innerHtml}</div>`)
+      out.push(`</div>`)
+      out.push('')
+      continue
+    }
+    out.push(_transformInline(line))
+    i++
+  }
+  return out.join('\n')
+}
 
 function renderToHtml(md) {
   if (!md) return ''
   try {
-    const raw = marked.parse(md)
+    const { meta, body } = _extractFrontmatter(md)
+    const propsHtml = _renderProperties(meta)
+    const processed = _preprocessObsidian(body)
+    const raw = propsHtml + marked.parse(processed)
     return DOMPurify.sanitize(raw, {
       ALLOW_UNKNOWN_PROTOCOLS: true,
-      ADD_ATTR: ['data-relpath', 'data-abspath'],
+      USE_PROFILES: { html: true, svg: true, svgFilters: true, mathMl: true },
+      ADD_ATTR: ['data-relpath', 'data-abspath', 'data-target', 'data-section', 'data-callout', 'style'],
     })
   } catch { return '' }
 }
@@ -2396,6 +2526,21 @@ async function refreshFormattedHtml() {
     formattedEl.value.insertAdjacentHTML('afterbegin', safeHtml) // re-insert DOMPurify-sanitized HTML
   }
   await loadLocalImages()
+  await renderMermaidBlocks()
+}
+
+// Render any <pre class="mermaid"> blocks emitted by the code renderer.
+// mermaid.run() rewrites each node's innerHTML with the rendered SVG.
+async function renderMermaidBlocks() {
+  if (!formattedEl.value) return
+  const nodes = formattedEl.value.querySelectorAll('pre.mermaid:not([data-processed="true"])')
+  if (nodes.length === 0) return
+  try {
+    await mermaid.run({ nodes: Array.from(nodes) })
+  } catch (err) {
+    // mermaid attaches its own error markup to failed nodes; nothing to do here
+    console.warn('[mermaid] render failed', err)
+  }
 }
 
 // Scan the formatted view for local images and load them as data: URLs via IPC
@@ -2689,6 +2834,26 @@ function showLinkError(msg) {
   linkErrorTimer = setTimeout(() => { linkError.value = '' }, 6000)
 }
 
+// Resolve an Obsidian wikilink target to a tree node by basename (case-insensitive).
+// Obsidian's default behavior: match the file whose basename (no .md) equals the target.
+function _findVaultFileByName(nodes, target) {
+  if (!Array.isArray(nodes)) return null
+  const norm = String(target).toLowerCase().trim()
+  // BFS so siblings are checked before nested directories — avoids unrelated deep matches
+  const queue = [...nodes]
+  while (queue.length) {
+    const n = queue.shift()
+    if (!n) continue
+    if (n.type === 'file') {
+      const base = (n.name || '').replace(/\.md$/i, '').toLowerCase()
+      if (base === norm) return n
+    } else if (n.children) {
+      queue.push(...n.children)
+    }
+  }
+  return null
+}
+
 async function handlePreviewClick(e) {
   // Walk up from click target to find an <a> tag
   let el = e.target
@@ -2696,7 +2861,34 @@ async function handlePreviewClick(e) {
     if (el === e.currentTarget) return // no link found, do nothing
     el = el.parentElement
   }
-  if (!el || !el.href) return
+  if (!el) return
+
+  // Wikilink (Obsidian): resolve by basename match against the vault tree.
+  if (el.classList.contains('wikilink')) {
+    e.preventDefault()
+    e.stopPropagation()
+    const target = el.dataset.target
+    const section = el.dataset.section
+    if (!target) return
+    const file = _findVaultFileByName(store.fileTree, target)
+    if (file) {
+      try {
+        await store.openFile(file.path, file.name)
+        if (section) {
+          await nextTick()
+          const t = document.getElementById(slugify(section))
+          if (t) t.scrollIntoView({ behavior: 'smooth' })
+        }
+      } catch (err) {
+        showLinkError(`Could not open note: ${target}`)
+      }
+    } else {
+      showLinkError(`Note not found in vault: ${target}`)
+    }
+    return
+  }
+
+  if (!el.href) return
 
   e.preventDefault()
   e.stopPropagation()
@@ -3466,10 +3658,146 @@ defineExpose({ docTreeCollapsed })
 .prose-obsidian a { color: #007AFF; text-decoration: none; }
 .prose-obsidian a:hover { text-decoration: underline; }
 .prose-obsidian hr { border: none; border-top: 1px solid #E5E5EA; margin: 24px 0; }
-.prose-obsidian table { border-collapse: collapse; margin: 0 0 16px; width: 100%; }
-.prose-obsidian th, .prose-obsidian td { border: 1px solid #E5E5EA; padding: 8px 12px; text-align: left; }
+.prose-obsidian table { border-collapse: collapse; margin: 0 0 16px; width: 100%; font-size: var(--fs-body); }
+.prose-obsidian th, .prose-obsidian td { border: 1px solid #E5E5EA; padding: 8px 12px; text-align: left; vertical-align: top; }
 .prose-obsidian th { background: #F9F9F9; font-weight: 600; }
+.prose-obsidian tbody tr:nth-child(even) td { background: #FAFAFA; }
 .prose-obsidian img { max-width: 100%; border-radius: 8px; }
+
+/* ── Properties (YAML frontmatter) ── */
+.prose-obsidian .doc-properties {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  padding: 12px 16px;
+  margin: 0 0 24px;
+  border: 1px solid #E5E5EA;
+  border-radius: 8px;
+  background: #FAFAFA;
+  font-size: var(--fs-secondary);
+}
+.prose-obsidian .doc-properties .prop-row { display: contents; }
+.prose-obsidian .doc-properties .prop-key { color: #6B7280; font-weight: 500; }
+.prose-obsidian .doc-properties .prop-val { color: #1A1A1A; display: flex; flex-wrap: wrap; gap: 4px; }
+.prose-obsidian .doc-properties .prop-tag {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: #E0EBFF;
+  color: #1E40AF;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* ── Wikilinks ── */
+.prose-obsidian a.wikilink {
+  color: #6F4FB8;
+  text-decoration: none;
+  border-bottom: 1px dashed #C7B7E8;
+  cursor: pointer;
+}
+.prose-obsidian a.wikilink:hover { background: #F4EEFB; border-bottom-style: solid; }
+
+/* ── Highlights (==text==) ── */
+.prose-obsidian mark { background: #FEF08A; color: inherit; padding: 0 2px; border-radius: 2px; }
+
+/* ── Mermaid container ── */
+.prose-obsidian pre.mermaid {
+  background: transparent;
+  border: 1px solid #E5E5EA;
+  border-radius: 10px;
+  padding: 16px;
+  margin: 0 0 16px;
+  text-align: center;
+  overflow-x: auto;
+}
+.prose-obsidian pre.mermaid svg { max-width: 100%; height: auto; }
+
+/* ── Callouts (Obsidian-style) ── */
+.prose-obsidian .callout {
+  border: 1px solid;
+  border-left-width: 4px;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 0 0 14px;
+  background: var(--cb-bg, #F2F6FB);
+  border-color: var(--cb-border, #BFD7F0);
+}
+.prose-obsidian .callout-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--cb-fg, #1E40AF);
+  margin-bottom: 4px;
+}
+.prose-obsidian .callout-body { color: #1A1A1A; }
+.prose-obsidian .callout-body > :first-child { margin-top: 0; }
+.prose-obsidian .callout-body > :last-child { margin-bottom: 0; }
+.prose-obsidian .callout-icon {
+  width: 16px; height: 16px; flex-shrink: 0;
+  background-color: currentColor;
+  -webkit-mask-position: center; mask-position: center;
+  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  -webkit-mask-size: contain; mask-size: contain;
+}
+.prose-obsidian .callout-note,
+.prose-obsidian .callout-info { --cb-bg:#EFF4FB; --cb-border:#9EC1EA; --cb-fg:#1D4ED8; }
+.prose-obsidian .callout-tip,
+.prose-obsidian .callout-hint,
+.prose-obsidian .callout-success,
+.prose-obsidian .callout-check,
+.prose-obsidian .callout-done { --cb-bg:#E8F8EE; --cb-border:#86CFA1; --cb-fg:#15803D; }
+.prose-obsidian .callout-warning,
+.prose-obsidian .callout-caution,
+.prose-obsidian .callout-attention { --cb-bg:#FEF7E6; --cb-border:#F5C97D; --cb-fg:#B45309; }
+.prose-obsidian .callout-danger,
+.prose-obsidian .callout-error,
+.prose-obsidian .callout-failure,
+.prose-obsidian .callout-fail,
+.prose-obsidian .callout-bug { --cb-bg:#FEEBEB; --cb-border:#F1A1A1; --cb-fg:#B91C1C; }
+.prose-obsidian .callout-abstract,
+.prose-obsidian .callout-summary,
+.prose-obsidian .callout-tldr { --cb-bg:#EAF6F8; --cb-border:#7DC9D1; --cb-fg:#0E7490; }
+.prose-obsidian .callout-question,
+.prose-obsidian .callout-help,
+.prose-obsidian .callout-faq { --cb-bg:#FFF7E6; --cb-border:#F1C56B; --cb-fg:#9A6700; }
+.prose-obsidian .callout-example { --cb-bg:#F3EAFC; --cb-border:#C4A5E8; --cb-fg:#6B21A8; }
+.prose-obsidian .callout-quote,
+.prose-obsidian .callout-cite { --cb-bg:#F4F4F5; --cb-border:#A1A1AA; --cb-fg:#3F3F46; }
+.prose-obsidian .callout-todo { --cb-bg:#EFF4FB; --cb-border:#9EC1EA; --cb-fg:#1D4ED8; }
+
+/* Callout icons (encoded SVGs as CSS masks). */
+.prose-obsidian .callout-note .callout-icon,
+.prose-obsidian .callout-info .callout-icon,
+.prose-obsidian .callout-todo .callout-icon { -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='12' y1='16' x2='12' y2='12'/><line x1='12' y1='8' x2='12.01' y2='8'/></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='12' y1='16' x2='12' y2='12'/><line x1='12' y1='8' x2='12.01' y2='8'/></svg>"); }
+.prose-obsidian .callout-tip .callout-icon,
+.prose-obsidian .callout-hint .callout-icon,
+.prose-obsidian .callout-success .callout-icon,
+.prose-obsidian .callout-check .callout-icon,
+.prose-obsidian .callout-done .callout-icon { -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>"); }
+.prose-obsidian .callout-warning .callout-icon,
+.prose-obsidian .callout-caution .callout-icon,
+.prose-obsidian .callout-attention .callout-icon { -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><path d='M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'/><line x1='12' y1='9' x2='12' y2='13'/><line x1='12' y1='17' x2='12.01' y2='17'/></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><path d='M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'/><line x1='12' y1='9' x2='12' y2='13'/><line x1='12' y1='17' x2='12.01' y2='17'/></svg>"); }
+.prose-obsidian .callout-danger .callout-icon,
+.prose-obsidian .callout-error .callout-icon,
+.prose-obsidian .callout-failure .callout-icon,
+.prose-obsidian .callout-fail .callout-icon,
+.prose-obsidian .callout-bug .callout-icon { -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='15' y1='9' x2='9' y2='15'/><line x1='9' y1='9' x2='15' y2='15'/></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='15' y1='9' x2='9' y2='15'/><line x1='9' y1='9' x2='15' y2='15'/></svg>"); }
+.prose-obsidian .callout-abstract .callout-icon,
+.prose-obsidian .callout-summary .callout-icon,
+.prose-obsidian .callout-tldr .callout-icon { -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><line x1='8' y1='6' x2='21' y2='6'/><line x1='8' y1='12' x2='21' y2='12'/><line x1='8' y1='18' x2='21' y2='18'/><line x1='3' y1='6' x2='3.01' y2='6'/><line x1='3' y1='12' x2='3.01' y2='12'/><line x1='3' y1='18' x2='3.01' y2='18'/></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><line x1='8' y1='6' x2='21' y2='6'/><line x1='8' y1='12' x2='21' y2='12'/><line x1='8' y1='18' x2='21' y2='18'/><line x1='3' y1='6' x2='3.01' y2='6'/><line x1='3' y1='12' x2='3.01' y2='12'/><line x1='3' y1='18' x2='3.01' y2='18'/></svg>"); }
+.prose-obsidian .callout-question .callout-icon,
+.prose-obsidian .callout-help .callout-icon,
+.prose-obsidian .callout-faq .callout-icon { -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><path d='M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3'/><line x1='12' y1='17' x2='12.01' y2='17'/></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><path d='M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3'/><line x1='12' y1='17' x2='12.01' y2='17'/></svg>"); }
+.prose-obsidian .callout-example .callout-icon { -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><polygon points='12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2'/></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><polygon points='12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2'/></svg>"); }
+.prose-obsidian .callout-quote .callout-icon,
+.prose-obsidian .callout-cite .callout-icon { -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'><path d='M9 7H5a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2v2a4 4 0 0 1-4 4v2a6 6 0 0 0 6-6V9a2 2 0 0 0-2-2zm12 0h-4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2v2a4 4 0 0 1-4 4v2a6 6 0 0 0 6-6V9a2 2 0 0 0-2-2z'/></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'><path d='M9 7H5a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2v2a4 4 0 0 1-4 4v2a6 6 0 0 0 6-6V9a2 2 0 0 0-2-2zm12 0h-4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2v2a4 4 0 0 1-4 4v2a6 6 0 0 0 6-6V9a2 2 0 0 0-2-2z'/></svg>"); }
+
+/* ── Footnote refs/section ── */
+.prose-obsidian sup.footnote-ref a { color: #007AFF; text-decoration: none; font-size: 0.78em; }
+.prose-obsidian section.footnotes { margin-top: 32px; padding-top: 16px; border-top: 1px solid #E5E5EA; font-size: var(--fs-secondary); color: #4B5563; }
+.prose-obsidian section.footnotes ol { padding-left: 20px; }
 
 /* ── Context menu ── */
 .notes-ctx-overlay {

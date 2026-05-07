@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { rowToAgent, agentToRow, serializeIds, deserializeIds } from '../AgentStore.js'
+import { rowToAgent, agentToRow, serializeIds, deserializeIds, PRUNE_COLUMN } from '../AgentStore.js'
 
 describe('serializeIds', () => {
   it('converts arrays to JSON strings', () => {
@@ -76,5 +76,18 @@ describe('rowToAgent / agentToRow round-trip', () => {
 
   it('rowToAgent returns null for null input', () => {
     expect(rowToAgent(null)).toBeNull()
+  })
+})
+
+describe('PRUNE_COLUMN map', () => {
+  it('maps each kind to the matching agents-table column', () => {
+    expect(PRUNE_COLUMN.skill).toBe('required_skill_ids')
+    expect(PRUNE_COLUMN.tool).toBe('required_tool_ids')
+    expect(PRUNE_COLUMN.mcp).toBe('required_mcp_server_ids')
+    expect(PRUNE_COLUMN.knowledge).toBe('required_knowledge_base_ids')
+  })
+
+  it('is frozen so callers cannot mutate the kind→column map', () => {
+    expect(Object.isFrozen(PRUNE_COLUMN)).toBe(true)
   })
 })

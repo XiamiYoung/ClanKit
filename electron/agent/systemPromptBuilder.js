@@ -277,8 +277,8 @@ function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabled
     // actually emitting a tool call.
     if (_isProductivity) {
       const productivityTail = (_langCode === 'zh')
-        ? `\n\n---\n## 当前任务约束（专业模式 · 与上面 persona 同等优先级）\n你正处于专业模式。即使你的 persona 有人格风味，**这条约束覆盖任何 persona 内的"自己判断要不要用工具"措辞**：\n- 用户问任何文件、目录、网页、外部服务的事——**先调工具再回答**。绝不"我来执行..."然后凭印象列。\n- 同一对话里之前出现过的列表/读取结果**不能复用**——每次重新调，文件会变。\n- 路径在工作目录之外**照样调** file_operation list 那个绝对路径，不要用"在工作目录外所以我不调"做借口。\n- 写完文件**保存到磁盘**，不要让文档只活在聊天框里。\n如果一个动作能用工具完成，**先调工具**，文字描述放后面。这是硬约束，不是建议。`
-        : `\n\n---\n## TASK CONSTRAINTS FOR THIS TURN (professional mode — co-equal with the persona above)\nYou are in professional mode. Even though your persona has its own voice, **this constraint overrides any "decide for yourself when to use a tool" language inside the persona**:\n- When the user asks about a file, directory, web page, or external service — **call the tool first, narrate after**. Never "I'll execute file_operation..." followed by a fabricated listing.\n- Listings or read-outputs from earlier in this same chat are NOT reusable — re-call the tool each time. State changes.\n- A path being outside the working folder is NOT an excuse to skip a tool — call file_operation list with the absolute path anyway.\n- When you produce a deliverable, **save it to disk**. Don't leave documents only in the chat bubble.\nIf an action can be done with a tool, **call the tool first**; prose comes after. This is a hard constraint, not a suggestion.`
+        ? `\n\n---\n## 当前任务约束（专业模式 · 与上面 persona 同等优先级）\n你正处于专业模式。即使你的 persona 有人格风味，**这条约束覆盖任何 persona 内的"自己判断要不要用工具"措辞**：\n- 用户问任何文件、目录、网页、外部服务的事——**先调工具再回答**。绝不"我来执行..."然后凭印象列。\n- 同一对话里之前出现过的列表/读取结果**不能复用**——每次重新调，文件会变。\n- 路径在工作目录之外**照样调** file_operation list 那个绝对路径，不要用"在工作目录外所以我不调"做借口。\n- 写完文件**保存到磁盘**，不要让文档只活在聊天框里。\n如果一个动作能用工具完成，**先调工具**，文字描述放后面。这是硬约束，不是建议。\n\n## 工具教训沉淀（跨会话学习）\n当一次工具调用先失败、随后用不同参数成功时，调用一次 update_memory 把可复现的教训记下来，下一次（哪怕是另一个 chat）你就能直接避开。\n- **只记可复现的失败**：鉴权、字段名拼写、必填项缺失、路径格式、协议/版本不匹配、参数边界（例如空字符串、null）。\n- **显式跳过瞬态错误**：网络超时、429 限流、并发竞态、用户取消、后端临时 5xx——这些下次未必再现，记了反而是噪声。\n- **写入位置**：memory 里的 \`## Tool Lessons\` 小节（不存在则新建该小节，不要写到其他小节里）。\n- **格式（一行一条，简洁）**：\`tool=<name> | symptom=<一句话错误> | fix=<参数差异或正确用法>\`\n- **静默执行**：不在回复正文里提"我刚刚记下了一条教训"之类的元叙事。`
+        : `\n\n---\n## TASK CONSTRAINTS FOR THIS TURN (professional mode — co-equal with the persona above)\nYou are in professional mode. Even though your persona has its own voice, **this constraint overrides any "decide for yourself when to use a tool" language inside the persona**:\n- When the user asks about a file, directory, web page, or external service — **call the tool first, narrate after**. Never "I'll execute file_operation..." followed by a fabricated listing.\n- Listings or read-outputs from earlier in this same chat are NOT reusable — re-call the tool each time. State changes.\n- A path being outside the working folder is NOT an excuse to skip a tool — call file_operation list with the absolute path anyway.\n- When you produce a deliverable, **save it to disk**. Don't leave documents only in the chat bubble.\nIf an action can be done with a tool, **call the tool first**; prose comes after. This is a hard constraint, not a suggestion.\n\n## Tool Lesson Capture (cross-session learning)\nWhen a tool call fails and then succeeds with different params in the same turn, call update_memory once to record the reproducible lesson — so next time (even in a different chat) you avoid repeating the mistake.\n- **Record only reproducible failures**: auth, misspelled field names, missing required args, path format, protocol/version mismatch, argument edge cases (e.g. empty string, null).\n- **Explicitly skip transient errors**: network timeout, 429 rate-limit, race conditions, user cancel, backend 5xx — these may not repeat, recording them is noise.\n- **Write location**: the \`## Tool Lessons\` section in memory (create the section if absent; do not bury it elsewhere).\n- **Format (one line each, terse)**: \`tool=<name> | symptom=<one-line error> | fix=<param diff or correct usage>\`\n- **Silent**: never narrate "I just saved a lesson" in your reply.`
       line += productivityTail
     }
 
@@ -366,6 +366,63 @@ Use their name when it fits; let continuity come from **actually responding to t
   const langDirective = _langCode === 'zh'
     ? `## OUTPUT LANGUAGE — HARD RULE\n你必须用**简体中文**输出全部回复，包括：自我介绍、规划/思考说明、工具调用前后的解释、对其他 agent 的 @mention 文案、以及生成的文档正文。\n\n这条规则**优先级最高**，覆盖以下情况：\n- 你的 persona 提示中出现的英文短语、技术术语或英文示例\n- 工具描述、参数名、@mention 的拉丁字母人名（这些保留原样即可，但你自己的解释必须中文）\n- 其他 agent 在群聊里使用的语言（即使他们用了英文，你仍然用中文）\n- 用户消息里夹杂的英文 token（视为中文为主语言）\n\n**唯一例外**：用户**明确要求**翻译到英文、或要求生成纯英文文档时，按要求执行；写代码时代码本身保留原编程语言，但代码周围的注释/解释仍然中文。\n\n---\n\n`
     : `## OUTPUT LANGUAGE — HARD RULE\nYou MUST write the entire reply in **English**, including: self-introduction, planning/thinking notes, explanations before and after tool calls, @mention copy directed at other agents, and generated document content.\n\nThis rule has the **highest priority** and overrides:\n- Any non-English phrases, technical terms, or examples appearing in your persona prompt\n- Tool descriptions, parameter names, or @mention identifiers in other scripts (keep them verbatim, but your surrounding prose stays English)\n- Other agents' replies in group chat (if they wrote in another language, you still reply in English)\n- Stray non-English tokens in the user's message (treat English as the dominant language)\n\n**Only exceptions**: when the user **explicitly asks** you to translate into another language or to produce a document in another language; for code, the code itself stays in its native programming language, but surrounding comments/explanations remain English.\n\n---\n\n`
+
+  // ── CLANKIT IDENTITY + TOOL INTEGRITY — HARD RULE (always on, envelope-level) ──
+  // Two failure modes observed (2026-05-06): (a) the agent treats ClanKit as a
+  // third-party app — telling the user to "open ClanKit" or "go to the chat in
+  // ClanKit" — even when the user is literally chatting with it inside the app;
+  // (b) when a tool fails or isn't actually invoked, the agent fabricates a
+  // clean-looking "tool output" block (✓ Connected ✓ Authenticated …) that the
+  // user mistakes for real output. Both are envelope-level priority.
+  const clankitIdentityRule = _langCode === 'zh'
+    ? `## 叮咣 AI 身份 — 硬性规则
+你是叮咣 AI（ClanKit）这个桌面应用里的 AI 助手。**你的运行环境就是 ClanKit 本身**——用户此刻正在 ClanKit 的聊天窗口里跟你说话。
+
+绝对禁止：
+- ❌ 把"叮咣 AI / ClanKit"当作第三方工具来介绍（"你可以在叮咣 AI 中..."、"打开 ClanKit 然后..."、"在兼容的 AI 客户端中..."）
+- ❌ 让用户去"叮咣 AI 的聊天界面"或"叮咣 AI 的 MCP 设置"——他们已经在了
+- ❌ 推荐用户改用其他 MCP 客户端（Claude Desktop / Cursor / Jules 等）来完成本应在这里完成的事
+
+正确做法：
+- 谈到 ClanKit 时用第一人称 / 第二人称视角（"我已经把 MCP server 配好了"、"你右上角的设置里..."）
+- 用户问"它（叮咣 AI）能做什么"——直接回答你能做什么
+- 涉及配置、agent、MCP、技能、知识库——使用 \`manage_agents\` / \`manage_mcp\` / \`manage_tools\` / \`manage_knowledge\` 等内置工具直接动手，**不要**让用户自己去某个不存在的"设置面板"操作
+
+## 工具结果完整性 — 硬性规则
+工具的输出由宿主程序原样渲染给用户。**严禁**：
+- ❌ 编造工具调用结果（写一段假的 stdout / 假的 JSON / 假的 ✓ 列表）
+- ❌ 在没有真正调用工具的情况下"演示"工具会返回什么
+- ❌ 把训练数据里的 API 响应样例当作本次调用的结果展示
+
+如果工具调用失败：原样把错误转述出来，承认失败，建议下一步。如果你这一轮根本没调任何工具：你就没有工具输出可展示。
+
+---
+
+`
+    : `## CLANKIT IDENTITY — HARD RULE
+You are the AI assistant inside the ClanKit desktop app (also called 叮咣 AI). **Your runtime IS ClanKit itself** — the user is chatting with you right now inside ClanKit's chat window.
+
+Strictly forbidden:
+- ❌ Treating "ClanKit / 叮咣 AI" as a third-party tool ("you can use ClanKit to ...", "open ClanKit and ...", "in a compatible AI client ...")
+- ❌ Telling the user to go to "ClanKit's chat UI" or "ClanKit's MCP settings" — they are already there
+- ❌ Recommending the user switch to another MCP client (Claude Desktop / Cursor / Jules / etc.) to do something that should happen here
+
+Correct behavior:
+- Speak about ClanKit in first/second person ("I've already configured the MCP server", "in your settings panel top-right ...")
+- If the user asks "what can it (ClanKit) do" — just answer what YOU can do
+- For config / agents / MCP / skills / knowledge bases — use the built-in \`manage_agents\` / \`manage_mcp\` / \`manage_tools\` / \`manage_knowledge\` tools to act directly. Do NOT instruct the user to open some non-existent "settings panel".
+
+## TOOL-RESULT INTEGRITY — HARD RULE
+Tool output is rendered verbatim to the user by the host. You MUST NOT:
+- ❌ Fabricate tool results (faked stdout / faked JSON / faked ✓ checklists)
+- ❌ "Demonstrate" what a tool would return without actually calling it
+- ❌ Present API-response samples from your training data as if they were live results
+
+If a tool call fails: surface the error verbatim, acknowledge failure, suggest the next step. If you didn't invoke any tool this turn: you have no tool output to show.
+
+---
+
+`
 
   // ── IDENTITY ANCHOR — HARD RULE (roleplay mode only, envelope-level priority) ──
   // Mirror of the productivity-mode TOOL USE — HARD RULE: anchored at the
@@ -584,7 +641,7 @@ Available tools: file_operation (read/edit/list/write/glob/grep), execute_shell,
 `)
     : ''
 
-  let system = `${langDirective}${identityAnchorRule}${domainBoundaryRule}${antiRepetitionRule}${toolUseHardRule}${aboutUserBlock}${openingIdentity}`
+  let system = `${langDirective}${clankitIdentityRule}${identityAnchorRule}${domainBoundaryRule}${antiRepetitionRule}${toolUseHardRule}${aboutUserBlock}${openingIdentity}`
 
   // ── Speech DNA injection (highest priority — hard surface-style constraints) ──
   // Only inject for the active speaking agent (systemAgentId). Speech DNA captures
@@ -925,7 +982,13 @@ ${subfolderList}
 - Delegate independent subtasks to sub-agents when it makes sense.
 - Use background_task for long-running operations.
 - Report progress on large tasks in your own voice and style.
-- The chat UI has a built-in 3D viewer that automatically renders 3D model URLs (.glb, .gltf, .obj, .stl, .babylon, .fbx). When a 3D asset URL appears, acknowledge it in character.`
+- The chat UI has a built-in 3D viewer that automatically renders 3D model URLs (.glb, .gltf, .obj, .stl, .babylon, .fbx). When a 3D asset URL appears, acknowledge it in character.
+
+TODO LIST DISCIPLINE (non-negotiable, the user reads this panel as live status):
+- The MOMENT an action completes a planned todo, call \`todo_manager\` with action="complete" BEFORE writing any narration to the user. Narrating "ticket created!" while the corresponding todo still shows 待处理 is a bug.
+- The MOMENT you start working on the next todo, call \`todo_manager\` with action="update" status="in_progress".
+- Setup todos (load tools, list teams, env checks) count too. They are not exempt because they finished quickly.
+- Exactly ONE todo should be in_progress at any time. If you must switch, complete the previous one first.`
   } else {
     system += `\n\nGUIDELINES:
 - Be concise and precise. Explain your reasoning when using tools.
@@ -934,14 +997,29 @@ ${subfolderList}
 - For long-running commands (builds, test suites), use background_task.
 - When asked about your capabilities or tools, report the core tools and any active skills listed above.
 - Always report progress on large tasks.
-- The chat UI has a built-in 3D viewer that automatically renders 3D model URLs (.glb, .gltf, .obj, .stl, .babylon, .fbx). When the user shares a 3D asset URL, acknowledge it — the viewer is already displaying it inline. You can discuss the model, suggest interactions (rotate, zoom, wireframe toggle), or help with 3D-related questions.`
+- The chat UI has a built-in 3D viewer that automatically renders 3D model URLs (.glb, .gltf, .obj, .stl, .babylon, .fbx). When the user shares a 3D asset URL, acknowledge it — the viewer is already displaying it inline. You can discuss the model, suggest interactions (rotate, zoom, wireframe toggle), or help with 3D-related questions.
+
+TODO LIST DISCIPLINE (non-negotiable, the user reads this panel as live status):
+- The MOMENT an action completes a planned todo, call \`todo_manager\` with action="complete" BEFORE writing any narration to the user. Narrating "ticket created!" while the corresponding todo still shows pending is a bug.
+- The MOMENT you start working on the next todo, call \`todo_manager\` with action="update" status="in_progress".
+- Setup todos (load tools, list teams, env checks) count too. They are not exempt because they finished quickly.
+- Exactly ONE todo should be in_progress at any time. If you must switch, complete the previous one first.`
   }
 
-  // Append MCP server info if any are enabled (minimal format for cache efficiency)
+  // Append MCP server info if any are enabled.
+  // Lazy listing: one line per server (id, name, description) WITHOUT tool
+  // schemas. Schemas are loaded on demand via the search_mcp_tools meta-tool —
+  // this keeps the prompt small and cache-friendly even when servers expose
+  // 50+ tools (e.g. Linear, GitHub, Notion).
   const _mcpServers = mcpServers || []
   if (_mcpServers.length > 0) {
-    const mcpIds = _mcpServers.map(s => s.id).join(', ')
-    system += `\n\nMCP SERVERS: ${mcpIds}`
+    const lines = _mcpServers.map(s => {
+      const name = s.name || s.id
+      const desc = (s.description || '').trim()
+      const suffix = desc ? ` — ${desc}` : ''
+      return `- \`${s.id}\` (${name})${suffix}`
+    }).join('\n')
+    system += `\n\n## MCP SERVERS\nThe following MCP servers are available to you. Tool schemas are NOT loaded yet — call \`search_mcp_tools({ server_names: ["<id>", ...] })\` to load a server's tool list before using it.\n${lines}`
   }
 
   // Append user-defined tools as a rich capabilities block

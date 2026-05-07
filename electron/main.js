@@ -651,6 +651,61 @@ app.whenReady().then(async () => {
     logger.warn('Failed to clean up stale run entries:', err.message)
   }
 
+  // ── Sweep stale agent references against live resource sets ───────────────
+  // Self-healing: cleans dead IDs (skill/tool/mcp/knowledge) that may have
+  // been left behind by deletes that happened before the per-delete prune in
+  // *:save-config / delete-* IPCs was wired up, or by any out-of-band edit
+  // to the resource files. Idempotent — when nothing is stale this is just 4
+  // cheap queries returning 0.
+  try {
+    const { getInstance: getAgentStore } = require('./agent/AgentStore')
+    const store = getAgentStore(p().DATA_DIR)
+
+    // MCP: array file → server.id
+    const mcpRaw = readJSON(p().MCP_SERVERS_FILE, [])
+    const mcpLive = Array.isArray(mcpRaw) ? mcpRaw.map(s => s && s.id).filter(Boolean) : []
+    store.pruneAllStale('mcp', mcpLive)
+
+    // Tools: dict file → keys (minus __deletedBuiltins reserved key)
+    const toolsRaw = readJSON(p().TOOLS_FILE, {})
+    const toolsLive = (toolsRaw && typeof toolsRaw === 'object')
+      ? Object.keys(toolsRaw).filter(k => k && k !== '__deletedBuiltins')
+      : []
+    store.pruneAllStale('tool', toolsLive)
+
+    // Knowledge: KNOWLEDGE_FILE.knowledgeBases keyed by kbId
+    const kbRaw = readJSON(p().KNOWLEDGE_FILE, {})
+    const kbLive = (kbRaw && kbRaw.knowledgeBases && typeof kbRaw.knowledgeBases === 'object')
+      ? Object.keys(kbRaw.knowledgeBases)
+      : []
+    store.pruneAllStale('knowledge', kbLive)
+
+    // Skills: directory names under skillsDir (matches scan-dir + builtin seed)
+    const skillsCfg = readJSON(p().CONFIG_FILE, {})
+    let skillsDir = (skillsCfg.skillsPath || '').trim()
+    if (skillsDir.startsWith('~/') || skillsDir === '~') {
+      skillsDir = path.join(require('os').homedir(), skillsDir.slice(1))
+    }
+    if (!skillsDir) skillsDir = path.join(p().DATA_DIR, 'skills')
+    let skillsLive = []
+    let skillsDirReadable = false
+    try {
+      skillsLive = require('fs').readdirSync(skillsDir, { withFileTypes: true })
+        .filter(e => e.isDirectory() && !e.name.startsWith('.'))
+        .map(e => e.name)
+      skillsDirReadable = true
+    } catch { /* skillsDir may not exist on a fresh install */ }
+    // Safety: only sweep skills when we successfully read a non-empty dir.
+    // ensureBuiltinSkills above always seeds at least the builtins, so an
+    // empty skillsLive after seeding indicates a broken filesystem read —
+    // skipping is safer than wiping every agent's requiredSkillIds.
+    if (skillsDirReadable && skillsLive.length > 0) {
+      store.pruneAllStale('skill', skillsLive)
+    }
+  } catch (err) {
+    logger.warn('[main] pruneAllStale sweep failed:', err.message)
+  }
+
   // ── Task Scheduler ──────────────────────────────────────────────────────────
   const taskScheduler = require('./task-scheduler')
   taskScheduler.init(() => p().DATA_DIR, () => mainWindow, () => p().SETTINGS_DIR)

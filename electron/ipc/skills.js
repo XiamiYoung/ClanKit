@@ -9,6 +9,7 @@ const { ipcMain, app } = require('electron')
 const { logger } = require('../logger')
 const ds = require('../lib/dataStore')
 const { isBuiltinSkillId } = require('../lib/builtinSkills')
+const { getInstance: getAgentStore } = require('../agent/AgentStore')
 
 /**
  * Normalize path separators on Windows.
@@ -260,6 +261,10 @@ function register() {
         return { error: 'Cannot delete a built-in skill.' }
       }
       await fs.promises.rm(skillPath, { recursive: true, force: true })
+      if (skillId) {
+        try { getAgentStore(ds.paths().DATA_DIR).pruneReferences('skill', skillId) }
+        catch (err) { logger.error('skills:delete-skill prune failed', err.message) }
+      }
       return { success: true }
     } catch (err) {
       return { error: err.message }

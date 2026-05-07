@@ -113,6 +113,15 @@
                   <span class="mcp-runtime-dot"></span>
                   {{ mcpStore.runningStatus[server.id] ? 'Running' : 'Stopped' }}
                 </span>
+                <button
+                  v-if="mcpStore.runningStatus[server.id]"
+                  class="mcp-card-icon-btn mcp-card-stop-btn"
+                  :style="{ background: cardGradient(idx) }"
+                  v-tooltip="t('common.stop')"
+                  @click.stop="stopServerById(server.id)"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+                </button>
               </div>
 
               <!-- Description -->
@@ -150,8 +159,10 @@
                 </button>
                 <button
                   class="mcp-card-icon-btn"
+                  :class="{ 'is-disabled': mcpStore.runningStatus[server.id] }"
                   :style="{ background: cardGradient(idx) }"
-                  v-tooltip="t('common.delete')"
+                  :disabled="mcpStore.runningStatus[server.id]"
+                  v-tooltip="mcpStore.runningStatus[server.id] ? t('mcp.stopBeforeDelete') : t('common.delete')"
                   @click.stop="requestCardDelete(server)"
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
@@ -641,8 +652,19 @@ function confirmDelete() {
 // confirm dialog + executeDelete pipeline picks it up, without opening
 // the edit modal.
 function requestCardDelete(server) {
+  // Hard guard — UI also disables the button when running, but defend against
+  // keyboard-activation / programmatic invocation slipping past the disabled state.
+  if (mcpStore.runningStatus[server.id]) return
   editingServer.value = server
   showConfirmDelete.value = true
+}
+
+async function stopServerById(serverId) {
+  try {
+    await mcpStore.stopServer(serverId)
+  } catch (err) {
+    console.error('[McpView] stopServer failed:', err)
+  }
 }
 
 async function executeDelete() {
@@ -990,6 +1012,28 @@ function cardGradient(idx = 0) {
 }
 .mcp-card-icon-btn:active {
   transform: scale(0.95);
+}
+.mcp-card-icon-btn.is-disabled,
+.mcp-card-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: grayscale(0.6);
+}
+.mcp-card-icon-btn.is-disabled:hover,
+.mcp-card-icon-btn:disabled:hover {
+  transform: none;
+  box-shadow: none;
+}
+/* Stop button sits inside the title row next to the runtime badge —
+   shrink slightly to balance against the badge height. */
+.mcp-card-stop-btn {
+  width: 1.4rem;
+  height: 1.4rem;
+  margin-left: 0.25rem;
+}
+.mcp-card-stop-btn svg {
+  width: 0.7rem;
+  height: 0.7rem;
 }
 
 /* ── Test Result Dialog ────────────────────────────────────────────────────── */

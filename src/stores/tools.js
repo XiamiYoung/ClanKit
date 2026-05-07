@@ -136,19 +136,13 @@ export const useToolsStore = defineStore('tools', () => {
     }
     tools.value = tools.value.filter(t => t.id !== id)
     await persist()
-    // Remove stale references from all agents
+    // Main-process IPC prunes agent references in SQLite; refresh renderer.
     try {
       const { useAgentsStore } = await import('./agents')
-      const agentsStore = useAgentsStore()
-      let affected = 0
-      for (const agent of agentsStore.agents) {
-        if (agent.requiredToolIds?.includes(id)) {
-          agent.requiredToolIds = agent.requiredToolIds.filter(tid => tid !== id)
-          affected++
-        }
-      }
-      if (affected > 0) await agentsStore.persist()
-    } catch {}
+      await useAgentsStore().loadAgents()
+    } catch (err) {
+      console.error('[tools] post-delete agents refresh failed:', err)
+    }
   }
 
   async function persist() {

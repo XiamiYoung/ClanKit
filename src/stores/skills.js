@@ -155,19 +155,13 @@ export const useSkillsStore = defineStore('skills', () => {
     }
     // Clean up installing state
     delete installingSkills.value[skillId]
-    // Remove stale references from all agents
+    // Main-process IPC prunes agent references in SQLite; refresh renderer.
     try {
       const { useAgentsStore } = await import('./agents')
-      const agentsStore = useAgentsStore()
-      let affected = 0
-      for (const agent of agentsStore.agents) {
-        if (agent.requiredSkillIds?.includes(skillId)) {
-          agent.requiredSkillIds = agent.requiredSkillIds.filter(id => id !== skillId)
-          affected++
-        }
-      }
-      if (affected > 0) await agentsStore.persist()
-    } catch {}
+      await useAgentsStore().loadAgents()
+    } catch (err) {
+      console.error('[skills] post-uninstall agents refresh failed:', err)
+    }
   }
 
   return { 

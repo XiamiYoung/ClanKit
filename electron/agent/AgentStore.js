@@ -147,6 +147,15 @@ function agentToRow(a) {
   }
 }
 
+// Maps a resource kind to the JSON-array column on the agents table that
+// holds references to that kind. Used by pruneReferences.
+const PRUNE_COLUMN = Object.freeze({
+  skill:     'required_skill_ids',
+  tool:      'required_tool_ids',
+  mcp:       'required_mcp_server_ids',
+  knowledge: 'required_knowledge_base_ids',
+})
+
 // ── DB layer (skeleton — full CRUD added in Task 1.2) ────────────────────────
 
 class AgentStore {
@@ -268,6 +277,85 @@ class AgentStore {
     if (!id) return
     const db = this._open()
     db.prepare('DELETE FROM agents WHERE id = ?').run(id)
+  }
+
+  /**
+   * Sweep stale references against a known set of live IDs for a given kind.
+   * Any agent reference NOT in `liveIds` is removed. Used on app startup as a
+   * self-healing safety net for IDs that went stale before the per-delete
+   * prune was wired up (or via any out-of-band write to the resource files).
+   *
+   * Returns the count of agent rows mutated.
+   */
+  pruneAllStale(kind, liveIds) {
+    const col = PRUNE_COLUMN[kind]
+    if (!col) return 0
+    const live = new Set((liveIds || []).filter(Boolean).map(String))
+    const db = this._open()
+    const rows = db.prepare(`SELECT id, ${col} AS list FROM agents WHERE ${col} != '[]' AND ${col} IS NOT NULL`).all()
+    if (!rows.length) return 0
+    const update = db.prepare(`UPDATE agents SET ${col} = ?, updated_at = ? WHERE id = ?`)
+    let affected = 0
+    let deadTotal = 0
+    const tx = db.transaction(() => {
+      const now = Date.now()
+      for (const row of rows) {
+        const arr = deserializeIds(row.list)
+        const next = arr.filter(x => live.has(String(x)))
+        const removed = arr.length - next.length
+        if (removed > 0) {
+          update.run(serializeIds(next), now, row.id)
+          affected++
+          deadTotal += removed
+        }
+      }
+    })
+    tx()
+    if (affected > 0) {
+      logger.info(`[AgentStore] pruneAllStale(${kind}): cleaned ${deadTotal} dead ID(s) across ${affected} agent(s)`)
+    }
+    return affected
+  }
+
+  /**
+   * Remove a stale resource ID from the matching `required_*_ids` JSON column
+   * of every agent row that contains it. Single transaction. Returns the count
+   * of rows that were actually mutated.
+   *
+   * `kind` ∈ 'skill' | 'tool' | 'mcp' | 'knowledge'. Unknown kinds and falsy
+   * IDs are no-ops returning 0.
+   *
+   * Authoritative cleanup path called from delete IPC handlers. The renderer
+   * stores no longer attempt their own cross-store cleanup — they just call
+   * loadAgents() afterwards to refresh the in-memory copy from SQLite.
+   */
+  pruneReferences(kind, id) {
+    const col = PRUNE_COLUMN[kind]
+    if (!col || !id) return 0
+    const db = this._open()
+    // LIKE prefilter narrows candidates; JS does the real filter to avoid
+    // false positives from substring matches in adjacent JSON columns.
+    const needle = `%${JSON.stringify(String(id))}%`
+    const rows = db.prepare(`SELECT id, ${col} AS list FROM agents WHERE ${col} LIKE ?`).all(needle)
+    if (!rows.length) return 0
+    const update = db.prepare(`UPDATE agents SET ${col} = ?, updated_at = ? WHERE id = ?`)
+    let affected = 0
+    const tx = db.transaction(() => {
+      const now = Date.now()
+      for (const row of rows) {
+        const arr = deserializeIds(row.list)
+        const next = arr.filter(x => x !== id)
+        if (next.length !== arr.length) {
+          update.run(serializeIds(next), now, row.id)
+          affected++
+        }
+      }
+    })
+    tx()
+    if (affected > 0) {
+      logger.info(`[AgentStore] pruned ${kind}:${id} from ${affected} agent(s)`)
+    }
+    return affected
   }
 
   // ── Categories ─────────────────────────────────────────────────────────
@@ -450,5 +538,6 @@ module.exports = {
   agentToRow,
   serializeIds,
   deserializeIds,
+  PRUNE_COLUMN,
   SCHEMA_VERSION,
 }

@@ -298,12 +298,16 @@ export function useChunkHandler({
               return true
             })
           if (!hasActivity) {
-            if (collaborationCancelled.value) {
-              // User-initiated stop on a truly empty placeholder — silently remove
+            // Empty placeholder — agent produced no text, no completed tools, no plan.
+            // Common causes: user cancelled mid-stream, group sequential-dispatch agent
+            // had nothing to add yet (waiting on a peer), or a collab round fired an
+            // agent that ended without speaking. EXCEPTION: keep the bubble when the
+            // backend tagged an explicit error (errorDetail) so the failure renders.
+            if (msg.errorDetail) {
+              msg.isError = true
+            } else {
               const rmIdx = targetChat.messages.indexOf(msg)
               if (rmIdx !== -1) targetChat.messages.splice(rmIdx, 1)
-            } else {
-              msg.isError = true
             }
           }
 
@@ -345,9 +349,14 @@ export function useChunkHandler({
                   cutAt = firstMentionEnd
                 }
                 // Pattern B: speaker-turn after a paragraph break. Requires \n\n
-                // followed by [Name]:, @Name, or "Name:" / "Name：".
+                // followed by an EXPLICIT impersonation marker: [Name]:, @Name:,
+                // or "Name:" — the colon is what flags "Name said". A bare @Name
+                // after \n\n is a normal address (e.g. agent reads file, then
+                // writes "\n\n@Other 我看到几个问题..."), NOT roleplay, and must
+                // be left intact — otherwise the agent's own review prose gets
+                // chopped off.
                 if (cutAt === -1) {
-                  const speakerTurn = tail.match(/\n\n[\s]*(?:\[[^\]]{1,40}\][:：]|@\S+|[A-Z][\w一-鿿]{0,30}[:：])/)
+                  const speakerTurn = tail.match(/\n\n[\s]*(?:\[[^\]]{1,40}\][:：]|@\S+?[:：]|[A-Z][\w一-鿿]{0,30}[:：])/)
                   if (speakerTurn) cutAt = firstMentionEnd + speakerTurn.index
                 }
                 if (cutAt !== -1 && cutAt < msg.content.length - 5) {

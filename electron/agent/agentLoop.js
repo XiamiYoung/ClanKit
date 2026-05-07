@@ -127,8 +127,8 @@ class AgentLoop {
       // this.anthropicClient.resolveModel() (e.g. contextManager) doesn't crash.
       this.anthropicClient = {
         resolveModel: () => this.geminiClient.resolveModel(),
-        isOpus46: () => false,
-        supportsThinking: () => false,
+        resolveThinkingConfig: () => null,
+        markThinkingDowngrade: () => null,
         getClient: () => null,
         countTokens: async () => 0,
       }
@@ -558,6 +558,13 @@ class AgentLoop {
           // cache exists). Null in non-analysis chats. The skill tool guards
           // its own usage on whether this ref is populated.
           analysisTool: this._pendingAnalysisTool || null,
+          // McpManager singleton — injected so manage_mcp can run a real
+          // testConnection() without require()ing project modules from
+          // {DATA_DIR}/skills/. Optional; null in environments where mcporter
+          // hasn't been loaded yet (the manage-mcp test action handles null).
+          mcpManager: (() => {
+            try { return require('./mcp/McpManager').mcpManager } catch { return null }
+          })(),
           // Host-injected regen callback for user-persona identity cards.
           // manage_agents calls it after create / update_agent of a
           // type='user' persona so the card stays in sync with the prompt.
@@ -902,8 +909,9 @@ class AgentLoop {
 
     const client = this.anthropicClient.getClient()
     const model  = this.anthropicClient.resolveModel()
-    const isOpus46 = this.anthropicClient.isOpus46()
-    const supportsThinking = this.anthropicClient.supportsThinking()
+    // Resolved once per loop. Mutates only on a thinking-related 400 retry
+    // (markThinkingDowngrade rewrites the cache entry; we re-resolve in catch).
+    let thinkingCfg = this.anthropicClient.resolveThinkingConfig()
     const provider = this.isGoogle
       ? 'google'
       : (this.config._directAuth
@@ -968,6 +976,13 @@ class AgentLoop {
       // only as a last-resort safeguard against infinite loops.
       const MAX_ITERATIONS = 200
 
+      // Stuck-loop detector: some providers (observed: qwen-plus) emit
+      // tool_calls with outputTokens=0 and re-call the same tool with the
+      // same args getting the same result for dozens of iterations.
+      // Track consecutive identical (toolCalls + results) batches and break.
+      let stuckLastKey = null
+      let stuckStrikes = 0
+
       while (!this.stopped && iteration < MAX_ITERATIONS) {
         iteration++
 
@@ -997,9 +1012,14 @@ class AgentLoop {
           // Apply effective tool_choice (Anthropic format).
           // Productivity mode forces 'any' on iteration 1 so the model cannot
           // skip a tool call. See _resolveEffectiveToolChoice.
+          // Mutex with thinking: Anthropic rejects (400) tool_choice='any' or
+          // a forced specific tool when thinking is enabled. When thinking is
+          // on we let it fall through to 'auto' — Anthropic models follow
+          // tool instructions reliably, so the productivity-mode forcing is
+          // mainly there for OpenAI-compat fallbacks anyway.
           const effectiveChoice = this._resolveEffectiveToolChoice(iteration, true)
           if (effectiveChoice === 'required' || effectiveChoice === 'any') {
-            createParams.tool_choice = { type: 'any' }
+            if (!thinkingCfg) createParams.tool_choice = { type: 'any' }
           } else if (effectiveChoice === 'none' && this.toolChoice === 'none') {
             // Honour explicit user 'none' setting (don't suppress mid-loop)
             createParams.tool_choice = { type: 'none' }
@@ -1049,12 +1069,13 @@ class AgentLoop {
         }
 
         // ── Thinking configuration ──
-        if (isOpus46) {
-          createParams.thinking = { type: 'adaptive' }
-        } else if (supportsThinking) {
-          createParams.thinking = { type: 'enabled', budget_tokens: 8192 }
-          // budget_tokens must be < max_tokens
-          createParams.max_tokens = Math.max(createParams.max_tokens, 8192 + 1024)
+        // Family-based defaults via AnthropicClient.resolveThinkingConfig().
+        // Budget mode requires max_tokens > budget_tokens; bump if needed.
+        if (thinkingCfg) {
+          createParams.thinking = thinkingCfg
+          if (thinkingCfg.type === 'enabled' && thinkingCfg.budget_tokens) {
+            createParams.max_tokens = Math.max(createParams.max_tokens, thinkingCfg.budget_tokens + 1024)
+          }
         }
 
         // ── Context-exhaustion check ──
@@ -1139,7 +1160,7 @@ class AgentLoop {
             model,
             provider,
             tools: allTools.length,
-            thinking: isOpus46 ? true : supportsThinking,
+            thinking: !!thinkingCfg,
             msgs: createParams.messages.length,
             inputTokens: this.contextManager.inputTokens || 0,
             outputTokens: this.contextManager.outputTokens || 0,
@@ -1932,6 +1953,40 @@ class AgentLoop {
               })
             }
 
+            // ── Stuck-loop guard ──
+            // If the model emits the same tool_calls with the same results
+            // and zero text output across multiple iterations, it is stuck.
+            // Nudge once, then break. tool_call_id is stripped from the key
+            // because it changes every iteration.
+            const _callsKey = openaiToolCalls
+              .map(tc => `${tc.function?.name}::${tc.function?.arguments || ''}`)
+              .sort()
+              .join('|')
+            const _resultsKey = toolResults
+              .map(tr => (tr.content || '').slice(0, 256))
+              .sort()
+              .join('|')
+            const _stuckKey = `${_callsKey}>>${_resultsKey}`
+            const _emittedNoText = (this.contextManager.outputTokens || 0) === 0
+            if (_emittedNoText && _stuckKey === stuckLastKey) {
+              stuckStrikes += 1
+            } else {
+              stuckStrikes = 0
+            }
+            stuckLastKey = _stuckKey
+
+            if (stuckStrikes === 2) {
+              logger.warn('AgentLoop detected repeated tool-call loop, nudging model', { iteration, strikes: stuckStrikes })
+              conversationMessages.push({
+                role: 'user',
+                content: 'You have called the same tool with the same arguments multiple times and received the same result. Stop calling tools and reply to the user with what you have, or explain why you cannot fulfill the request.'
+              })
+            } else if (stuckStrikes >= 3) {
+              logger.warn('AgentLoop stuck in repeated tool-call loop, breaking', { iteration, strikes: stuckStrikes })
+              onChunk({ type: 'text', text: '\n\n[Stopped: the model kept calling the same tool with the same result. Try rephrasing your question or switching model.]\n' })
+              break
+            }
+
             // If a plan was submitted, break — wait for user approval
             if (this._planPending) {
               this._planPending = false
@@ -1973,10 +2028,48 @@ class AgentLoop {
                 })
               }
             } catch (streamErr) {
+              // Thinking-mode rejected (400) → downgrade adaptive→budget→none,
+              // persist in process cache, retry once with the new payload.
+              // Cache survives this loop so subsequent calls and other chats
+              // skip straight to the working mode.
+              const errMsg = streamErr.message || ''
+              const thinkingRejected = !!thinkingCfg && streamErr.status === 400 && (
+                /thinking/i.test(errMsg) ||
+                /adaptive/i.test(errMsg) ||
+                /budget_tokens/i.test(errMsg)
+              )
+              if (thinkingRejected) {
+                const prevType = thinkingCfg.type
+                thinkingCfg = this.anthropicClient.markThinkingDowngrade(prevType)
+                const retryParams = { ...createParams }
+                if (thinkingCfg) {
+                  retryParams.thinking = thinkingCfg
+                  if (thinkingCfg.type === 'enabled' && thinkingCfg.budget_tokens) {
+                    retryParams.max_tokens = Math.max(retryParams.max_tokens, thinkingCfg.budget_tokens + 1024)
+                  }
+                } else {
+                  delete retryParams.thinking
+                }
+                try {
+                  if (retryParams.betas && retryParams.betas.length > 0) {
+                    const { betas, ...rest } = retryParams
+                    stream = await client.beta.messages.stream({ ...rest, betas }, { signal: this._abortController.signal })
+                  } else {
+                    stream = await client.messages.stream(retryParams, { signal: this._abortController.signal })
+                  }
+                  createParams.thinking = retryParams.thinking
+                  createParams.max_tokens = retryParams.max_tokens
+                  // Successful — fall through to stream consumption
+                } catch (retryErr) {
+                  logger.error('Retry after thinking downgrade also FAILED', retryErr.message)
+                  // Fall through to other handlers / generic error path
+                }
+              }
+
               // tool_choice='any' rejected → retry without tool_choice and disable
               // forcing for this loop. Some Anthropic-compat or older models may
               // reject the 'any' choice; we degrade gracefully.
-              const toolChoiceRejected = createParams.tool_choice?.type === 'any' && (
+              const toolChoiceRejected = !stream && createParams.tool_choice?.type === 'any' && (
                 streamErr.status === 400 ||
                 streamErr.message?.includes('tool_choice') ||
                 streamErr.message?.includes("'any'") ||
@@ -2002,51 +2095,55 @@ class AgentLoop {
                 }
               }
 
-              // Some models (e.g. OpenRouter image-generation models) reject tool use with 404.
-              // Retry once without tools so image generation can proceed.
-              const noToolSupport = streamErr.status === 404 &&
-                (streamErr.message?.includes('tool use') || streamErr.message?.includes('tool_use'))
+              // If an earlier recovery (thinking-downgrade or tool_choice)
+              // already produced a working stream, skip the remaining handlers.
+              if (!stream) {
+                // Some models (e.g. OpenRouter image-generation models) reject tool use with 404.
+                // Retry once without tools so image generation can proceed.
+                const noToolSupport = streamErr.status === 404 &&
+                  (streamErr.message?.includes('tool use') || streamErr.message?.includes('tool_use'))
 
-              // max_tokens exceeds model limit → parse the limit and retry with lower value
-              const maxTokensErr = streamErr.status === 400 &&
-                /max_tokens|max_completion_tokens|context length/i.test(streamErr.message || '')
+                // max_tokens exceeds model limit → parse the limit and retry with lower value
+                const maxTokensErr = streamErr.status === 400 &&
+                  /max_tokens|max_completion_tokens|context length/i.test(streamErr.message || '')
 
-              if (noToolSupport && createParams.tools?.length > 0) {
-                logger.warn('Model does not support tool use — retrying without tools', streamErr.message)
-                const paramsNoTools = { ...createParams }
-                delete paramsNoTools.tools
-                try {
-                  stream = await client.messages.stream(paramsNoTools, {
-                    signal: this._abortController.signal
-                  })
-                } catch (retryErr) {
-                  logger.error('Retry without tools also FAILED', retryErr.message)
-                  throw retryErr
-                }
-              } else if (maxTokensErr) {
-                const rangeMatch = (streamErr.message || '').match(/valid range.*?\[(\d+),\s*(\d+)\]/)
-                const contextMatch = (streamErr.message || '').match(/maximum context length is (\d+) tokens.*?(\d+) of text input/i)
-                let upperBound = rangeMatch ? Number(rangeMatch[2]) : null
-                if (!upperBound && contextMatch) {
-                  upperBound = Math.max(1024, Number(contextMatch[1]) - Number(contextMatch[2]) - 256)
-                }
-                if (upperBound && upperBound > 0) {
-                  logger.warn(`max_tokens exceeds model limit ${upperBound} — retrying (Anthropic path)`, { model })
-                  const retryParams = { ...createParams, max_tokens: upperBound }
+                if (noToolSupport && createParams.tools?.length > 0) {
+                  logger.warn('Model does not support tool use — retrying without tools', streamErr.message)
+                  const paramsNoTools = { ...createParams }
+                  delete paramsNoTools.tools
                   try {
-                    stream = await client.messages.stream(retryParams, { signal: this._abortController.signal })
+                    stream = await client.messages.stream(paramsNoTools, {
+                      signal: this._abortController.signal
+                    })
                   } catch (retryErr) {
-                    logger.error('max_tokens retry also FAILED (Anthropic path)', retryErr.message)
+                    logger.error('Retry without tools also FAILED', retryErr.message)
                     throw retryErr
+                  }
+                } else if (maxTokensErr) {
+                  const rangeMatch = (streamErr.message || '').match(/valid range.*?\[(\d+),\s*(\d+)\]/)
+                  const contextMatch = (streamErr.message || '').match(/maximum context length is (\d+) tokens.*?(\d+) of text input/i)
+                  let upperBound = rangeMatch ? Number(rangeMatch[2]) : null
+                  if (!upperBound && contextMatch) {
+                    upperBound = Math.max(1024, Number(contextMatch[1]) - Number(contextMatch[2]) - 256)
+                  }
+                  if (upperBound && upperBound > 0) {
+                    logger.warn(`max_tokens exceeds model limit ${upperBound} — retrying (Anthropic path)`, { model })
+                    const retryParams = { ...createParams, max_tokens: upperBound }
+                    try {
+                      stream = await client.messages.stream(retryParams, { signal: this._abortController.signal })
+                    } catch (retryErr) {
+                      logger.error('max_tokens retry also FAILED (Anthropic path)', retryErr.message)
+                      throw retryErr
+                    }
+                  } else {
+                    logger.error('stream open FAILED', streamErr.message, streamErr.status)
+                    throw streamErr
                   }
                 } else {
                   logger.error('stream open FAILED', streamErr.message, streamErr.status)
-                  throw streamErr
+                  if (streamAttempt > MAX_STREAM_RETRIES) throw streamErr
+                  continue
                 }
-              } else {
-                logger.error('stream open FAILED', streamErr.message, streamErr.status)
-                if (streamAttempt > MAX_STREAM_RETRIES) throw streamErr
-                continue
               }
             }
 
@@ -2144,7 +2241,10 @@ class AgentLoop {
                   })))
                 }
 
-                if (isOpus46 && finalMessage.content) {
+                // Adaptive thinking models (Opus 4.6+, Sonnet 4.6+) emit
+                // server-side compaction blocks inside finalMessage.content
+                // that must be preserved across turns to keep compaction state.
+                if (thinkingCfg?.type === 'adaptive' && finalMessage.content) {
                   this.contextManager.appendAssistantContent(conversationMessages, finalMessage.content)
                 } else {
                   conversationMessages.push({ role: 'assistant', content: assistantContent })
@@ -2180,7 +2280,7 @@ class AgentLoop {
                 provider,
                 tools: toolUseBlocks.length,
                 currentTools: toolUseBlocks.map(b => b.name).join(', '),
-                thinking: isOpus46 ? true : supportsThinking,
+                thinking: !!thinkingCfg,
                 msgs: conversationMessages.length,
                 inputTokens: this.contextManager.inputTokens,
                 outputTokens: this.contextManager.outputTokens

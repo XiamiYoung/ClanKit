@@ -21,8 +21,12 @@
         @mouseleave="hidePathTooltip"
       >
         <div class="ch-title-icon">
-          <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <span v-if="chatIcon" class="ch-title-icon-emoji">{{ chatIcon }}</span>
+          <svg v-else style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            <circle cx="8" cy="10" r="1" fill="currentColor" stroke="none"/>
+            <circle cx="12" cy="10" r="1" fill="currentColor" stroke="none"/>
+            <circle cx="16" cy="10" r="1" fill="currentColor" stroke="none"/>
           </svg>
         </div>
         <span v-if="isRunning" class="ch-title-spinner"></span>
@@ -37,8 +41,12 @@
       <!-- Inline edit mode -->
       <div class="ch-title-edit" v-else>
         <div class="ch-title-icon">
-          <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <span v-if="chatIcon" class="ch-title-icon-emoji">{{ chatIcon }}</span>
+          <svg v-else style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            <circle cx="8" cy="10" r="1" fill="currentColor" stroke="none"/>
+            <circle cx="12" cy="10" r="1" fill="currentColor" stroke="none"/>
+            <circle cx="16" cy="10" r="1" fill="currentColor" stroke="none"/>
           </svg>
         </div>
         <input
@@ -616,6 +624,7 @@ const knowledgeStore = useKnowledgeStore()
 // ── Computed chat reference ──
 const chat = computed(() => chatsStore.chats.find(c => c.id === props.chatId) || null)
 const resolvedChatId = computed(() => props.chatId)
+const chatIcon = computed(() => (chat.value?.icon || '').trim())
 const chatFolderPath = computed(() => props.chatId ? chatsStore.getChatFolderPath(props.chatId) : '')
 
 // ── Folder path tooltip ──
@@ -1146,6 +1155,11 @@ function confirmProductivitySwitch() {
   background: var(--bg-main, #F2F2F7);
   color: var(--text-secondary, #6B7280);
   flex-shrink: 0;
+}
+.ch-title-icon-emoji {
+  font-size: 0.875rem;
+  line-height: 1;
+  user-select: none;
 }
 /* ── Running spinner (before title) ── */
 .ch-title-spinner {

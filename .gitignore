@@ -45,8 +45,9 @@ electron-compiled/
 *.bak
 *.bak*
 
-# docs (local notes — not tracked)
-docs/
+# docs (local notes — not tracked, except README screenshots)
+docs/*
+!docs/screenshots/
 
 # git worktrees (isolated workspaces)
 .worktrees/

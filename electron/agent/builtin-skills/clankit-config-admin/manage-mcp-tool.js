@@ -92,11 +92,12 @@ class ManageMcpTool extends BaseTool {
   constructor(context) {
     super(
       'manage_mcp',
-      'Create/update/delete/list MCP (Model Context Protocol) server entries in mcp-servers.json. Each server runs a local subprocess via { command, args[], env{} }. Secrets MUST go in env, not args. Action enum: create_server, update_server, delete_server, list_servers, get_server. NEVER call file_operation or execute_shell to edit mcp-servers.json — use this tool.',
+      'Create/update/delete/list/test MCP (Model Context Protocol) server entries in mcp-servers.json. Each server runs a local subprocess via { command, args[], env{} }, or connects over HTTP/SSE via { url, headers{} }. Secrets MUST go in env or headers, not args. Action enum: create_server, update_server, delete_server, list_servers, get_server, test_server. NEVER call file_operation or execute_shell to edit mcp-servers.json or to spawn npx/mcp-remote yourself — always use this tool.',
       'Manage MCP'
     )
     this._context = context || {}
     this._dataPath = context?.dataPath || ''
+    this._mcpManager = context?.mcpManager || null
   }
 
   schema() {
@@ -105,7 +106,7 @@ class ManageMcpTool extends BaseTool {
       properties: {
         action: {
           type: 'string',
-          enum: ['create_server', 'update_server', 'delete_server', 'list_servers', 'get_server'],
+          enum: ['create_server', 'update_server', 'delete_server', 'list_servers', 'get_server', 'test_server'],
         },
         server: {
           type: 'object',
@@ -173,6 +174,7 @@ class ManageMcpTool extends BaseTool {
         case 'delete_server': return this._deleteServer(input.id)
         case 'list_servers':  return this._listServers()
         case 'get_server':    return this._getServer(input.id, input.server?.name)
+        case 'test_server':   return await this._testServer(input.id, input.server?.name)
         default: return this._err(`Unknown action: ${action}`)
       }
     } catch (err) {
@@ -237,6 +239,36 @@ class ManageMcpTool extends BaseTool {
     if (!server && name) server = arr.find(s => s.name === name) || null
     if (!server) return this._err(`MCP server not found (id=${id || ''} name=${name || ''})`)
     return this._ok(formatMcpSummary(server), { server })
+  }
+
+  async _testServer(id, name) {
+    const arr = this._read()
+    let server = null
+    if (id) server = arr.find(s => s.id === id) || null
+    if (!server && name) server = arr.find(s => s.name === name) || null
+    if (!server) return this._err(`MCP server not found (id=${id || ''} name=${name || ''})`)
+    if (!this._mcpManager || typeof this._mcpManager.testConnection !== 'function') {
+      return this._err('MCP runtime not available in this context — cannot test connection.')
+    }
+    try {
+      const result = await this._mcpManager.testConnection(server)
+      if (!result.success) {
+        return this._err(`Connection failed: ${result.error || 'unknown error'}`, {
+          id: server.id, name: server.name, success: false, error: result.error || '',
+        })
+      }
+      const tools = Array.isArray(result.tools) ? result.tools : []
+      const list = tools.length === 0
+        ? '(server connected but exposes no tools)'
+        : tools.slice(0, 30).map(t => `- ${t.name}${t.description ? ` — ${t.description}` : ''}`).join('\n') +
+          (tools.length > 30 ? `\n…and ${tools.length - 30} more` : '')
+      return this._ok(
+        `MCP server "${server.name}" OK — ${tools.length} tool(s) discovered:\n${list}`,
+        { id: server.id, name: server.name, success: true, toolCount: tools.length, tools }
+      )
+    } catch (err) {
+      return this._err(`Test failed: ${err.message}`, { id: server.id, name: server.name, success: false, error: err.message })
+    }
   }
 }
 

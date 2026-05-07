@@ -18,9 +18,9 @@ class GeminiClient {
     return this.config.provider?.model || this.config.customModel || 'gemini-2.0-flash-001'
   }
 
-  /** Stub: Gemini does not support adaptive thinking or extended output */
-  isOpus46() { return false }
-  supportsThinking() { return false }
+  // Gemini does not use Anthropic-style thinking blocks
+  resolveThinkingConfig() { return null }
+  markThinkingDowngrade() { return null }
 
   getClient() { return this.client }
 }

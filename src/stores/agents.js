@@ -533,24 +533,6 @@ export const useAgentsStore = defineStore('agents', () => {
     if (changed) await persist()
   }
 
-  async function cleanStaleKnowledgeRefs(validIndexIds) {
-    const validSet = new Set(validIndexIds)
-    let changed = false
-    const sweep = (list) => {
-      for (const agent of list) {
-        if (!agent.requiredKnowledgeBaseIds?.length) continue
-        const cleaned = agent.requiredKnowledgeBaseIds.filter(id => validSet.has(id))
-        if (cleaned.length !== agent.requiredKnowledgeBaseIds.length) {
-          agent.requiredKnowledgeBaseIds = cleaned
-          changed = true
-        }
-      }
-    }
-    sweep(_systemAgents.value)
-    sweep(_userAgents.value)
-    if (changed) await persist()
-  }
-
   return {
     agents, categories,
     systemAgents, userAgents,
@@ -561,7 +543,6 @@ export const useAgentsStore = defineStore('agents', () => {
     loadAgents, saveAgent, deleteAgent, setDefault,
     addCategory, renameCategory, deleteCategory, reorderCategory,
     assignToCategory, unassignFromCategory,
-    cleanStaleKnowledgeRefs,
     applyWizardCapabilitiesToBuiltins,
     // Plan usage protection
     isAgentUsedInPlans, agentPlanUsageCount,

@@ -187,14 +187,29 @@ describe('useChunkHandler', () => {
       expect(runningAgentKeys.has('chat1:a1')).toBe(false)
     })
 
-    it('marks isError when agent produces no content', () => {
+    it('silently removes empty placeholder when agent produces no content (group sequential / collab no-op)', () => {
       const { handleChunk } = createHandler()
 
       handleChunk('chat1', { type: 'agent_start', agentId: 'a1', agentName: 'Alice' })
+      expect(mockChatsStore.chats[0].messages.length).toBe(1)
+
+      handleChunk('chat1', { type: 'agent_end', agentId: 'a1', agentName: 'Alice' })
+
+      // Empty placeholder removed — no visual noise from agents that ran but said nothing
+      expect(mockChatsStore.chats[0].messages.length).toBe(0)
+    })
+
+    it('keeps the bubble (marked isError) when agent_end fires after an explicit agent_error', () => {
+      const { handleChunk } = createHandler()
+
+      handleChunk('chat1', { type: 'agent_start', agentId: 'a1', agentName: 'Alice' })
+      handleChunk('chat1', { type: 'agent_error', agentId: 'a1', agentName: 'Alice', error: 'rate limit', errorCode: 'rate_limit' })
       handleChunk('chat1', { type: 'agent_end', agentId: 'a1', agentName: 'Alice' })
 
       const msg = mockChatsStore.chats[0].messages[0]
+      expect(msg).toBeDefined()
       expect(msg.isError).toBe(true)
+      expect(msg.errorDetail).toBe('rate limit')
       expect(msg.streaming).toBe(false)
     })
   })
@@ -296,6 +311,30 @@ describe('useChunkHandler', () => {
       const msg = chat.messages[0]
       expect(msg.content).toContain('@Bob')
       expect(msg.content).not.toContain('thanks Alice')
+    })
+
+    it('does NOT truncate when \\n\\n@OtherName is followed by plain prose (review addressing, not impersonation)', () => {
+      const { handleChunk } = createHandler()
+      const chat = mockChatsStore.chats[0]
+      chat.groupAgentIds = ['a1', 'a2']
+      mockAgentsStore.getAgentById = vi.fn((id) => {
+        if (id === 'a1') return { id: 'a1', name: 'Alice' }
+        if (id === 'a2') return { id: 'a2', name: 'Bob' }
+        return null
+      })
+
+      handleChunk('chat1', { type: 'agent_start', agentId: 'a1', agentName: 'Alice' })
+      // Common pattern: opener mentions @Bob, then (after tool calls in real flow)
+      // a review paragraph that ALSO addresses @Bob without a colon. Joining text
+      // segments produces a \n\n@Bob boundary that previously got mis-truncated as
+      // a roleplay marker, eating the agent's own review prose.
+      const fullText = 'Let me check @Bob the latest fix.\n\n@Bob I confirmed all the fixes are in place. Specifically: timeout is added, exit code is correct. No remaining issues.'
+      handleChunk('chat1', { type: 'text', text: fullText, agentId: 'a1' })
+      handleChunk('chat1', { type: 'agent_end', agentId: 'a1', agentName: 'Alice' })
+
+      const msg = chat.messages[0]
+      expect(msg.content).toBe(fullText)
+      expect(msg.content).toContain('No remaining issues')
     })
   })
 
