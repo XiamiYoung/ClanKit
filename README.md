@@ -1,6 +1,6 @@
-# ClanKit
+# ClanKit · Official Website: [clankit.app](https://clankit.app/)
 
-**English** | [简体中文](./README.zh-CN.md) | [Website](https://clankit.app/)
+**English** | [简体中文](./README.zh-CN.md)
 
 A local-first, multi-LLM desktop workspace for chat, agent collaboration, and tool orchestration.
 
@@ -10,10 +10,13 @@ Built with Electron and Vue 3. Runs Anthropic, OpenRouter, OpenAI-compatible, De
 
 ## Demo
 
-[![ClanKit demo](https://img.youtube.com/vi/CFOSY6yZ54o/maxresdefault.jpg)](https://youtu.be/CFOSY6yZ54o)
+<a href="https://youtu.be/CFOSY6yZ54o" title="Watch the ClanKit demo on YouTube">
+  <img src="https://img.youtube.com/vi/CFOSY6yZ54o/maxresdefault.jpg" alt="Watch the ClanKit demo on YouTube" width="720">
+  <br>
+  <img src="https://img.shields.io/badge/%E2%96%B6%20Watch%20demo-YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white" alt="Watch on YouTube">
+</a>
 
-- ▶ English (YouTube): <https://youtu.be/CFOSY6yZ54o>
-- ▶ 中文 (Bilibili): <https://www.bilibili.com/video/BV1cndPBDE6r/>
+> Prefer Bilibili? See the [Chinese README](./README.zh-CN.md#demo).
 
 ---
 

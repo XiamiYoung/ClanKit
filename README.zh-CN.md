@@ -1,6 +1,6 @@
-# ClanKit
+# ClanKit · 官方网站：[clankit.app](https://clankit.app/)
 
-[English](./README.md) | **简体中文** | [官方网站](https://clankit.app/)
+[English](./README.md) | **简体中文**
 
 本地优先的多模型桌面工作台，用于聊天、Agent 协作和工具编排。
 
@@ -10,10 +10,13 @@
 
 ## Demo
 
-[![ClanKit demo](https://img.youtube.com/vi/CFOSY6yZ54o/maxresdefault.jpg)](https://youtu.be/CFOSY6yZ54o)
+<a href="https://www.bilibili.com/video/BV1cndPBDE6r/" title="在 Bilibili 观看 ClanKit 演示">
+  <img src="./docs/screenshots/zh/zh_video_screenshots.png" alt="在 Bilibili 观看 ClanKit 演示" width="720">
+  <br>
+  <img src="https://img.shields.io/badge/%E2%96%B6%20%E8%A7%82%E7%9C%8B%E6%BC%94%E7%A4%BA-Bilibili-00A1D6?style=for-the-badge&logo=bilibili&logoColor=white" alt="在 Bilibili 观看">
+</a>
 
-- ▶ English (YouTube)：<https://youtu.be/CFOSY6yZ54o>
-- ▶ 中文 (Bilibili)：<https://www.bilibili.com/video/BV1cndPBDE6r/>
+> 想看英文版？请见 [English README](./README.md#demo)。
 
 ---
 
