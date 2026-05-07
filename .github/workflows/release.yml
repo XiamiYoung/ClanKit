@@ -70,6 +70,8 @@ jobs:
           EOF
 
       - name: Build Windows
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
         run: npm run build && npx electron-builder --win --publish never
 
       - name: Upload to R2
@@ -126,6 +128,8 @@ jobs:
           EOF
 
       - name: Build macOS
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
         run: npm run build && npx electron-builder --mac --publish never
 
       - name: Upload to R2
