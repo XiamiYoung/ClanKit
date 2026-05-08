@@ -5,6 +5,10 @@
 const crypto = require('crypto')
 const { WebSocket } = require('ws')
 
+// Public Microsoft Edge TTS client token — NOT a credential.
+// Same constant used by every open-source Edge TTS client (rany2/edge-tts etc.);
+// hardcoded by Microsoft into the Edge browser's Read Aloud feature. Listed
+// here verbatim because secret scanners occasionally flag the 32-char hex.
 const TRUSTED_CLIENT_TOKEN = '6A5AA1D4EAFF4E9FB37E23D68491D6F4'
 const BASE_URL = 'speech.platform.bing.com/consumer/speech/synthesize/readaloud'
 const WSS_URL = `wss://${BASE_URL}/edge/v1?TrustedClientToken=${TRUSTED_CLIENT_TOKEN}`

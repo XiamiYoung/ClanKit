@@ -666,13 +666,24 @@
 
                   <!-- Anthropic: 3 model inputs with Test -->
                   <template v-if="selectedProvider.type === 'anthropic'">
-                    <p class="hint" style="margin-bottom: 0.75rem;">
-                      {{ t('config.anthropicModelHint') }}
-                      <a href="#" @click.prevent="openUrl('https://platform.claude.com/docs/en/docs/about-claude/models/overview')" style="color: var(--color-accent); text-decoration: underline;">{{ t('config.anthropicModelDocs') }}</a>
-                    </p>
+                    <div style="display:flex; align-items:center; gap:0.625rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
+                      <AppButton size="compact" @click="fetchAnthropicLatestModels" :disabled="anthropicFetching || !selectedProvider.apiKey" :loading="anthropicFetching">
+                        <svg v-if="!anthropicFetching" style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-.18-5.88"/></svg>
+                        {{ anthropicFetching ? t('config.fetching') : t('config.fetchAnthropicModels') }}
+                      </AppButton>
+                      <span class="hint" style="margin:0; font-size: 0.75rem; flex:1; min-width: 0;">
+                        {{ t('config.anthropicModelHint') }}
+                        <a href="#" @click.prevent="openUrl('https://platform.claude.com/docs/en/docs/about-claude/models/overview')" style="color: var(--accent); text-decoration: underline;">{{ t('config.anthropicModelDocs') }}</a>
+                      </span>
+                    </div>
+                    <div v-if="anthropicFetchMsg" class="test-result" :class="anthropicFetchMsg.ok ? 'success' : 'error'" style="margin-bottom: 0.5rem;">
+                      <svg v-if="anthropicFetchMsg.ok" class="icon-sm shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                      <svg v-else class="icon-sm shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                      <span>{{ anthropicFetchMsg.text }}</span>
+                    </div>
                     <div class="form-group compact">
                       <label class="form-label">{{ t('config.sonnetModel') }}</label>
-                      <input v-model="selectedProvider.model" type="text" class="field font-mono" placeholder="e.g. claude-sonnet-4-7" />
+                      <input v-model="selectedProvider.model" type="text" class="field font-mono" placeholder="e.g. claude-sonnet-4-6" />
                     </div>
                     <div class="form-group compact">
                       <label class="form-label">{{ t('config.opusModel') }}</label>
@@ -680,7 +691,7 @@
                     </div>
                     <div class="form-group compact">
                       <label class="form-label">{{ t('config.haikuModel') }}</label>
-                      <input v-model="selectedProvider.settings.haikuModel" type="text" class="field font-mono" placeholder="e.g. claude-haiku-4-7" />
+                      <input v-model="selectedProvider.settings.haikuModel" type="text" class="field font-mono" placeholder="e.g. claude-haiku-4-5" />
                     </div>
                     <div class="test-connection-row" style="margin-top: 0.5rem;">
                       <select v-model="selectedTestModel" class="field font-mono" style="flex:1;">
@@ -852,7 +863,7 @@
           <!-- Add Provider Modal -->
           <Teleport to="body">
             <div v-if="showAddProviderModal" class="modal-backdrop">
-              <div class="modal-content" style="min-width:20vw;">
+              <div class="modal-content add-provider-modal">
                 <div class="modal-header">
                   <h3>{{ t('config.addProvider', 'Add Provider') }}</h3>
                   <button class="modal-close" @click="showAddProviderModal = false">
@@ -860,18 +871,23 @@
                   </button>
                 </div>
                 <div class="modal-body">
-                  <div class="form-group">
-                    <label class="form-label">Provider Type</label>
-                    <select v-model="addProviderPreset" class="field">
-                      <option v-for="opt in providerPresetOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-                    </select>
+                  <div class="ap-provider-list">
+                    <button
+                      v-for="opt in addProviderListOptions"
+                      :key="opt.value"
+                      type="button"
+                      class="ap-provider-item"
+                      :class="{ selected: addProviderPreset === opt.value }"
+                      @click="addProviderPreset = opt.value"
+                    >
+                      <div class="ap-provider-top">
+                        <span class="ap-provider-name">{{ opt.label }}</span>
+                        <span v-if="opt.freeInfo" class="ap-badge" :class="opt.freeInfo.badge">{{ t(opt.freeInfo.labelKey) }}</span>
+                        <a v-if="opt.apiKeyUrl" href="#" class="ap-apikey-link" @click.stop.prevent="openUrl(opt.apiKeyUrl)">{{ t('onboarding.getApiKey') }} →</a>
+                      </div>
+                    </button>
                   </div>
-                  <!-- freeInfo banner for selected preset -->
-                  <div v-if="addProviderPresetInfo?.freeInfo" class="add-provider-free-info" :class="addProviderPresetInfo.freeInfo.badge">
-                    <span>{{ t(addProviderPresetInfo.freeInfo.labelKey) }}</span>
-                    <a v-if="addProviderPresetInfo.apiKeyUrl" href="#" class="add-provider-apikey-link" @click.prevent="openUrl(addProviderPresetInfo.apiKeyUrl)">{{ t('onboarding.getApiKey') }} →</a>
-                  </div>
-                  <div v-if="addProviderPreset === 'custom'" class="form-group">
+                  <div v-if="addProviderPreset === 'custom'" class="form-group" style="margin-top: 0.875rem;">
                     <label class="form-label">Provider Name</label>
                     <input v-model="addProviderName" type="text" class="field" placeholder="My Custom Provider" />
                   </div>
@@ -3719,6 +3735,7 @@ async function testUtilityModel() {
   if (testingUtilityModel.value || !form.utilityModel.provider || !form.utilityModel.model) return
   testingUtilityModel.value = true
   testUtilityModelResult.value = null
+  testUtilityModelToken++
   const providerType = form.utilityModel.provider
   const providerCfg = configStore.config.providers?.find(p => p.type === providerType && p.apiKey) || {}
   try {
@@ -3729,7 +3746,11 @@ async function testUtilityModel() {
       utilityModel: form.utilityModel.model,
     })
     if (res.success) {
+      const token = ++testUtilityModelToken
       testUtilityModelResult.value = { ok: true, message: `Connected \u00B7 ${res.ms}ms` }
+      setTimeout(() => {
+        if (testUtilityModelToken === token) testUtilityModelResult.value = null
+      }, 5000)
     } else {
       testUtilityModelResult.value = { ok: false, message: res.error }
     }
@@ -3824,7 +3845,11 @@ watch(modelsLeftNav, (val) => {
   testResultNew.value = null
   testingProviderNew.value = false
   providerModelsFetchError.value = ''
+  anthropicFetchMsg.value = null
+  anthropicFetchToken++
+  testResultNewToken++
   testUtilityModelResult.value = null
+  testUtilityModelToken++
   // Re-sync the Utility Model form from persisted config every time the user
   // enters the utility sub-page. Unsaved edits are discarded on leaving.
   if (val === 'utility') {
@@ -3846,7 +3871,6 @@ const showAddProviderModal = ref(false)
 const showDeleteConfirm = ref(false)
 const deleteConfirmId = ref(null)
 const deleteConfirmName = ref('')
-const addProviderPresetInfo = computed(() => configStore.PROVIDER_PRESETS[addProviderPreset.value] || null)
 const testModelTemp = ref('')
 const selectedTestModel = ref('')
 const testingProviderNew = ref(false)
@@ -3877,6 +3901,15 @@ const providerPresetOptions = [
   { value: 'doubao', label: 'Doubao（豆包）' },
   { value: 'custom', label: 'Custom' },
 ]
+
+const addProviderListOptions = computed(() => providerPresetOptions.map(opt => {
+  const preset = configStore.PROVIDER_PRESETS[opt.value] || {}
+  return {
+    ...opt,
+    freeInfo: preset.freeInfo || null,
+    apiKeyUrl: preset.apiKeyUrl || null,
+  }
+}))
 
 const PROVIDER_CHINESE_NAMES = {
   deepseek: '深度求索',
@@ -4189,6 +4222,7 @@ async function testProviderNew() {
   const myProviderId = selectedProvider.value.id
   testingProviderNew.value = true
   testResultNew.value = null
+  testResultNewToken++
   try {
     // For non-Anthropic, test whichever model the user highlighted in the list
     // (testTargetModel) — falls back to the persisted default. Anthropic still
@@ -4209,7 +4243,11 @@ async function testProviderNew() {
     if (selectedProvider.value?.id !== myProviderId) return
     if (res.success) {
       selectedProvider.value.testedAt = Date.now()
+      const token = ++testResultNewToken
       testResultNew.value = { ok: true, message: `Connected · ${res.ms}ms · ${model}` }
+      setTimeout(() => {
+        if (testResultNewToken === token) testResultNew.value = null
+      }, 5000)
       // After a successful test for a non-Anthropic provider, warn if the tested
       // model has no known context window (neither API / catalog / manual override).
       if (selectedProvider.value.type !== 'anthropic') {
@@ -4277,6 +4315,91 @@ async function fetchProviderModels() {
     }
   } catch (err) { providerModelsFetchError.value = err.message }
   finally { providerModelsFetching.value = false }
+}
+
+// Anthropic: Fetch latest models and auto-fill sonnet/opus/haiku slots.
+// Strategy: GET /v1/models, group by tier (id contains 'opus'/'sonnet'/'haiku'),
+// pick the lexicographically newest id per tier (Anthropic IDs encode date,
+// e.g. claude-sonnet-4-5-20250929 sorts correctly).
+const anthropicFetching = ref(false)
+const anthropicFetchMsg = ref(null)
+// Token-based generation counters — incremented every time a new banner is set
+// or the user navigates away. The auto-dismiss callback only clears the banner
+// if the token still matches, so a newer message (or a manual reset via the
+// left-nav watcher) is never wiped by a stale timeout. Vue's ref(<object>)
+// returns a reactive Proxy, so reference-equality comparison on .value would
+// silently fail — that's why we track a primitive token instead.
+let anthropicFetchToken = 0
+let testResultNewToken = 0
+let testUtilityModelToken = 0
+
+async function fetchAnthropicLatestModels() {
+  if (!selectedProvider.value || selectedProvider.value.type !== 'anthropic') return
+  anthropicFetchToken++
+  if (!selectedProvider.value.apiKey) {
+    anthropicFetchMsg.value = { ok: false, text: 'Enter API key first.' }
+    return
+  }
+  anthropicFetching.value = true
+  anthropicFetchMsg.value = null
+  try {
+    const baseURL = selectedProvider.value.baseURL ||
+      configStore.PROVIDER_PRESETS.anthropic?.defaultBaseURL || ''
+    if (!baseURL) {
+      anthropicFetchMsg.value = { ok: false, text: 'Base URL not configured.' }
+      return
+    }
+    const result = await window.electronAPI.fetchAnthropicModels({
+      apiKey: selectedProvider.value.apiKey,
+      baseURL,
+    })
+    if (!result?.success) {
+      anthropicFetchMsg.value = { ok: false, text: result?.error || 'Fetch failed.' }
+      return
+    }
+    const models = result.models || []
+    const pickLatest = (tier) => {
+      const candidates = models.filter(m => String(m.id).toLowerCase().includes(tier))
+      if (candidates.length === 0) return null
+      // Prefer created_at if present; else lexicographic (date-suffixed ids sort correctly).
+      candidates.sort((a, b) => {
+        if (a.created_at && b.created_at) return String(b.created_at).localeCompare(String(a.created_at))
+        return String(b.id).localeCompare(String(a.id))
+      })
+      return candidates[0].id
+    }
+    const opus = pickLatest('opus')
+    const sonnet = pickLatest('sonnet')
+    const haiku = pickLatest('haiku')
+    if (!opus && !sonnet && !haiku) {
+      anthropicFetchMsg.value = { ok: false, text: t('config.fetchAnthropicNoMatch') }
+      return
+    }
+    const filled = []
+    if (sonnet) { selectedProvider.value.model = sonnet; filled.push(`Sonnet=${sonnet}`) }
+    if (opus) {
+      if (!selectedProvider.value.settings) selectedProvider.value.settings = {}
+      selectedProvider.value.settings.opusModel = opus
+      filled.push(`Opus=${opus}`)
+    }
+    if (haiku) {
+      if (!selectedProvider.value.settings) selectedProvider.value.settings = {}
+      selectedProvider.value.settings.haikuModel = haiku
+      filled.push(`Haiku=${haiku}`)
+    }
+    const token = ++anthropicFetchToken
+    anthropicFetchMsg.value = {
+      ok: true,
+      text: t('config.fetchAnthropicSuccess').replace('{filled}', filled.join(', ')),
+    }
+    setTimeout(() => {
+      if (anthropicFetchToken === token) anthropicFetchMsg.value = null
+    }, 5000)
+  } catch (err) {
+    anthropicFetchMsg.value = { ok: false, text: err.message || String(err) }
+  } finally {
+    anthropicFetching.value = false
+  }
 }
 
 async function enrichProviderContext() {
@@ -7513,26 +7636,72 @@ async function checkKnowledgeModelIfNeeded() {
   color: #22C55E;
 }
 
-/* Add Provider modal — freeInfo banner */
-.add-provider-free-info {
+/* Add Provider modal — list-based picker (light theme, mirrors SetupWizard layout) */
+.add-provider-modal {
+  width: min(44rem, 92vw);
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+}
+.add-provider-modal .modal-body {
+  overflow-y: auto;
+  flex: 1;
+}
+.ap-provider-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+.ap-provider-item {
+  width: 100%;
+  text-align: left;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  font-family: inherit;
+  color: var(--text-primary);
+}
+.ap-provider-item:hover {
+  border-color: var(--accent);
+  background: var(--accent-light);
+}
+.ap-provider-item.selected {
+  border-color: var(--accent);
+  background: var(--accent-light);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.ap-provider-top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.375rem;
-  font-size: 0.8125rem;
-  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
 }
-.add-provider-free-info.free { background: #064E3B22; color: #6EE7B7; border: 1px solid #064E3B; }
-.add-provider-free-info.trial { background: #78350F22; color: #FCD34D; border: 1px solid #78350F; }
-.add-provider-free-info.paid { background: #1F293722; color: #9CA3AF; border: 1px solid #374151; }
-.add-provider-apikey-link {
+.ap-provider-name {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.ap-badge {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 0.125rem 0.4rem;
+  border-radius: 0.25rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.ap-badge.free { background: rgba(16, 185, 129, 0.12); color: #047857; border: 1px solid rgba(16, 185, 129, 0.3); }
+.ap-badge.trial { background: rgba(245, 158, 11, 0.12); color: #B45309; border: 1px solid rgba(245, 158, 11, 0.3); }
+.ap-badge.paid { background: rgba(107, 114, 128, 0.12); color: #4B5563; border: 1px solid rgba(107, 114, 128, 0.3); }
+.ap-apikey-link {
+  margin-left: auto;
   font-size: 0.75rem;
-  color: #818CF8;
+  color: var(--accent);
   text-decoration: none;
   white-space: nowrap;
   flex-shrink: 0;
 }
-.add-provider-apikey-link:hover { color: #A5B4FC; text-decoration: underline; }
+.ap-apikey-link:hover { color: var(--accent-hover); text-decoration: underline; }
 </style>

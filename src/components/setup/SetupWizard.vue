@@ -52,9 +52,12 @@
                 <svg class="sw-privacy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                 </svg>
-                <div>
-                  <p class="sw-privacy-text">{{ t('setupWizard.privacyNotice') }}</p>
-                  <p class="sw-privacy-hint">{{ t('setupWizard.privacyHint') }}</p>
+                <div class="sw-privacy-body">
+                  <label class="sw-telemetry-row">
+                    <input type="checkbox" v-model="telemetryEnabled" class="sw-telemetry-checkbox" />
+                    <span class="sw-telemetry-label">{{ t('setupWizard.telemetryToggleLabel') }}</span>
+                  </label>
+                  <p class="sw-privacy-hint">{{ t('setupWizard.telemetryToggleDesc') }}</p>
                 </div>
               </div>
             </template>
@@ -157,8 +160,17 @@
                 </template>
                 <template v-if="selectedProviderType === 'anthropic'">
                   <div class="sw-form-group">
+                    <div style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                      <AppButton size="compact" @click="handleFetchAnthropicModels" :disabled="anthropicFetching || !providerApiKey" :loading="anthropicFetching">
+                        {{ anthropicFetching ? t('setupWizard.fetchingModels') : t('config.fetchAnthropicModels') }}
+                      </AppButton>
+                      <span style="font-size:0.75rem; color:#9CA3AF; flex:1; min-width:0;">{{ t('config.fetchAnthropicModelsHint') }}</span>
+                    </div>
+                    <p v-if="anthropicFetchError" class="sw-error-text">{{ anthropicFetchError }}</p>
+                  </div>
+                  <div class="sw-form-group">
                     <label class="sw-label">Sonnet Model</label>
-                    <input v-model="anthropicSonnet" class="sw-input font-mono" placeholder="e.g. claude-sonnet-4-7" />
+                    <input v-model="anthropicSonnet" class="sw-input font-mono" placeholder="e.g. claude-sonnet-4-6" />
                   </div>
                   <div class="sw-form-group">
                     <label class="sw-label">Opus Model</label>
@@ -166,7 +178,7 @@
                   </div>
                   <div class="sw-form-group">
                     <label class="sw-label">Haiku Model</label>
-                    <input v-model="anthropicHaiku" class="sw-input font-mono" placeholder="e.g. claude-haiku-4-7" />
+                    <input v-model="anthropicHaiku" class="sw-input font-mono" placeholder="e.g. claude-haiku-4-5" />
                   </div>
                 </template>
                 <template v-else>
@@ -507,6 +519,10 @@ async function runInstallRecommended() {
 
 // Auto-detect system language via Electron app.getLocale()
 const selectedLanguage = ref(configStore.config.language || 'en')
+// Anonymous install statistics — checkbox in step 1's privacy notice. Default
+// ON, but the ping itself is gated on the wizard finishing, so the user always
+// has a chance to uncheck before any data is sent.
+const telemetryEnabled = ref(!configStore.config.telemetryOptOut)
 let languageInitialized = false
 
 // Initialize language when wizard becomes visible (for fresh install)
@@ -675,6 +691,58 @@ function syncProviderFields() {
     updates.settings = { ...configStore.getProvider(wizardProviderId.value)?.settings, protocol: customProtocol.value }
   }
   configStore.updateProvider(wizardProviderId.value, updates)
+}
+
+// Anthropic-specific fetch: GET /v1/models, pick latest opus/sonnet/haiku.
+const anthropicFetching = ref(false)
+const anthropicFetchError = ref('')
+
+async function handleFetchAnthropicModels() {
+  ensureWizardProvider()
+  syncProviderFields()
+  anthropicFetching.value = true
+  anthropicFetchError.value = ''
+  try {
+    const provider = configStore.getProvider(wizardProviderId.value)
+    const baseURL = provider?.baseURL || currentPreset.value?.defaultBaseURL || ''
+    if (!baseURL) {
+      anthropicFetchError.value = 'Base URL not configured.'
+      return
+    }
+    const result = await window.electronAPI.fetchAnthropicModels({
+      apiKey: providerApiKey.value,
+      baseURL,
+    })
+    if (!result?.success) {
+      anthropicFetchError.value = result?.error || t('setupWizard.testFailed')
+      return
+    }
+    const models = result.models || []
+    const pickLatest = (tier) => {
+      const candidates = models.filter(m => String(m.id).toLowerCase().includes(tier))
+      if (candidates.length === 0) return null
+      candidates.sort((a, b) => {
+        if (a.created_at && b.created_at) return String(b.created_at).localeCompare(String(a.created_at))
+        return String(b.id).localeCompare(String(a.id))
+      })
+      return candidates[0].id
+    }
+    const opus = pickLatest('opus')
+    const sonnet = pickLatest('sonnet')
+    const haiku = pickLatest('haiku')
+    if (!opus && !sonnet && !haiku) {
+      anthropicFetchError.value = t('config.fetchAnthropicNoMatch')
+      return
+    }
+    if (sonnet) anthropicSonnet.value = sonnet
+    if (opus) anthropicOpus.value = opus
+    if (haiku) anthropicHaiku.value = haiku
+    syncProviderFields()
+  } catch (err) {
+    anthropicFetchError.value = err.message || t('setupWizard.testFailed')
+  } finally {
+    anthropicFetching.value = false
+  }
 }
 
 async function handleFetchModels() {
@@ -936,7 +1004,11 @@ async function _goNextInner() {
   const current = step.value
 
   if (current === 1) {
-    await configStore.saveConfig({ language: selectedLanguage.value, setupWizardStep: 1 })
+    await configStore.saveConfig({
+      language: selectedLanguage.value,
+      telemetryOptOut: !telemetryEnabled.value,
+      setupWizardStep: 1,
+    })
   } else if (current === 2) {
     // Auth step — AuthForm.success or onAuthStepSkip drives advancement; just persist progress.
     await configStore.saveConfig({ setupWizardStep: 2 })
@@ -1213,6 +1285,14 @@ async function finishTour() {
     // Mark this chat for AI Docs nav highlight when agent replies
     chatsStore.wizardFirstChatId = chatId
     await configStore.saveConfig({ setupDismissed: true, onboardingCompleted: true })
+    // The user has now completed the wizard, so they have seen the telemetry
+    // disclosure on step 1 and either kept the default (allow) or opted out.
+    // Fire the install ping the same session — sendInstallPing() in main will
+    // honor telemetryOptOut + onboardingCompleted gates and silently no-op if
+    // either is set, or if apiBaseUrl is unconfigured (source builds).
+    if (window.electronAPI?.fireInstallPing) {
+      window.electronAPI.fireInstallPing().catch(() => { /* fire-and-forget */ })
+    }
     emit('complete')
     router.push('/chats')
     // Auto-send greeting in user's language after navigation settles
@@ -1841,6 +1921,27 @@ watch(step, (val) => {
 .sw-privacy-icon { width: 1.25rem; height: 1.25rem; color: #6B7280; flex-shrink: 0; margin-top: 0.125rem; }
 .sw-privacy-text { font-size: var(--fs-secondary, 0.875rem); color: #D1D5DB; margin: 0 0 0.25rem; line-height: 1.4; }
 .sw-privacy-hint { font-size: 0.75rem; color: #6B7280; margin: 0; line-height: 1.4; }
+.sw-privacy-body { display: flex; flex-direction: column; gap: 0.375rem; flex: 1; min-width: 0; }
+.sw-telemetry-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+}
+.sw-telemetry-checkbox {
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: #FFFFFF;
+  cursor: pointer;
+}
+.sw-telemetry-label {
+  font-size: var(--fs-secondary, 0.875rem);
+  color: #E5E7EB;
+  line-height: 1.4;
+}
 
 /* ── Agent intro card ──────────────────────────────────────────────── */
 

@@ -1,0 +1,13 @@
+# CODEOWNERS for ClanKit
+#
+# Every PR automatically requests review from the listed owners.
+# Combined with branch-protection rule "Require review from Code Owners"
+# (Settings → Branches → master → Require a pull request before merging
+# → Require review from Code Owners), no PR can merge without owner approval.
+#
+# Syntax: <pattern> <owner> [<owner>...]
+# Owners can be GitHub usernames (@user) or teams (@org/team).
+# More-specific patterns later in this file override earlier patterns.
+
+# Default owner for everything in the repo
+*       @XiamiYoung

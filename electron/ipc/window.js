@@ -164,32 +164,39 @@ function register() {
     const bounds = mainWindow.getBounds()
     const display = screen.getDisplayMatching(bounds)
     const wa = display.workArea
-    if (_isMaximizedManual || mainWindow.isMaximized()) {
-      // Restore
+
+    // Manual-maximize state: we did setBounds(workArea) ourselves and stored
+    // the pre-maximize geometry. Windows may have implicitly set WS_MAXIMIZE
+    // because the bounds match the work area — in that case `unmaximize()`
+    // alone won't restore to our saved size (Windows has no pre-maximize
+    // snapshot for setBounds-style maximizes). Always restore via setBounds.
+    if (_preMaximizeBounds) {
+      const restore = _preMaximizeBounds
       if (mainWindow.isMaximized()) {
+        // Clear WS_MAXIMIZE first, otherwise setBounds can be ignored.
         mainWindow.unmaximize()
-      } else {
-        // Manually maximized — restore to saved pre-maximize bounds, or default 70%
-        const restore = _preMaximizeBounds || {
-          x: Math.round(wa.x + wa.width * 0.15),
-          y: Math.round(wa.y + wa.height * 0.1),
-          width: Math.round(wa.width * 0.7),
-          height: Math.round(wa.height * 0.8)
-        }
-        mainWindow.setBounds(restore)
-        _preMaximizeBounds = null
-        _isMaximizedManual = false
-        mainWindow.webContents.send('window:maximized', false)
       }
+      mainWindow.setBounds(restore)
+      _preMaximizeBounds = null
+      _isMaximizedManual = false
+      mainWindow.webContents.send('window:maximized', false)
       return false
-    } else {
-      // Maximize to current display work area via setBounds (reliable on all monitors)
-      _preMaximizeBounds = { ...bounds }
-      mainWindow.setBounds({ x: wa.x, y: wa.y, width: wa.width, height: wa.height })
-      _isMaximizedManual = true
-      mainWindow.webContents.send('window:maximized', true)
-      return true
     }
+
+    // Pure native-maximize state (e.g. the initial mainWindow.maximize() at startup).
+    if (mainWindow.isMaximized() || _isMaximizedManual) {
+      mainWindow.unmaximize()
+      _isMaximizedManual = false
+      mainWindow.webContents.send('window:maximized', false)
+      return false
+    }
+
+    // Not maximized — maximize via setBounds (reliable across multi-monitor setups).
+    _preMaximizeBounds = { ...bounds }
+    mainWindow.setBounds({ x: wa.x, y: wa.y, width: wa.width, height: wa.height })
+    _isMaximizedManual = true
+    mainWindow.webContents.send('window:maximized', true)
+    return true
   })
 
   ipcMain.handle('window:close', () => {

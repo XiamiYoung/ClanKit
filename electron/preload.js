@@ -47,6 +47,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   fetchOpenRouterModels: (params) => ipcRenderer.invoke('openrouter:fetch-models', params),
   fetchOpenAIModels: (params) => ipcRenderer.invoke('openai:fetch-models', params),
   fetchGoogleModels: (params) => ipcRenderer.invoke('google:fetch-models', params),
+  fetchAnthropicModels: (params) => ipcRenderer.invoke('anthropic:fetch-models', params),
   loadModelCache: () => ipcRenderer.invoke('models:load-cache'),
   saveModelCache: (data) => ipcRenderer.invoke('models:save-cache', data),
   enrichModelContext: (params) => ipcRenderer.invoke('models:enrich-context', params),
@@ -390,6 +391,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // The renderer then forwards idToken to the backend via /auth/google.
   signInWithGoogle: () => ipcRenderer.invoke('auth:google-sign-in'),
   getAuthBaseUrl: () => ipcRenderer.invoke('auth:get-base-url'),
+
+  // ── Telemetry ──────────────────────────────────────────────────────────────
+  // Trigger the one-time anonymous install ping. Called by the setup wizard
+  // immediately after the user clicks through the privacy disclosure so the
+  // ping fires the same session (instead of waiting for the next launch).
+  // Server-side dedup ensures repeat calls from the same machine are no-ops.
+  fireInstallPing: () => ipcRenderer.invoke('telemetry:fire-install-ping'),
 
   // ── Draw.io ─────────────────────────────────────────────────────────────────
   drawio: {

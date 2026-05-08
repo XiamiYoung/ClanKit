@@ -1,8 +1,22 @@
 {
   "name": "clankit",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "description": "ClanKit - Multi-LLM Desktop Application",
   "license": "SEE LICENSE IN LICENSE",
+  "author": {
+    "name": "ClanKit",
+    "email": "hello@clankit.app",
+    "url": "https://clankit.app"
+  },
+  "homepage": "https://clankit.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/XiamiYoung/ClanKit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/XiamiYoung/ClanKit/issues",
+    "email": "hello@clankit.app"
+  },
   "main": "electron/main.js",
   "scripts": {
     "test": "vitest run",

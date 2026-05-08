@@ -86,7 +86,7 @@
 
 **平台**
 - Windows 与 macOS 安装包
-- 本地优先——数据留在硬盘，除非你主动配置，否则不联网外发
+- 本地优先——聊天记录、Agent、知识库、API Key 全部留在你硬盘上。对外网络请求仅限：(1) 你自己配置的服务商 API、MCP 服务；(2) 一次性的匿名安装统计（可在 Setup 向导或 Config → 安全 中关闭）
 - 内置中英文 i18n
 
 ---
@@ -103,7 +103,7 @@
 ### 从源码运行
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/XiamiYoung/ClanKit.git
 cd ClanKit
 npm install
 npm run dev
@@ -112,6 +112,8 @@ npm run dev
 会启动 Vite 并拉起 Electron。Renderer 改动支持 HMR；`electron/` 下的改动需要重启 App。
 
 **环境要求：** Node.js 18+，npm。
+
+> **后端服务可选。** ClanKit 内置了一个可选的云端账号 / 匿名安装统计后端（`api.clankit.app`）。从源码运行时**不需要它**——App 默认进入**游客模式**，所有核心功能（聊天、Agent、MCP、知识库、语音）均可本地运行。完全跳过：把 `electron/build-config.dev.json` 留空或不创建即可（schema 见 `electron/build-config.example.json`）。
 
 ---
 
@@ -180,7 +182,7 @@ git push && git push --tags
 - **macOS：** `~/Library/Application Support/clankit/data`
 - **Linux：** `~/.config/clankit/data`
 
-可通过 `CLANKIT_DATA_PATH` 环境变量覆盖（这是 `.env` 中唯一保留的路径设置）。
+可通过 `CLANKIT_DATA_PATH` 环境变量覆盖（在启动 App 前的 shell 里设置即可，例如 Windows 上 `set CLANKIT_DATA_PATH=... && npm run dev`，macOS/Linux 上 `CLANKIT_DATA_PATH=... npm run dev`）。
 
 数据目录里常见文件：
 
@@ -191,7 +193,7 @@ git push && git push --tags
 - `knowledge.json` — 知识库索引
 - `chats/index.json`、`chats/<id>.json` — 对话元数据与原始消息
 
-运行时路径设置（`skillsPath`、`DoCPath`、`artifactPath`）保存在 `config.json`，不在 `.env`。
+其他运行时路径设置（`skillsPath`、`DoCPath`、`artifactPath`）保存在 `config.json`。
 
 ---
 
@@ -225,7 +227,7 @@ ClanKit/
 └── scripts/               # 构建与运行时脚本
 ```
 
-更深层的架构、IPC 协议、Agent 执行流水线、协作 Loop 不变量，详见 [CLAUDE.md](./CLAUDE.md)。
+更深层的架构、IPC 协议、Agent 执行流水线、协作 Loop 不变量，请直接阅读相关源码注释（`electron/agent/agentLoop.js`、`electron/ipc/agent.js`、`src/composables/useChunkHandler.js`）。
 
 ---
 
@@ -246,13 +248,9 @@ Electron 31 · Vue 3.4（Composition API）· Pinia 2 · Vue Router 4 · Vite 5 
 
 ## 贡献
 
-欢迎 Bug 报告与 Pull Request：
+欢迎 Bug 报告与 Pull Request。提交前请阅读 [CONTRIBUTING.md](./CONTRIBUTING.md)，了解贡献流程、许可条款以及代码风格约定。
 
-1. 任何非小改请先开 Issue 描述方案，再提 PR。
-2. 提交前请运行 `npm test`，确保套件通过。
-3. 新增 UI 字符串请走 i18n。
-
-工程约定与历史决策见 [LESSONS.md](./LESSONS.md)。
+发现安全漏洞请**不要**直接开 public issue——参见 [SECURITY.md](./SECURITY.md) 提供的私下披露渠道。
 
 ---
 

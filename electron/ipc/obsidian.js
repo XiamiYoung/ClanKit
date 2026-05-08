@@ -52,14 +52,34 @@ async function _readHeadWithTimeout(filePath, head, timeoutMs) {
   }
 }
 
+// The 8KB probe boundary may slice through a multi-byte UTF-8 sequence
+// (CJK chars are 3 bytes); fatal-decoding the truncated tail throws and
+// would falsely flag a perfectly valid text file as binary. Trim up to 3
+// trailing bytes if they form an incomplete leading sequence.
+function _trimIncompleteUtf8Tail(buf) {
+  let i = buf.length - 1
+  let cont = 0
+  while (i >= 0 && cont < 3 && (buf[i] & 0xC0) === 0x80) { cont++; i-- }
+  if (i < 0) return buf
+  const lead = buf[i]
+  const need = (lead & 0x80) === 0    ? 1
+             : (lead & 0xE0) === 0xC0 ? 2
+             : (lead & 0xF0) === 0xE0 ? 3
+             : (lead & 0xF8) === 0xF0 ? 4
+             : 0
+  if (need === 0) return buf
+  return (buf.length - i) >= need ? buf : buf.subarray(0, i)
+}
+
 // Heuristic: decide if a buffer looks like text.
 //   - Any NUL byte (0x00) → binary.
-//   - Otherwise strictly validate as UTF-8 with TextDecoder fatal mode.
+//   - Otherwise strictly validate as UTF-8 with TextDecoder fatal mode,
+//     after trimming any incomplete UTF-8 tail introduced by the probe cut.
 function _looksLikeText(buf) {
   if (!buf || buf.length === 0) return true // empty file is editable
   for (let i = 0; i < buf.length; i++) if (buf[i] === 0x00) return false
   try {
-    new TextDecoder('utf-8', { fatal: true }).decode(buf)
+    new TextDecoder('utf-8', { fatal: true }).decode(_trimIncompleteUtf8Tail(buf))
     return true
   } catch {
     return false

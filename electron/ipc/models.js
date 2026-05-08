@@ -200,6 +200,47 @@ ${modelIds.join('\n')}`
     }
   })
 
+  // ── Anthropic fetch ────────────────────────────────────────────────────
+  ipcMain.handle('anthropic:fetch-models', async (_, { apiKey, baseURL }) => {
+    if (!apiKey) return { success: false, error: 'Anthropic API key not configured', models: [] }
+    if (!baseURL) return { success: false, error: 'Anthropic baseURL not configured', models: [] }
+    const url = baseURL.replace(/\/+$/, '') + '/v1/models'
+    try {
+      const https = require('https')
+      const http = require('http')
+      const fetcher = url.startsWith('https') ? https : http
+      const data = await new Promise((resolve, reject) => {
+        const req = fetcher.get(url, {
+          headers: {
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'Content-Type': 'application/json',
+          },
+          timeout: 15000,
+        }, (res) => {
+          let body = ''
+          res.on('data', chunk => { body += chunk })
+          res.on('end', () => {
+            if (res.statusCode >= 400) reject(new Error(`HTTP ${res.statusCode}: ${body.slice(0, 200)}`))
+            else { try { resolve(JSON.parse(body)) } catch (e) { reject(new Error('Invalid JSON response')) } }
+          })
+        })
+        req.on('error', reject)
+        req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')) })
+      })
+      const models = (data.data || []).map(m => ({
+        id: m.id,
+        name: m.display_name || m.id,
+        created_at: m.created_at || null,
+      }))
+      enrichModelsFromCatalog('anthropic', models, ds.paths().DATA_DIR)
+      return { success: true, models }
+    } catch (err) {
+      logger.error('anthropic:fetch-models error', err.message)
+      return { success: false, error: err.message, models: [] }
+    }
+  })
+
   // ── Google fetch ────────────────────────────────────────────────────────
   ipcMain.handle('google:fetch-models', async (_, { apiKey }) => {
     if (!apiKey) return { success: false, error: 'Google API key not configured', models: [] }

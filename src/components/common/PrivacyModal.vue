@@ -107,7 +107,7 @@
 
             <section class="privacy-section">
               <h2>10. Contact</h2>
-              <p>If you have any questions about this Privacy Policy, please open an issue on our GitHub repository, or reach out for business and licensing inquiries at <a href="mailto:yyx.xiami@gmail.com">yyx.xiami@gmail.com</a> or <a href="mailto:da.xiami@foxmail.com">da.xiami@foxmail.com</a>.</p>
+              <p>If you have any questions about this Privacy Policy, please open an issue on our GitHub repository, or reach out for business and licensing inquiries at <a href="mailto:hello@clankit.app">hello@clankit.app</a>.</p>
             </section>
           </template>
 
@@ -188,7 +188,7 @@
 
             <section class="privacy-section">
               <h2>10. 联系方式</h2>
-              <p>如果您对本隐私政策有任何疑问，请在我们的 GitHub 仓库中提交 Issue；如需商务与授权合作，请联系 <a href="mailto:yyx.xiami@gmail.com">yyx.xiami@gmail.com</a> 或 <a href="mailto:da.xiami@foxmail.com">da.xiami@foxmail.com</a>。</p>
+              <p>如果您对本隐私政策有任何疑问，请在我们的 GitHub 仓库中提交 Issue；如需商务与授权合作，请联系 <a href="mailto:hello@clankit.app">hello@clankit.app</a>。</p>
             </section>
           </template>
 

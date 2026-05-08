@@ -67,8 +67,17 @@ async function sendInstallPing() {
 
   try {
     const config = dataStore.readJSON(dataStore.paths().CONFIG_FILE, {})
+    // Gate on the wizard being complete: a fresh install hasn't yet shown the
+    // user the privacy disclosure + opt-out toggle, so do not phone home until
+    // they've at least seen step 1 and clicked through. The renderer triggers
+    // a follow-up ping via `telemetry:fire-install-ping` once the wizard saves
+    // onboardingCompleted=true.
+    if (!config.onboardingCompleted) return
     if (config.telemetryOptOut) return
-  } catch (_) { /* proceed if config can't be read */ }
+  } catch (_) {
+    // Config unreadable on a fresh install — treat as "not yet onboarded".
+    return
+  }
 
   const markerPath = path.join(dataStore.paths().SETTINGS_DIR, '.telemetry_sent')
   if (fs.existsSync(markerPath)) return

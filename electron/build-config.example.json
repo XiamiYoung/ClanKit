@@ -1,0 +1,25 @@
+{
+  "$readme": "Optional cloud backend config. Copy this file to build-config.dev.json (or build-config.prod.json) ONLY if you need login or release-feed integration. Both variants are gitignored. Most contributors should skip this file entirely — see $path_A below.",
+
+  "$path_A_recommended": "Skip this file. Run the app, tap 'Sign in later' on the wizard's account step, and you're done. authOnboarded=true is written to config.json and the auth dialog never auto-opens again. All core features (chat, agents, MCP, knowledge base, voice, AI docs) work in guest mode. Only the Account tab in Config will show 'Sign in' instead of a profile.",
+
+  "$path_B_google_oauth_with_mock_backend": "If you want to exercise the signed-in UI without a real backend, configure googleOAuthClientId + googleOAuthClientSecret AND set mockBackend=true. Caveats: (1) the real Google OAuth dance still runs — register your own Google Cloud OAuth Client (Application type: Desktop app, no redirect URI configuration needed; we use a loopback PKCE flow); (2) ONLY /auth/google is mocked — email/password sign-in, /auth/me, and /auth/refresh all still hit apiBaseUrl, so leave it empty and avoid the email tab; (3) the synthesized fake access token is not a real JWT, so /auth/refresh will fail noisily after the access token's local expiry — sign out + sign in to reset.",
+
+  "$path_C_real_backend": "Maintainer-only path. Requires apiBaseUrl pointing at a deployed ClanKit backend with a matching signingSalt. Forks would need to fork + deploy the backend separately.",
+
+  "apiBaseUrl": "",
+  "$apiBaseUrl_doc": "Base URL of the cloud backend. Leave empty for paths A and B. Required for path C.",
+
+  "googleOAuthClientId": "",
+  "googleOAuthClientSecret": "",
+  "$googleOAuth_doc": "Required for paths B and C (Google sign-in). Create at https://console.cloud.google.com/apis/credentials -> Create OAuth client ID -> Application type: Desktop app. No redirect URI configuration needed.",
+
+  "signingSalt": "",
+  "$signingSalt_doc": "HMAC-SHA256 salt for telemetry payload signatures. Required only for path C. Telemetry no-ops gracefully when apiBaseUrl is empty.",
+
+  "mockBackend": false,
+  "$mockBackend_doc": "Path B: set to true so /auth/google returns a fake response instead of POSTing to apiBaseUrl. Path C: set to false (real backend will respond).",
+
+  "releaseFeedUrl": "",
+  "$releaseFeedUrl_doc": "URL for electron-updater (latest.yml / latest-mac.yml). Leave empty to disable auto-update."
+}

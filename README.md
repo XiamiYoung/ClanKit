@@ -86,7 +86,7 @@ Hide the navigation, the chat, every panel — the writing surface takes over th
 
 **Platform**
 - Windows and macOS installers
-- Local-first — your data stays on disk, nothing phones home unless you configure it
+- Local-first — your chats, agents, knowledge base, and API keys live on disk. The only network calls are the ones you configure (provider APIs, MCP servers) plus a single anonymous install ping you can opt out of in the setup wizard or in Config → Security
 - Built-in i18n (English / Chinese)
 
 ---
@@ -103,7 +103,7 @@ Download the latest release from the [Releases](../../releases) page:
 ### From source
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/XiamiYoung/ClanKit.git
 cd ClanKit
 npm install
 npm run dev
@@ -112,6 +112,8 @@ npm run dev
 This starts Vite and launches Electron. Renderer changes hot-reload; changes under `electron/` require restarting the app.
 
 **Requirements:** Node.js 18+, npm.
+
+> **Optional backend services.** ClanKit ships with an optional cloud account / telemetry backend hosted at `api.clankit.app`. When building from source, you don't need it — the app runs in **guest mode** with all core features (chat, agents, MCP, knowledge base, voice) available locally. To opt out completely, leave `electron/build-config.dev.json` empty or absent (see `electron/build-config.example.json` for the schema).
 
 ---
 
@@ -180,7 +182,7 @@ Default user data directory:
 - **macOS:** `~/Library/Application Support/clankit/data`
 - **Linux:** `~/.config/clankit/data`
 
-Override via the `CLANKIT_DATA_PATH` environment variable (the only path setting that lives in `.env`).
+Override via the `CLANKIT_DATA_PATH` environment variable (set it in your shell before launching the app, e.g. `set CLANKIT_DATA_PATH=... && npm run dev` on Windows or `CLANKIT_DATA_PATH=... npm run dev` on macOS/Linux).
 
 Typical files inside the data directory:
 
@@ -191,7 +193,7 @@ Typical files inside the data directory:
 - `knowledge.json` — knowledge-base index
 - `chats/index.json`, `chats/<id>.json` — chat metadata and transcripts
 
-Runtime path settings (`skillsPath`, `DoCPath`, `artifactPath`) live in `config.json`, not `.env`.
+Other runtime path settings (`skillsPath`, `DoCPath`, `artifactPath`) live in `config.json`.
 
 ---
 
@@ -225,7 +227,7 @@ ClanKit/
 └── scripts/               # Build and runtime scripts
 ```
 
-Deeper architecture, IPC protocol, agent execution pipeline, and collaboration loop invariants are documented in [CLAUDE.md](./CLAUDE.md).
+Deeper architecture, IPC protocol, agent execution pipeline, and collaboration loop invariants live in source comments next to the code (`electron/agent/agentLoop.js`, `electron/ipc/agent.js`, `src/composables/useChunkHandler.js`).
 
 ---
 
@@ -246,13 +248,9 @@ Electron 31 · Vue 3.4 (Composition API) · Pinia 2 · Vue Router 4 · Vite 5 ·
 
 ## Contributing
 
-Bug reports and pull requests are welcome. Please:
+Bug reports and pull requests are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for how to propose changes, the license terms attached to contributions, and the project's coding conventions.
 
-1. Open an issue describing the change before submitting a PR for any non-trivial work.
-2. Run `npm test` and make sure the suite passes before opening a PR.
-3. Keep UI strings i18n-ready.
-
-See [LESSONS.md](./LESSONS.md) for project conventions and past design decisions.
+For security vulnerabilities, please **do not** open a public issue — see [SECURITY.md](./SECURITY.md) for the private disclosure channel.
 
 ---
 

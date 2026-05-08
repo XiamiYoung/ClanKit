@@ -78,8 +78,24 @@
             @mousedown="startNotesResize"
           ></div>
           <!-- Tree toolbar -->
-          <div class="px-3 py-2 flex items-center gap-1 shrink-0" style="border-bottom:1px solid #E5E5EA;">
+          <div class="px-3 py-2 flex items-center gap-1 shrink-0">
             <span style="font-family:'Inter',sans-serif;font-size:var(--fs-caption);color:#9CA3AF;">{{ t('notes.dragDropHint') }}</span>
+          </div>
+
+          <!-- Search Filter -->
+          <div class="doc-sidebar-filter">
+            <svg class="doc-filter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+            </svg>
+            <input
+              v-model="docFilterQuery"
+              type="text"
+              :placeholder="t('notes.searchNotes')"
+              class="doc-filter-input"
+            />
+            <button v-if="docFilterQuery" class="doc-filter-clear" @click="docFilterQuery = ''">
+              <svg style="width:12px;height:12px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+            </button>
           </div>
 
           <!-- File tree (root drop zone) -->
@@ -97,21 +113,44 @@
             <div v-if="store.fileTree.length === 0" class="px-4 py-8 text-center">
               <p style="font-family:'Inter',sans-serif; font-size:var(--fs-secondary); color:#9CA3AF;">{{ t('notes.noFilesFound') }}</p>
             </div>
-            <TreeNode
-              v-for="(node, nodeIdx) in visibleFileTree"
-              :key="node.path"
-              :node="node"
-              :index="nodeIdx"
-              :depth="0"
-              :active-path="store.activeFile?.path"
-              :expanded-folders="store.expandedFolders"
-              @select-file="(p, n) => store.openFile(p, n)"
-              @toggle-folder="(p) => store.toggleFolder(p)"
-              @delete-item="handleDeleteItem"
-              @move-item="handleMoveItem"
-              @copy-files="(paths, dest) => copySystemFilesToDir(paths, dest)"
-              @context-menu="(e, node) => openContextMenu(e, node.path, node.type)"
-            />
+
+            <!-- Search mode: flat filtered file list -->
+            <template v-if="docFilterQuery.trim()">
+              <div v-if="flatFilteredFiles.length === 0" class="px-4 py-6 text-center">
+                <p style="font-family:'Inter',sans-serif; font-size:var(--fs-secondary); color:#9CA3AF;">{{ t('notes.noFilesFound') }}</p>
+              </div>
+              <div
+                v-for="f in flatFilteredFiles"
+                :key="f.path"
+                @click="store.openFile(f.path, f.name)"
+                @contextmenu.prevent.stop="openContextMenu($event, f.path, 'file')"
+                class="doc-search-item"
+                :class="{ active: store.activeFile?.path === f.path }"
+              >
+                <component :is="fileTypeIcon(f.name, store.activeFile?.path === f.path ? '#fff' : '#9CA3AF', store.activeFile?.path === f.path)" />
+                <span class="doc-search-item-name">{{ f.name }}</span>
+                <span v-if="f.folderName" class="doc-folder-badge">{{ f.folderName }}</span>
+              </div>
+            </template>
+
+            <!-- Tree mode -->
+            <template v-else>
+              <TreeNode
+                v-for="(node, nodeIdx) in visibleFileTree"
+                :key="node.path"
+                :node="node"
+                :index="nodeIdx"
+                :depth="0"
+                :active-path="store.activeFile?.path"
+                :expanded-folders="store.expandedFolders"
+                @select-file="(p, n) => store.openFile(p, n)"
+                @toggle-folder="(p) => store.toggleFolder(p)"
+                @delete-item="handleDeleteItem"
+                @move-item="handleMoveItem"
+                @copy-files="(paths, dest) => copySystemFilesToDir(paths, dest)"
+                @context-menu="(e, node) => openContextMenu(e, node.path, node.type)"
+              />
+            </template>
           </div>
         </div>
 
@@ -880,6 +919,28 @@ function _isNodeVisible(node) {
   return store.probeCache[node.path] !== false
 }
 const visibleFileTree = computed(() => (store.fileTree || []).filter(_isNodeVisible))
+
+// File search: flat list of matching files (case-insensitive substring on name).
+// Empty query -> tree mode; non-empty -> walk full tree, collect visible files,
+// sort alphabetically, attach parent folder name for the badge.
+const docFilterQuery = ref('')
+const flatFilteredFiles = computed(() => {
+  const q = docFilterQuery.value.trim().toLowerCase()
+  if (!q) return []
+  const out = []
+  function walk(nodes, parentName) {
+    for (const n of nodes) {
+      if (n.type === 'dir') {
+        if (n.children && n.children.length) walk(n.children, n.name)
+      } else if (_isNodeVisible(n) && n.name.toLowerCase().includes(q)) {
+        out.push({ path: n.path, name: n.name, folderName: parentName })
+      }
+    }
+  }
+  walk(store.fileTree || [], '')
+  out.sort((a, b) => a.name.localeCompare(b.name))
+  return out
+})
 
 // This instance should render the floating AI panel only when:
 // - it IS the embedded focus-mode instance, OR
@@ -3944,6 +4005,116 @@ defineExpose({ docTreeCollapsed })
   background: #FFFFFF;
   position: relative;
   transition: width 0.2s ease, min-width 0.2s ease;
+}
+
+/* ── Doc tree search filter (mirrors chat-sidebar-filter) ───────────────── */
+.doc-sidebar-filter {
+  padding: 0.375rem 0.625rem 0.5rem;
+  position: relative;
+  flex-shrink: 0;
+  border-bottom: 1px solid #E5E5EA;
+}
+.doc-filter-input {
+  width: 100%;
+  padding: 0.5rem 2rem 0.5rem 2.25rem;
+  border: 1px solid #E5E5EA;
+  border-radius: 0.625rem;
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-secondary);
+  font-weight: 400;
+  color: #1A1A1A;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.doc-filter-input::placeholder { color: #9CA3AF; }
+.doc-filter-input:hover { border-color: #9CA3AF; }
+.doc-filter-input:focus {
+  border-color: #1A1A1A;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.06);
+}
+.doc-filter-icon {
+  position: absolute;
+  left: 1.25rem;
+  top: calc(50% - 0.0625rem);
+  transform: translateY(-50%);
+  width: 1rem;
+  height: 1rem;
+  color: #9CA3AF;
+  pointer-events: none;
+  transition: color 0.2s;
+}
+.doc-sidebar-filter:focus-within .doc-filter-icon { color: #1A1A1A; }
+.doc-filter-clear {
+  position: absolute;
+  right: 1rem;
+  top: calc(50% - 0.0625rem);
+  transform: translateY(-50%);
+  width: 1.375rem;
+  height: 1.375rem;
+  border: none;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: #9CA3AF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.doc-filter-clear:hover {
+  background: #F5F5F5;
+  color: #6B7280;
+}
+
+/* Search mode flat result rows */
+.doc-search-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.75rem;
+  margin: 0.25rem 0.5rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  font-size: var(--fs-body);
+  color: #6B7280;
+  transition: background 0.15s, color 0.15s;
+  min-width: 0;
+}
+.doc-search-item:hover {
+  background: #F5F5F5;
+  color: #1A1A1A;
+}
+.doc-search-item.active {
+  background: linear-gradient(135deg, #0F0F0F, #1A1A1A, #374151);
+  color: #fff;
+}
+.doc-search-item-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.doc-folder-badge {
+  flex-shrink: 0;
+  padding: 0.125rem 0.4375rem;
+  border-radius: 0.3125rem;
+  background: rgba(0, 0, 0, 0.06);
+  color: #9CA3AF;
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  max-width: 7.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.doc-search-item.active .doc-folder-badge {
+  background: rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.85);
 }
 .docs-catalog-header {
   flex-shrink: 0;

@@ -10,7 +10,7 @@ logs/
 *.log
 npm-debug.log*
 
-# Environment files (keep .env.example as template)
+# Environment files (defensive — project doesn't currently use .env)
 .env
 .env.local
 .env.development
@@ -27,6 +27,11 @@ npm-debug.log*
 
 # Claude Code local settings
 .claude/
+
+# AI development memory — local-only, contains internal incident notes
+CLAUDE.md
+LESSONS.md
+LESSONS-ARCHIVE.md
 
 # OS files
 .DS_Store
