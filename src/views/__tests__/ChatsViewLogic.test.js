@@ -62,6 +62,7 @@ const mockAgentsStore = {
     if (id === 'agent1') return { id: 'agent1', name: 'Agent One', prompt: 'Test', providerId: 'anthropic', modelId: 'claude-3' }
     return null
   }),
+  isAgentDeleted: vi.fn(() => false),
   defaultSystemAgent: { id: 'agent1', name: 'Agent One', prompt: 'Test', providerId: 'anthropic', modelId: 'claude-3' },
   defaultUserAgent: { id: 'user1', name: 'User' },
 }
