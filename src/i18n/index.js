@@ -159,6 +159,8 @@ export const en = {
     upToDate: 'You are on the latest version ({version}).',
     checkFailed: 'Update check failed. Please try again later.',
     currentVersion: 'Current version: {version}',
+    softwareUpdates: 'Software updates',
+    newVersionAvailable: 'A new version is available: {version}.',
   },
   config: {
     title: 'Configuration',
@@ -2870,6 +2872,8 @@ export const zh = {
     upToDate: '已是最新版本({version})',
     checkFailed: '检查更新失败,请稍后重试。',
     currentVersion: '当前版本:{version}',
+    softwareUpdates: '软件更新',
+    newVersionAvailable: '发现新版本:{version}',
   },
   config: {
     title: '配置',

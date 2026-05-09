@@ -166,6 +166,69 @@
         </template>
 
         <!-- ════════════════════════════════════════════════════════════════ -->
+        <!-- About (General > About) -->
+        <!-- ════════════════════════════════════════════════════════════════ -->
+        <template v-if="activeTopTab === 'general' && activeSubTab === 'about'">
+          <div class="config-card">
+            <div class="form-section-header">
+              <div class="section-icon-sm">
+                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+                </svg>
+              </div>
+              <h3 class="form-section-title">{{ t('updater.softwareUpdates') }}</h3>
+            </div>
+
+            <div class="about-version-row">
+              <span class="about-version-label">{{ t('updater.currentVersion', '', { version: updater.currentVersion.value || '—' }) }}</span>
+            </div>
+
+            <div class="about-actions-row">
+              <AppButton
+                size="compact"
+                variant="primary"
+                :disabled="!updater.enabled || updater.state.value === 'checking' || updater.state.value === 'downloading'"
+                :loading="updater.state.value === 'checking'"
+                @click="onCheckForUpdates"
+              >
+                {{ updater.state.value === 'checking' ? t('updater.checking') : t('updater.checkButton') }}
+              </AppButton>
+
+              <AppButton
+                v-if="updater.state.value === 'available'"
+                size="compact"
+                variant="primary"
+                @click="updater.install()"
+              >
+                {{ updater.available.value?.manualOnly ? t('updater.download') : t('updater.installNow') }}
+              </AppButton>
+
+              <span
+                v-if="aboutStatusText"
+                class="about-status"
+                :class="aboutStatusClass"
+              >
+                <svg
+                  v-if="updater.lastCheckOutcome.value === 'up_to_date'"
+                  class="icon-xs"
+                  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                ><polyline points="20 6 9 17 4 12"/></svg>
+                <svg
+                  v-else-if="updater.lastCheckOutcome.value === 'failed'"
+                  class="icon-xs"
+                  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                ><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                {{ aboutStatusText }}
+              </span>
+            </div>
+
+            <p v-if="!updater.enabled" class="hint" style="margin-top:0.75rem;">
+              {{ t('updater.checkFailed') }}
+            </p>
+          </div>
+        </template>
+
+        <!-- ════════════════════════════════════════════════════════════════ -->
         <!-- Language (General > Language) -->
         <!-- ════════════════════════════════════════════════════════════════ -->
         <template v-if="activeTopTab === 'general' && activeSubTab === 'language'">
@@ -2814,6 +2877,7 @@ import ConfirmModal from '../components/common/ConfirmModal.vue'
 import PreviewLimitModal from '../components/common/PreviewLimitModal.vue'
 import { useI18n } from '../i18n/useI18n'
 import { useAuth } from '../composables/useAuth'
+import { useUpdater } from '../composables/useUpdater'
 import { buildDemoTooltipHtml } from '../utils/demoMode.js'
 import { PREVIEW_LIMITS, isLimitEnforced } from '../utils/guestLimits'
 
@@ -2826,6 +2890,33 @@ const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 const auth = useAuth()
+const updater = useUpdater()
+
+// "About" tab status line. Distinct from the toast banner: this surfaces
+// up-to-date / failure feedback after a manual click in Settings, since
+// `updater.state` flips back to 'idle' on not_available and the user would
+// otherwise see no acknowledgement that the click did anything.
+const aboutStatusText = computed(() => {
+  if (updater.state.value === 'available' && updater.available.value?.version) {
+    return t('updater.newVersionAvailable', '', { version: updater.available.value.version })
+  }
+  if (updater.lastCheckOutcome.value === 'up_to_date') {
+    return t('updater.upToDate', '', { version: updater.currentVersion.value || '' })
+  }
+  if (updater.lastCheckOutcome.value === 'failed') {
+    return t('updater.checkFailed')
+  }
+  return ''
+})
+const aboutStatusClass = computed(() => {
+  if (updater.lastCheckOutcome.value === 'failed') return 'is-error'
+  if (updater.state.value === 'available') return 'is-info'
+  if (updater.lastCheckOutcome.value === 'up_to_date') return 'is-success'
+  return ''
+})
+function onCheckForUpdates() {
+  updater.check({ trigger: 'manual' })
+}
 
 const showPreviewLimitModal = ref(false)
 const previewLimitMessage = ref('')
@@ -3421,6 +3512,13 @@ const IconAccount = defineComponent({
     h('circle', { cx: '12', cy: '7', r: '4' })
   ])
 })
+const IconAbout = defineComponent({
+  render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
+    h('circle', { cx: '12', cy: '12', r: '10' }),
+    h('line', { x1: '12', y1: '16', x2: '12', y2: '12' }),
+    h('line', { x1: '12', y1: '8', x2: '12.01', y2: '8' })
+  ])
+})
 const IconAiDoc = defineComponent({
   render: () => h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
     h('path', { d: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z' }),
@@ -3445,6 +3543,7 @@ const subTabsGeneral = computed(() => [
   { value: 'email',         label: t('config.email'),          icon: IconEmail         },
   { value: 'im',            label: t('config.im'),             icon: IconIM            },
   { value: 'account',       label: t('account.title'),         icon: IconAccount       },
+  { value: 'about',         label: t('common.about'),          icon: IconAbout         },
 ])
 const voiceMenuExpanded = ref(false)
 const vadExpanded = ref(false)
@@ -3484,6 +3583,7 @@ watch(() => route.query.tab, (tab) => {
   if (tab === 'security') { activeTopTab.value = 'general'; activeSubTab.value = 'security'; return }
   if (tab === 'email') { activeTopTab.value = 'general'; activeSubTab.value = 'email'; return }
   if (tab === 'skills') { activeTopTab.value = 'ai'; activeSubTab.value = 'skills'; return }
+  if (tab === 'about') { activeTopTab.value = 'general'; activeSubTab.value = 'about'; return }
 }, { immediate: true })
 
 // Forward-declared here (before onboarding watcher) to avoid TDZ;
@@ -5646,6 +5746,31 @@ async function checkKnowledgeModelIfNeeded() {
 }
 .save-indicator.success { background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color: #FFFFFF; box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08); }
 .save-indicator.error { background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%); color: #FF6B6B; box-shadow: 0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08); }
+
+.about-version-row {
+  margin-bottom: 0.875rem;
+  font-size: var(--fs-body);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.about-version-label { font-family: 'Inter', sans-serif; }
+.about-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  flex-wrap: wrap;
+}
+.about-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: var(--fs-secondary);
+  font-weight: 500;
+  animation: fadeIn 0.2s ease;
+}
+.about-status.is-success { color: var(--text-secondary); }
+.about-status.is-info    { color: #3B82F6; }
+.about-status.is-error   { color: #EF4444; }
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(2px); }

@@ -12,6 +12,12 @@ const lastError = ref(null)           // string | null
 const dismissedVersion = ref(null)    // version the user explicitly clicked "Later" on; banner stays hidden until next launch
 const currentVersion = ref('')
 const bannerVisible = ref(false)
+// lastCheckOutcome captures the *result* of the most recent manual check so
+// settings UIs can show "Up to date" / "Check failed" feedback. It's distinct
+// from `state` because state flips back to 'idle' on not_available, which
+// would otherwise leave the user wondering whether the click did anything.
+// Values: null | 'up_to_date' | 'failed'
+const lastCheckOutcome = ref(null)
 
 let _wired = false
 let _detachers = []
@@ -46,15 +52,20 @@ function wire(api) {
     }
   }).catch(() => {})
 
-  _detachers.push(api.onCheckStarted(() => { state.value = 'checking' }))
+  _detachers.push(api.onCheckStarted(() => {
+    state.value = 'checking'
+    lastCheckOutcome.value = null
+  }))
   _detachers.push(api.onAvailable((info) => {
     available.value = info
     progress.value = 0
     state.value = 'available'
+    lastCheckOutcome.value = null
   }))
   _detachers.push(api.onNotAvailable(() => {
     available.value = null
     state.value = 'idle'
+    lastCheckOutcome.value = 'up_to_date'
   }))
   _detachers.push(api.onProgress((p) => {
     state.value = 'downloading'
@@ -73,13 +84,10 @@ function wire(api) {
   _detachers.push(api.onError((e) => {
     lastError.value = e?.message || 'Unknown error'
     state.value = 'error'
+    lastCheckOutcome.value = 'failed'
   }))
 
   _wired = true
-}
-
-function isDarwin() {
-  return globalThis.window?.electronAPI?.platform === 'darwin'
 }
 
 export function useUpdater() {
@@ -96,12 +104,16 @@ export function useUpdater() {
     } catch (err) {
       lastError.value = err?.message || String(err)
       state.value = 'error'
+      lastCheckOutcome.value = 'failed'
     }
   }
 
   async function install() {
     if (!enabled) return
-    if (isDarwin() && available.value?.manualOnly) {
+    // manualOnly = no electron-updater download flow available (Mac always,
+    // Win when the GitHub fallback was picked). Open the asset URL in the
+    // user's browser instead.
+    if (available.value?.manualOnly) {
       await api.openDownloadPage()
       return
     }
@@ -138,6 +150,7 @@ export function useUpdater() {
     lastError: readonly(lastError),
     bannerVisible: readonly(bannerVisible),
     currentVersion: readonly(currentVersion),
+    lastCheckOutcome: readonly(lastCheckOutcome),
     check,
     install,
     quitAndInstall,
@@ -155,6 +168,7 @@ export function _resetForTest() {
   dismissedVersion.value = null
   currentVersion.value = ''
   bannerVisible.value = false
+  lastCheckOutcome.value = null
   _detachers.forEach(d => { try { d() } catch (_) {} })
   _detachers = []
   _wired = false
