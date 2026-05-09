@@ -29,5 +29,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh workflow run release.yml \
+            --repo "${{ github.repository }}" \
             --ref "${{ steps.release.outputs.tag_name }}" \
             -f r2_prefix=stable
