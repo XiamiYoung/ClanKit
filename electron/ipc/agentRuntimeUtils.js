@@ -2,13 +2,15 @@ const { logger } = require('../logger')
 const ds = require('../lib/dataStore')
 const { normalizeAgents } = require('../agent/dataNormalizers')
 
-const OPENAI_COMPATIBLE_PROVIDER_TYPES = new Set([
-  'openai', 'openai_official', 'deepseek', 'minimax', 'openrouter',
-  'qwen', 'glm', 'mistral', 'groq', 'xai', 'moonshot', 'doubao', 'ollama',
-])
+// Only anthropic and google use non-OpenAI-compatible auth/transport.
+// Every other provider type — including user-defined ones like 'custom' —
+// is treated as OpenAI-compatible. This matches applyProviderCredsToConfig's
+// fall-through else branch.
+const NON_OPENAI_COMPATIBLE_PROVIDER_TYPES = new Set(['anthropic', 'google'])
 
 function isOpenAICompatibleProvider(type) {
-  return OPENAI_COMPATIBLE_PROVIDER_TYPES.has(type)
+  if (!type) return false
+  return !NON_OPENAI_COMPATIBLE_PROVIDER_TYPES.has(type)
 }
 
 function detectModelProviderType(modelId) {
