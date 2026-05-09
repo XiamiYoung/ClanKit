@@ -20,6 +20,12 @@
 
 ## 功能一览
 
+### 开聊就开聊，不用先调一堆设置。
+
+![第一次对话](./docs/screenshots/zh/first_chat_cn.png)
+
+打开 App、加一个服务商，立刻开始对话。所有进阶能力——Skills、MCP、知识库、群聊——都按需开启，不会拦在你和 AI 之间。
+
 ### 认识你的数字人，每一处都可调。
 
 ![数字人花名册](./docs/screenshots/zh/agents_cn.png)
