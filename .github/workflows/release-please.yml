@@ -1,0 +1,33 @@
+name: release-please
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - id: release
+        uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      # When release-please merges its Release PR it creates a tag + GitHub
+      # Release. GITHUB_TOKEN-created tag pushes do NOT trigger downstream
+      # workflows (anti-recursion rule), so release.yml's `push: tags` would
+      # be silently ignored. workflow_dispatch is exempt from that rule, so
+      # we explicitly trigger the build here.
+      - name: Trigger Release Build workflow
+        if: steps.release.outputs.release_created
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run release.yml \
+            --ref "${{ steps.release.outputs.tag_name }}" \
+            -f r2_prefix=stable
