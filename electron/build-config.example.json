@@ -21,5 +21,8 @@
   "$mockBackend_doc": "Path B: set to true so /auth/google returns a fake response instead of POSTing to apiBaseUrl. Path C: set to false (real backend will respond).",
 
   "releaseFeedUrl": "",
-  "$releaseFeedUrl_doc": "URL for electron-updater (latest.yml / latest-mac.yml). Leave empty to disable auto-update."
+  "$releaseFeedUrl_doc": "Cloudflare R2 (or any HTTPS host) URL serving electron-updater latest.yml / latest-mac.yml. Primary update source; supports incremental blockmap downloads on Windows.",
+
+  "githubReleaseRepo": "",
+  "$githubReleaseRepo_doc": "Optional GitHub repo (owner/name) used as a fallback when the R2 mirror is unreachable. Probed in parallel with releaseFeedUrl on every check; if R2 is down but GitHub is up, the user is offered a browser download of the latest release asset. Leave empty to disable the fallback. Both fields can be empty to disable auto-update entirely."
 }

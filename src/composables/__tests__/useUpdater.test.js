@@ -85,6 +85,56 @@ describe('useUpdater', () => {
     expect(api.install).not.toHaveBeenCalled()
   })
 
+  it('install() opens external download whenever manualOnly is set, even on win32', async () => {
+    // GitHub-fallback path on Windows: electron-updater can't drive the
+    // download, so the button must open the GitHub asset URL in the browser.
+    const u = useUpdater()
+    fire('available', { version: '0.0.4', downloadUrl: 'https://github.com/x/Setup.exe', manualOnly: true })
+    await nextTick()
+    await u.install()
+    expect(api.openDownloadPage).toHaveBeenCalled()
+    expect(api.install).not.toHaveBeenCalled()
+  })
+
+  it('not_available sets lastCheckOutcome to up_to_date', async () => {
+    const u = useUpdater()
+    fire('check_started', { trigger: 'manual' })
+    await nextTick()
+    expect(u.lastCheckOutcome.value).toBe(null)
+    fire('not_available', { currentVersion: '0.0.3' })
+    await nextTick()
+    expect(u.lastCheckOutcome.value).toBe('up_to_date')
+    expect(u.state.value).toBe('idle')
+  })
+
+  it('error event sets lastCheckOutcome to failed', async () => {
+    const u = useUpdater()
+    fire('error', { message: 'all mirrors unreachable' })
+    await nextTick()
+    expect(u.lastCheckOutcome.value).toBe('failed')
+    expect(u.state.value).toBe('error')
+  })
+
+  it('check_started clears stale lastCheckOutcome from a previous click', async () => {
+    const u = useUpdater()
+    fire('not_available', { currentVersion: '0.0.3' })
+    await nextTick()
+    expect(u.lastCheckOutcome.value).toBe('up_to_date')
+    fire('check_started', { trigger: 'manual' })
+    await nextTick()
+    expect(u.lastCheckOutcome.value).toBe(null)
+  })
+
+  it('available event clears lastCheckOutcome', async () => {
+    const u = useUpdater()
+    fire('not_available', { currentVersion: '0.0.3' })
+    await nextTick()
+    expect(u.lastCheckOutcome.value).toBe('up_to_date')
+    fire('available', { version: '0.0.4', manualOnly: false })
+    await nextTick()
+    expect(u.lastCheckOutcome.value).toBe(null)
+  })
+
   it('progress events update percent', async () => {
     const u = useUpdater()
     fire('available', { version: '0.0.4', manualOnly: false })
