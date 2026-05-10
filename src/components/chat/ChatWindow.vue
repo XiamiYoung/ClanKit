@@ -243,7 +243,7 @@
                   <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
                 </svg>
                 <span>{{ formatErrorLabel(item.data) }}</span>
-                <span v-if="item.data.isError" class="cw-error-info" :data-tooltip="item.data.errorDetail || t('errors.unknownError')">
+                <span v-if="item.data.isError" class="cw-error-info" v-tooltip="item.data.errorDetail || t('errors.unknownError')">
                   <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
                   </svg>
@@ -1483,33 +1483,6 @@ defineExpose({ scrollToBottom })
   flex-shrink: 0;
 }
 .cw-error-info:hover { opacity: 1; }
-.cw-error-info::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  bottom: calc(100% + 6px);
-  right: 0;
-  min-width: 200px;
-  max-width: 360px;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.5rem;
-  background: #1F2937;
-  color: #F9FAFB;
-  font-size: 0.75rem;
-  font-weight: 400;
-  line-height: 1.4;
-  white-space: pre-wrap;
-  word-break: break-word;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  pointer-events: none;
-  opacity: 0;
-  transform: translateY(4px);
-  transition: opacity 0.15s, transform 0.15s;
-  z-index: 50;
-}
-.cw-error-info:hover::after {
-  opacity: 1;
-  transform: translateY(0);
-}
 
 /* ── Error detail dialog ─────────────────────────────────────────────────── */
 .cw-error-dialog-backdrop {
