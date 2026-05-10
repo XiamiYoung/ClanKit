@@ -18,7 +18,6 @@ const mockChat = reactive({
   permissionMode: 'inherit',
   chatAllowList: [],
   chatDangerOverrides: [],
-  maxOutputTokens: null,
   maxAgentRounds: 10,
   workingPath: null,
   mode: 'chat',
