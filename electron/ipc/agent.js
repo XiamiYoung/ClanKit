@@ -675,7 +675,7 @@ function _buildIdentityAwareMessages(rawMessages, currentSysId, currentUsrId, ag
 // Register memory:* IPC handlers now that runMemoryExtraction is defined
 function register() {
 
-ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAgents, enabledSkills, currentAttachments, agentPrompts, mcpServers, httpTools, agentRuns, knowledgeConfig, injectedPlan, chatPermissionMode, chatAllowList, chatDangerOverrides, maxOutputTokens }) => {
+ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAgents, enabledSkills, currentAttachments, agentPrompts, mcpServers, httpTools, agentRuns, knowledgeConfig, injectedPlan, chatPermissionMode, chatAllowList, chatDangerOverrides }) => {
   const normalizedIncomingConfig = _normalizeLoopConfig(config, agentPrompts?.systemAgentId || null)
   logger.agent('IPC agent:run received', { chatId, model: normalizedIncomingConfig?.customModel || normalizedIncomingConfig?.anthropic?.activeModel || normalizedIncomingConfig?.activeModel, msgCount: messages?.length, agentRuns: agentRuns?.length || 0 })
   logger.agent('config', {
@@ -769,9 +769,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       loopConfig.sandboxConfig = groupCfg.sandboxConfig || DEFAULT_CONFIG.sandboxConfig
       loopConfig.chatPermissionMode = chatPermissionMode || 'inherit'
       loopConfig.chatAllowList = chatAllowList || []
-      // Per-chat value takes precedence; fall back to global config default
-      loopConfig.maxOutputTokens = maxOutputTokens || groupCfg.maxOutputTokens || null
-      loopConfig._maxOutputTokensExplicit = !!maxOutputTokens
+      loopConfig.maxOutputTokens = groupCfg.maxOutputTokens || null
       loopConfig.smtpConfig = groupCfg.smtp || null
       // Inject config-backed paths — all agents share the same global paths
       loopConfig.dataPath     = ds.paths().DATA_DIR
@@ -910,9 +908,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
   loopConfig.chatPermissionMode = chatPermissionMode || 'inherit'
   loopConfig.chatAllowList = chatAllowList || []
   loopConfig.chatDangerOverrides = chatDangerOverrides || []
-  // Per-chat value takes precedence; fall back to global config default
-  loopConfig.maxOutputTokens = maxOutputTokens || fullCfg.maxOutputTokens || null
-  loopConfig._maxOutputTokensExplicit = !!maxOutputTokens
+  loopConfig.maxOutputTokens = fullCfg.maxOutputTokens || null
   loopConfig.smtpConfig = fullCfg.smtp || null
   // Inject config-backed paths so the agent always has them regardless of what the renderer sent
   loopConfig.dataPath     = ds.paths().DATA_DIR
@@ -1054,8 +1050,7 @@ ipcMain.handle('agent:run-additional', async (event, {
     loopConfig.chatPermissionMode  = meta.permissionMode || 'inherit'
     loopConfig.chatAllowList       = meta.chatAllowList || []
     loopConfig.chatDangerOverrides = meta.chatDangerOverrides || []
-    loopConfig.maxOutputTokens     = meta.maxOutputTokens || groupCfg.maxOutputTokens || null
-    loopConfig._maxOutputTokensExplicit = !!meta.maxOutputTokens
+    loopConfig.maxOutputTokens     = groupCfg.maxOutputTokens || null
     loopConfig.smtpConfig          = groupCfg.smtp || null
     loopConfig.dataPath            = ds.paths().DATA_DIR
     loopConfig.artifactPath        = groupCfg.artifactPath || groupCfg.artyfactPath || ''
@@ -1659,7 +1654,6 @@ ipcMain.handle('agent:doc-run', async (event, {
     loopConfig.chatPermissionMode = permissionMode || 'allow_all'
     loopConfig.chatAllowList = []
     loopConfig.maxOutputTokens = fullCfg.maxOutputTokens || null
-    loopConfig._maxOutputTokensExplicit = false
     loopConfig.dataPath     = ds.paths().DATA_DIR
     loopConfig.artifactPath = fullCfg.artifactPath || fullCfg.artyfactPath || ''
     loopConfig.skillsPath   = fullCfg.skillsPath   || ''
@@ -2678,8 +2672,7 @@ ipcMain.handle('agent:send-message', async (event, {
       loopConfig.chatPermissionMode = _liveCM.chatMode || 'inherit'
       loopConfig.chatAllowList = _liveCM.chatAllowList || []
       loopConfig.chatDangerOverrides = targetChatMeta.chatDangerOverrides || []
-      loopConfig.maxOutputTokens = targetChatMeta.maxOutputTokens || fullCfg.maxOutputTokens || null
-      loopConfig._maxOutputTokensExplicit = !!targetChatMeta.maxOutputTokens
+      loopConfig.maxOutputTokens = fullCfg.maxOutputTokens || null
       loopConfig.smtpConfig = fullCfg.smtp || null
       loopConfig.mode = targetChatMeta.mode || 'chat'
       loopConfig.chatWorkingPath = targetChatMeta.chatWorkingPath || null

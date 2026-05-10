@@ -169,7 +169,7 @@
           </div>
         </div>
       </template>
-      <template v-else-if="(seg.type === 'tool' || seg.type === 'permission' || seg.type === 'warning') && !isMemoryTool(seg) && processExpanded">
+      <template v-else-if="(seg.type === 'tool' || seg.type === 'permission') && !isMemoryTool(seg) && processExpanded">
       <!-- File diff (file_operation write/append) -->
       <div v-if="seg.type === 'tool' && isFileWrite(seg)" class="my-2 rounded-xl overflow-hidden" style="border:1px solid #d1d5db; font-size:0.78rem;">
         <!-- Diff header -->
@@ -311,19 +311,6 @@
         @allow-global="handlePermissionAllowGlobal"
         @reject="handlePermissionReject"
       />
-
-      <!-- Warning segment -->
-      <div v-else-if="seg.type === 'warning'" class="mr-warning-indicator">
-        <svg class="mr-warning-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-        </svg>
-        <span>{{ warningLabel(seg) }}</span>
-        <span class="mr-warning-info" :data-tooltip="warningDetail(seg)">
-          <svg class="mr-warning-info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
-          </svg>
-        </span>
-      </div>
 
       </template>
 
@@ -1119,7 +1106,7 @@ function isMemoryTool(seg) {
 }
 // Visible = rendered inside the collapsible block (excludes hidden tools AND memory tools)
 function isVisibleProcessSegment(s) {
-  if (s.type === 'permission' || s.type === 'warning') return true
+  if (s.type === 'permission') return true
   if (s.type === 'tool') return (isFileWrite(s) || !isHiddenTool(s) || s.output === undefined) && !isMemoryTool(s)
   return false
 }
@@ -1220,18 +1207,6 @@ function toggleTool(i, seg) {
   // Get current visible state, then flip it
   const currentlyExpanded = isToolExpanded(i, seg)
   expandedTools[i] = !currentlyExpanded
-}
-
-// ── Warning helpers ──────────────────────────────────────────────────────────
-function warningLabel(seg) {
-  if (seg.code === 'max_tokens_capped') return t('chats.maxTokensCapped')
-  if (seg.code === 'context_trimmed') return t('chats.contextTrimmed')
-  return seg.message || t('chats.warningLabel')
-}
-function warningDetail(seg) {
-  if (seg.code === 'max_tokens_capped') return t('chats.maxTokensCappedDetail', { from: seg.from, to: seg.to })
-  if (seg.code === 'context_trimmed') return t('chats.contextTrimmedDetail')
-  return seg.message || ''
 }
 
 // ── Tool helpers ─────────────────────────────────────────────────────────────
@@ -1439,66 +1414,6 @@ function diffMarker(type) {
 </script>
 
 <style scoped>
-/* ── Warning indicator ─────────────────────────────────────────────────────── */
-.mr-warning-indicator {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-  padding: 0.375rem 0.625rem;
-  margin-bottom: 0.5rem;
-  border-radius: 0.5rem;
-  background: rgba(245, 158, 11, 0.08);
-  color: #B45309;
-  font-size: var(--fs-small, 0.8125rem);
-  font-weight: 600;
-  font-family: 'Inter', sans-serif;
-}
-.mr-warning-icon {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-}
-.mr-warning-info {
-  margin-left: auto;
-  position: relative;
-  cursor: help;
-}
-.mr-warning-info-icon {
-  width: 14px;
-  height: 14px;
-  opacity: 0.5;
-  transition: opacity 0.15s;
-}
-.mr-warning-info:hover .mr-warning-info-icon {
-  opacity: 1;
-}
-.mr-warning-info::after {
-  content: attr(data-tooltip);
-  position: absolute;
-  bottom: calc(100% + 6px);
-  right: 0;
-  min-width: 200px;
-  max-width: 320px;
-  padding: 0.5rem 0.75rem;
-  border-radius: 0.5rem;
-  background: #1F2937;
-  color: #F9FAFB;
-  font-size: 0.75rem;
-  font-weight: 400;
-  line-height: 1.4;
-  white-space: pre-wrap;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  pointer-events: none;
-  opacity: 0;
-  transform: translateY(4px);
-  transition: opacity 0.15s, transform 0.15s;
-  z-index: 50;
-}
-.mr-warning-info:hover::after {
-  opacity: 1;
-  transform: translateY(0);
-}
-
 /* ── Code block copy button ────────────────────────────────────────────────── */
 :deep(.code-block-wrap) {
   position: relative;
