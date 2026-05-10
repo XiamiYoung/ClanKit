@@ -603,20 +603,6 @@ export function useChunkHandler({
         })
         scrollToBottom(false, cId)
       }
-    } else if (chunk.type === 'warning') {
-      dbg(`warning: ${chunk.code || chunk.message || 'unknown'}`, 'warn')
-      // Show warning as a persistent segment in the chat bubble
-      const warnRouteKey = chunk.agentId ? `${cId}:${chunk.agentId}` : cId
-      const warnSegs = perChatStreamingSegments.get(warnRouteKey) || []
-      warnSegs.push({
-        type: 'warning',
-        code: chunk.code || null,
-        from: chunk.from || null,
-        to: chunk.to || null,
-        message: chunk.message || null,
-      })
-      perChatStreamingSegments.set(warnRouteKey, warnSegs)
-      flushSegments(warnRouteKey)
     } else if (chunk.type === 'max_tokens_reached') {
       dbg(`max_tokens reached (limit=${chunk.limit})`, 'warn')
     } else if (chunk.type === 'subagent_progress') {

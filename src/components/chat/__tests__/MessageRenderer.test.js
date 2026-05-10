@@ -197,18 +197,4 @@ describe('MessageRenderer', () => {
     expect(images.length).toBeGreaterThan(0)
   })
 
-  // 9. Warning segments — counted in execution steps header
-  it('counts warning segments in execution steps header', () => {
-    const wrapper = mountMsg({
-      role: 'assistant',
-      streaming: false,
-      content: '',
-      segments: [
-        { type: 'warning', code: 'model_fallback', message: 'Model fell back to default' },
-      ],
-    })
-    // Warning is a process segment → shows in the collapsible header
-    expect(wrapper.find('.steps-header').exists()).toBe(true)
-    expect(wrapper.find('.steps-badge').text()).toBe('1')
-  })
 })

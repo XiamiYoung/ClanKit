@@ -44,6 +44,18 @@ function stripLoneSurrogates(str) {
   return str.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '\uFFFD')
 }
 
+// Resolve the effective max_output_tokens for an LLM request.
+// configuredMax is clamped to [1024, 98304] when provided (otherwise defaultMax wins).
+// providerMax (e.g. DeepSeek 8192) silently caps the result if smaller — this is the
+// load-bearing behavior preserved after the chat-level override and warning UI were removed.
+function resolveMaxOutputTokens({ configuredMax, providerMax, defaultMax }) {
+  let max = configuredMax
+    ? Math.min(98304, Math.max(1024, Number(configuredMax)))
+    : defaultMax
+  if (providerMax && providerMax > 0 && providerMax < max) max = providerMax
+  return max
+}
+
 // Recursively sanitize all strings in an object/array.
 function sanitizeForJson(obj) {
   if (typeof obj === 'string') return stripLoneSurrogates(obj)
@@ -939,33 +951,23 @@ class AgentLoop {
       }
     })
 
-    // Resolve configured output token limit (5-layer fallback):
-    //   1. Per-chat override (ChatSettingsModal → loopConfig.maxOutputTokens)
+    // Resolve configured output token limit (4-layer fallback):
+    //   1. Global config override (loopConfig.maxOutputTokens)
     //   2. Per-model user override (config.json → provider.modelSettings[modelId])
     //   3. API-returned default (provider-models.json cache, e.g. Google outputTokenLimit)
-    //   4. Built-in lookup table (LiteLLM catalog)
-    //   5. Fallback: 32768
+    //   4. Built-in lookup table (LiteLLM catalog) — fallback: 32768
+    // Then capped silently by per-provider hard limit (e.g. DeepSeek 8192) if any.
     const { lookupModelMaxOutputTokens } = require('./modelDefaults')
     const modelSettings = this.config._modelSettings || {}
     const perModelOverride = modelSettings[model]?.maxOutputTokens
     const cachedDefault = this.config._cachedModelMaxOutputTokens?.[model] || null
     const builtInDefault = lookupModelMaxOutputTokens(model, this.config.dataPath)
-    const DEFAULT_MAX_TOKENS = perModelOverride || cachedDefault || builtInDefault
-    let configuredMaxTokens = this.config.maxOutputTokens
-      ? Math.min(98304, Math.max(1024, Number(this.config.maxOutputTokens)))
-      : DEFAULT_MAX_TOKENS
-    // Cap by per-provider hard limit (e.g. DeepSeek 8192)
-    const providerMaxTokens = this.config.providerMaxOutputTokens
-    if (providerMaxTokens && providerMaxTokens > 0 && providerMaxTokens < configuredMaxTokens) {
-      const originalValue = configuredMaxTokens
-      configuredMaxTokens = providerMaxTokens
-      // Only warn if user explicitly set a per-chat maxOutputTokens that exceeds provider limit.
-      // Silent cap for global defaults — that's expected behavior, not a surprise.
-      if (this.config._maxOutputTokensExplicit) {
-        logger.agent('maxOutputTokens capped by provider limit (explicit per-chat override)', { configured: originalValue, providerMax: providerMaxTokens })
-        onChunk({ type: 'warning', code: 'max_tokens_capped', from: originalValue, to: configuredMaxTokens })
-      }
-    }
+    const defaultMax = perModelOverride || cachedDefault || builtInDefault
+    const configuredMaxTokens = resolveMaxOutputTokens({
+      configuredMax: this.config.maxOutputTokens,
+      providerMax: this.config.providerMaxOutputTokens,
+      defaultMax,
+    })
 
     try {
       let iteration = 0
@@ -2625,4 +2627,4 @@ class AgentLoop {
   }
 }
 
-module.exports = { AgentLoop, _maybeInjectReplyBank }
+module.exports = { AgentLoop, _maybeInjectReplyBank, resolveMaxOutputTokens }
