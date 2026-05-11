@@ -7,6 +7,8 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  # actions: write — needed by `gh workflow run` to dispatch ci.yml / release.yml
+  actions: write
 
 jobs:
   release-please:
@@ -32,3 +34,23 @@ jobs:
             --repo "${{ github.repository }}" \
             --ref "${{ steps.release.outputs.tag_name }}" \
             -f r2_prefix=stable
+
+      # Same anti-recursion rule applies to the Release PR itself: when this
+      # job creates/updates it via GITHUB_TOKEN, ci.yml's `pull_request`
+      # trigger is silently skipped, leaving the PR stuck with required
+      # checks "Expected — Waiting for status to be reported". Re-dispatch
+      # ci.yml against each PR's head branch via workflow_dispatch (exempt).
+      - name: Trigger CI on release PRs
+        if: steps.release.outputs.prs_created == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRS: ${{ steps.release.outputs.prs }}
+        run: |
+          echo "$PRS" | jq -c '.[]' | while read -r pr; do
+            branch=$(echo "$pr" | jq -r '.headBranchName')
+            number=$(echo "$pr" | jq -r '.number')
+            echo "Dispatching ci.yml for PR #$number (branch: $branch)"
+            gh workflow run ci.yml \
+              --repo "${{ github.repository }}" \
+              --ref "$branch"
+          done

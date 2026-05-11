@@ -5,6 +5,10 @@ on:
     branches: [master, main]
   pull_request:
     branches: [master, main]
+  # Allow manual / API-triggered runs on any ref. release-please.yml uses
+  # this to wake CI on its bot-authored release PRs (pull_request events
+  # raised by GITHUB_TOKEN are silently skipped by GitHub anti-recursion).
+  workflow_dispatch:
 
 permissions:
   contents: read
