@@ -46,14 +46,11 @@ function stripLoneSurrogates(str) {
 
 // Resolve the effective max_output_tokens for an LLM request.
 // configuredMax is clamped to [1024, 98304] when provided (otherwise defaultMax wins).
-// providerMax (e.g. DeepSeek 8192) silently caps the result if smaller — this is the
-// load-bearing behavior preserved after the chat-level override and warning UI were removed.
-function resolveMaxOutputTokens({ configuredMax, providerMax, defaultMax }) {
-  let max = configuredMax
-    ? Math.min(98304, Math.max(1024, Number(configuredMax)))
-    : defaultMax
-  if (providerMax && providerMax > 0 && providerMax < max) max = providerMax
-  return max
+// Provider-level silent cap was removed — providers that hard-reject oversized
+// max_tokens are handled by the 400-retry path in the streaming loop instead.
+function resolveMaxOutputTokens({ configuredMax, defaultMax }) {
+  if (configuredMax) return Math.min(98304, Math.max(1024, Number(configuredMax)))
+  return defaultMax
 }
 
 // Recursively sanitize all strings in an object/array.
@@ -923,7 +920,7 @@ class AgentLoop {
     const model  = this.anthropicClient.resolveModel()
     // Resolved once per loop. Mutates only on a thinking-related 400 retry
     // (markThinkingDowngrade rewrites the cache entry; we re-resolve in catch).
-    let thinkingCfg = this.anthropicClient.resolveThinkingConfig()
+    let thinkingCfg = this.anthropicClient.resolveThinkingConfig(this.config.effort)
     const provider = this.isGoogle
       ? 'google'
       : (this.config._directAuth
@@ -951,12 +948,13 @@ class AgentLoop {
       }
     })
 
-    // Resolve configured output token limit (4-layer fallback):
-    //   1. Global config override (loopConfig.maxOutputTokens)
-    //   2. Per-model user override (config.json → provider.modelSettings[modelId])
-    //   3. API-returned default (provider-models.json cache, e.g. Google outputTokenLimit)
-    //   4. Built-in lookup table (LiteLLM catalog) — fallback: 32768
-    // Then capped silently by per-provider hard limit (e.g. DeepSeek 8192) if any.
+    // Resolve configured output token limit (3-layer fallback):
+    //   1. Per-model user override (config.json → provider.modelSettings[modelId])
+    //   2. API-returned default (provider-models.json cache, e.g. Google outputTokenLimit)
+    //   3. LiteLLM catalog, then family heuristic for catalog misses (opus→32K, others→64K)
+    // Provider-level and global silent caps were removed — 400-retry path handles
+    // hard rejects. configuredMax (this.config.maxOutputTokens) is always null
+    // now; the field is kept for potential future per-call override hooks.
     const { lookupModelMaxOutputTokens } = require('./modelDefaults')
     const modelSettings = this.config._modelSettings || {}
     const perModelOverride = modelSettings[model]?.maxOutputTokens
@@ -965,7 +963,6 @@ class AgentLoop {
     const defaultMax = perModelOverride || cachedDefault || builtInDefault
     const configuredMaxTokens = resolveMaxOutputTokens({
       configuredMax: this.config.maxOutputTokens,
-      providerMax: this.config.providerMaxOutputTokens,
       defaultMax,
     })
 
@@ -2269,8 +2266,24 @@ class AgentLoop {
           } // end retry while loop
 
           // ── Handle tool_use stop reason ──
-          if (stopReason === 'tool_use' && !this.stopped) {
-            const toolUseBlocks = assistantContent.filter(b => b.type === 'tool_use')
+          // Also accept stop_reason='max_tokens' when the assistant emitted at
+          // least one complete tool_use block before being cut off. Anthropic
+          // streams tool input via input_json_delta and only emits the tool_use
+          // block when its content_block_stop has fired, so any block present
+          // in assistantContent has a fully-parsed input. Executing them lets
+          // the agent recover from truncation instead of breaking silently.
+          const _toolUseBlocks = assistantContent.filter(b => b.type === 'tool_use')
+          const _shouldExecuteTools = !this.stopped && (
+            stopReason === 'tool_use' ||
+            (stopReason === 'max_tokens' && _toolUseBlocks.length > 0)
+          )
+          if (stopReason === 'max_tokens' && _toolUseBlocks.length > 0) {
+            // Surface the truncation so the UI can render a banner even though
+            // execution will continue with the tools we got.
+            onChunk({ type: 'max_tokens_reached', limit: configuredMaxTokens, truncated: 'mid-tool_use' })
+          }
+          if (_shouldExecuteTools) {
+            const toolUseBlocks = _toolUseBlocks
             onChunk({
               type: 'agent_step',
               id: `step-tools-${iteration}`,
@@ -2400,7 +2413,10 @@ class AgentLoop {
 
           } else {
             if (stopReason === 'max_tokens') {
-              onChunk({ type: 'max_tokens_reached', limit: configuredMaxTokens })
+              // No tool_use to execute — the model ran out of budget mid-output
+              // (or burned it on thinking blocks). Loop ends; the UI shows the
+              // banner so the user knows to retry with smaller scope.
+              onChunk({ type: 'max_tokens_reached', limit: configuredMaxTokens, truncated: 'no-tool_use' })
             } else if (stopReason === 'end_turn') {
               // Normal end of turn — no action needed
             }

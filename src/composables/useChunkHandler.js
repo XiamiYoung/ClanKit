@@ -289,6 +289,14 @@ export function useChunkHandler({
           msg.streaming = false
           if (msg.streamingStartedAt) msg.durationMs = Date.now() - msg.streamingStartedAt
           msg.timestamp = Date.now()
+          // If the backend tagged this message with an error (agent_error chunk
+          // attached errorDetail/errorCode), mark isError so ChatWindow renders
+          // the red bubble — regardless of whether partial content was produced.
+          // Rate-limit / mid-stream failures (e.g. 429 after the model already
+          // wrote some text) need the banner just as much as empty failures.
+          if (msg.errorDetail) {
+            msg.isError = true
+          }
           // Must match useInterrupt._hasActivity — pending tool calls (no output) don't count.
           const hasActivity = !!(msg.content?.trim()) || msg.planData ||
             (msg.segments || []).some(s => {
@@ -297,18 +305,13 @@ export function useChunkHandler({
               if (s.type === 'agent_step') return false
               return true
             })
-          if (!hasActivity) {
-            // Empty placeholder — agent produced no text, no completed tools, no plan.
-            // Common causes: user cancelled mid-stream, group sequential-dispatch agent
-            // had nothing to add yet (waiting on a peer), or a collab round fired an
-            // agent that ended without speaking. EXCEPTION: keep the bubble when the
-            // backend tagged an explicit error (errorDetail) so the failure renders.
-            if (msg.errorDetail) {
-              msg.isError = true
-            } else {
-              const rmIdx = targetChat.messages.indexOf(msg)
-              if (rmIdx !== -1) targetChat.messages.splice(rmIdx, 1)
-            }
+          if (!hasActivity && !msg.errorDetail) {
+            // Empty placeholder — agent produced no text, no completed tools, no plan,
+            // and no error to report. Common causes: user cancelled mid-stream, group
+            // sequential-dispatch agent had nothing to add yet (waiting on a peer), or
+            // a collab round fired an agent that ended without speaking.
+            const rmIdx = targetChat.messages.indexOf(msg)
+            if (rmIdx !== -1) targetChat.messages.splice(rmIdx, 1)
           }
 
           // ── Post-processing: truncate multi-turn roleplay ──
@@ -604,7 +607,29 @@ export function useChunkHandler({
         scrollToBottom(false, cId)
       }
     } else if (chunk.type === 'max_tokens_reached') {
-      dbg(`max_tokens reached (limit=${chunk.limit})`, 'warn')
+      dbg(`max_tokens reached (limit=${chunk.limit}, truncated=${chunk.truncated || 'unknown'})`, 'warn')
+      // Push a visible system banner so the user sees what happened even
+      // when there's no streaming assistant message to append to (e.g. when
+      // the model burned the entire budget on thinking blocks and emitted
+      // no text). Complements the suffix-append handler in chats.js.
+      if (targetChat?.messages) {
+        const limitStr = (chunk.limit || 0).toLocaleString()
+        const hint = chunk.truncated === 'mid-tool_use'
+          ? `Output hit the ${limitStr}-token limit mid-tool call. Tool was executed; the loop will continue.`
+          : `Output hit the ${limitStr}-token limit. Send a follow-up to continue.`
+        targetChat.messages.push({
+          id: uuidv4(),
+          role: 'system',
+          timestamp: Date.now(),
+          createdAt: Date.now(),
+          maxTokensReached: true,
+          truncated: chunk.truncated || null,
+          content: hint,
+          segments: [{ type: 'text', content: hint }],
+          streaming: false,
+        })
+        scrollToBottom(false, cId)
+      }
     } else if (chunk.type === 'subagent_progress') {
       dbg(`subagent: ${chunk.agent || 'unknown'} — ${chunk.status || JSON.stringify(chunk).slice(0,60)}`, 'info')
 

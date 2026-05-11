@@ -258,7 +258,9 @@ const DEFAULT_CONFIG = {
   skillsPath:        '',
   DoCPath:           '',
   artifactPath:      '',
-  maxOutputTokens: 32768,
+  // (no global `maxOutputTokens` — output cap flows from per-model catalog →
+  // family heuristic. Stale 32768 values are stripped from user config.json
+  // on load in electron/ipc/store.js, see comment there.)
   newsFeeds: [],
   sandboxConfig: {
     defaultMode: 'sandbox',

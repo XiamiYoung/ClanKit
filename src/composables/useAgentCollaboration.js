@@ -132,6 +132,7 @@ export function useAgentCollaboration({
       modeTransitionPending: targetChat.modeTransitionPending ? JSON.parse(JSON.stringify(targetChat.modeTransitionPending)) : null,
       userAgentId: targetChat.userAgentId || null,
       systemAgentId: agentIds[0] || null,
+      effort: targetChat.effort || null,
     }
 
     for (const id of agentIds) runningAgentKeys.add(`${chatId}:${id}`)

@@ -492,6 +492,7 @@ export function useSendMessage({
           modelContextWindows: modelsStore.getAllContextWindows(),
           chatType: targetChat.type || 'chat',
           analysisTargetAgentId: targetChat.analysisTargetAgentId || null,
+          effort: targetChat.effort || null,
         },
       }).catch(err => {
         dbg(`sendMessage IPC error: ${err.message}`, 'error')
@@ -755,6 +756,7 @@ export function useSendMessage({
         modelContextWindows: modelsStore.getAllContextWindows(),
         chatType: targetChat.type || 'chat',
         analysisTargetAgentId: targetChat.analysisTargetAgentId || null,
+        effort: targetChat.effort || null,
       },
     }).catch(err => dbg(`approvePlan IPC error: ${err.message}`, 'error'))
 
