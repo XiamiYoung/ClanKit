@@ -224,7 +224,17 @@ class ManageTasksTool extends BaseTool {
               },
             },
             permissionMode: { type: 'string', enum: ['all_permissions', 'inherit', 'chat_only'] },
-            allowList: { type: 'array' },
+            allowList: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  pattern: { type: 'string' },
+                  description: { type: 'string' },
+                },
+              },
+            },
             schedule: {
               oneOf: [
                 { type: 'string', description: 'Bare cron string, e.g. "0 8 * * *" - auto-wrapped as {type:cron,cron,enabled:true}' },
