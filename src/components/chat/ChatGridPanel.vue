@@ -201,6 +201,34 @@
             </div>
             <span class="gp-hint-right">{{ t('chats.gridSendHint') }}</span>
           </div>
+          <!-- Per-tile permission + Anthropic effort selectors -->
+          <div class="gp-perm-row">
+            <div class="gp-perm-cell">
+              <label class="gp-perm-label">{{ t('chats.permissionMode') }}:</label>
+              <select
+                :value="gpPermissionMode"
+                @change="(e) => setGpPermissionMode(e.target.value)"
+                class="permission-mode-select"
+                :class="'pms-' + gpPermissionMode"
+              >
+                <option value="inherit">{{ t('chats.inherit') }}</option>
+                <option value="chat_only">{{ t('chats.chatOnly') }}</option>
+                <option value="all_permissions">{{ t('chats.allPermissions') }}</option>
+              </select>
+            </div>
+            <div v-if="gpHasAnthropicAgent" class="gp-perm-cell">
+              <label class="gp-perm-label">{{ t('chats.anthropicEffort') }}:</label>
+              <select
+                v-model="gpEffort"
+                class="permission-mode-select"
+                :class="'pms-effort-' + gpEffort"
+              >
+                <option v-for="tier in GP_EFFORT_TIERS" :key="tier.id" :value="tier.id">
+                  {{ t('effortTier.' + tier.id) }} · {{ tier.tokens }}
+                </option>
+              </select>
+            </div>
+          </div>
         </div>
       </template>
     </ChatWindow>
@@ -435,6 +463,45 @@ const isRunning = computed(() => chat.value?.isRunning ?? false)
 const isProductivity = computed(() => chat.value?.mode === 'productivity')
 const showModeChip = computed(() => !!chat.value)
 const modeLabel = computed(() => isProductivity.value ? t('chats.modeProductivityTooltip') : t('chats.modeChatTooltip'))
+
+// ── Per-tile permission + effort selectors ──
+const GP_EFFORT_TIERS = [
+  { id: 'low',    tokens: '1,024'  },
+  { id: 'medium', tokens: '4,096'  },
+  { id: 'high',   tokens: '16,384' },
+  { id: 'xhigh',  tokens: '32,768' },
+  { id: 'max',    tokens: 'adaptive' },
+]
+const gpPermissionMode = computed(() => chat.value?.permissionMode || 'inherit')
+function setGpPermissionMode(val) {
+  if (!chat.value) return
+  chat.value.permissionMode = val
+  chatsStore.persistChat?.(chat.value.id)
+  // Mirror ChatsView's live-state plumbing — backend listens for this event
+  // so a mid-turn flip propagates to running agent loops in this chat.
+  window.electronAPI?.updatePermissionMode?.(chat.value.id, { chatPermissionMode: val })
+}
+const gpHasAnthropicAgent = computed(() => {
+  const c = chat.value
+  if (!c) return false
+  const ids = []
+  if (c.systemAgentId) ids.push(c.systemAgentId)
+  if (c.userAgentId)   ids.push(c.userAgentId)
+  if (Array.isArray(c.groupAgentIds)) ids.push(...c.groupAgentIds)
+  return ids.some(id => {
+    const ag = id ? agentsStore.getAgentById(id) : null
+    if (!ag?.providerId) return false
+    return configStore.getProvider(ag.providerId)?.type === 'anthropic'
+  })
+})
+const gpEffort = computed({
+  get: () => chat.value?.effort || 'medium',
+  set: (val) => {
+    if (!chat.value) return
+    chat.value.effort = val
+    chatsStore.persistChat?.(chat.value.id)
+  },
+})
 
 // ── Mode dropdown ──
 const showProductivityConfirm = ref(false)
@@ -1134,6 +1201,17 @@ function deleteMessage(msg) {
 .gp-att-count { font-size: var(--fs-small, 0.75rem); color: #1A1A1A; font-weight: 500; }
 .gp-hint-right { font-size: var(--fs-small, 0.75rem); color: #9CA3AF; }
 
+.gp-perm-row {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin-top: 0.25rem;
+  padding: 0 0.125rem;
+  flex-wrap: wrap;
+}
+.gp-perm-cell { display: flex; align-items: center; gap: 0.25rem; }
+.gp-perm-label { font-size: 0.6875rem; color: #6B7280; white-space: nowrap; font-weight: 500; }
+
 /* ── Approval badge (red, pulsing) ── */
 .gp-approval-badge {
   display: flex; align-items: center; gap: 0.3125rem;
@@ -1296,6 +1374,41 @@ function deleteMessage(msg) {
 
 <!-- Unscoped styles for teleported swap dropdown -->
 <style>
+/* Permission + effort selectors — mirror ChatsView styling so grid tiles
+   render identically to the single-chat status bar. */
+.permission-mode-select {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  padding: 0.3rem 0.5rem 0.3rem 0.375rem;
+  min-height: 1.375rem;
+  border-radius: 0.375rem;
+  border: 1px solid transparent;
+  background-color: #FFFFFF;
+  color: #1A1A1A;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  outline: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%231A1A1A' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.375rem center;
+  padding-right: 1.5rem;
+  min-width: fit-content;
+  vertical-align: middle;
+}
+.permission-mode-select.pms-inherit         { color: #92400E; background-color: #FEF3C7; }
+.permission-mode-select.pms-chat_only       { color: #047857; background-color: #ECFDF5; }
+.permission-mode-select.pms-all_permissions { color: #B91C1C; background-color: #FEF2F2; }
+.permission-mode-select.pms-effort-low      { color: #0369A1; background-color: #E0F2FE; }
+.permission-mode-select.pms-effort-medium   { color: #6D28D9; background-color: #F3E8FF; }
+.permission-mode-select.pms-effort-high     { color: #9333EA; background-color: #FAE8FF; }
+.permission-mode-select.pms-effort-xhigh    { color: #C2410C; background-color: #FFEDD5; }
+.permission-mode-select.pms-effort-max      { color: #B91C1C; background-color: #FEE2E2; }
+.permission-mode-select:hover { opacity: 0.85; }
+.permission-mode-select:focus { outline: none; }
+.permission-mode-select option { background-color: #FFFFFF; color: #1A1A1A; padding: 0.375rem 0.5rem; font-weight: normal; }
+
 .gp-swap-dropdown {
   width: 18.75rem;
   max-height: 25rem;

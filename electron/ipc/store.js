@@ -162,12 +162,21 @@ function register({ DEFAULT_CONFIG }) {
       const settings = { ...(provider?.settings || {}) }
       delete settings.temperature
       delete settings.topP
-      if (settings.maxOutputTokens == null) settings.maxOutputTokens = 32768
+      delete settings.maxOutputTokens
+      // Backfill effort default for older Anthropic providers
+      if (provider?.type === 'anthropic' && !settings.effort) settings.effort = 'medium'
       return { ...provider, settings }
     }
     let providers = saved.providers || []
     if (providers.length > 0) providers = providers.map(sanitizeProvider)
     const nonEmpty = Object.fromEntries(Object.entries(saved).filter(([, v]) => v !== '' && v !== null && v !== undefined))
+    // Drop legacy global `maxOutputTokens` field. Older installs auto-injected
+    // 32768 here which silently capped every modern flagship (Sonnet 64K, Opus
+    // 128K). Output cap now flows exclusively from per-model catalog → family
+    // heuristic. If a user genuinely wants a global cap they can add a different
+    // mechanism later, but we never want a stale persisted value bottlenecking
+    // requests without their knowledge.
+    delete nonEmpty.maxOutputTokens
     const savedSandbox = saved.sandboxConfig || {}
     const result = {
       ...DEFAULT_CONFIG, ...nonEmpty, providers,

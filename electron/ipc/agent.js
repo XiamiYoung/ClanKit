@@ -769,7 +769,8 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       loopConfig.sandboxConfig = groupCfg.sandboxConfig || DEFAULT_CONFIG.sandboxConfig
       loopConfig.chatPermissionMode = chatPermissionMode || 'inherit'
       loopConfig.chatAllowList = chatAllowList || []
-      loopConfig.maxOutputTokens = groupCfg.maxOutputTokens || null
+      // Global maxOutputTokens removed — output cap now flows from per-model
+      // catalog → family heuristic. Stale config.json values must NOT bottleneck.
       loopConfig.smtpConfig = groupCfg.smtp || null
       // Inject config-backed paths — all agents share the same global paths
       loopConfig.dataPath     = ds.paths().DATA_DIR
@@ -908,7 +909,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
   loopConfig.chatPermissionMode = chatPermissionMode || 'inherit'
   loopConfig.chatAllowList = chatAllowList || []
   loopConfig.chatDangerOverrides = chatDangerOverrides || []
-  loopConfig.maxOutputTokens = fullCfg.maxOutputTokens || null
+  // Global maxOutputTokens removed — see comment in agent.js earlier call site
   loopConfig.smtpConfig = fullCfg.smtp || null
   // Inject config-backed paths so the agent always has them regardless of what the renderer sent
   loopConfig.dataPath     = ds.paths().DATA_DIR
@@ -1050,7 +1051,10 @@ ipcMain.handle('agent:run-additional', async (event, {
     loopConfig.chatPermissionMode  = meta.permissionMode || 'inherit'
     loopConfig.chatAllowList       = meta.chatAllowList || []
     loopConfig.chatDangerOverrides = meta.chatDangerOverrides || []
-    loopConfig.maxOutputTokens     = groupCfg.maxOutputTokens || null
+    // Global maxOutputTokens removed — see comment in agent.js earlier call site
+    // Chat-level effort override (Anthropic thinking tier). Null means inherit
+    // from provider; applyProviderCredsToConfig resolves the final value.
+    if (meta.effort) loopConfig.effort = meta.effort
     loopConfig.smtpConfig          = groupCfg.smtp || null
     loopConfig.dataPath            = ds.paths().DATA_DIR
     loopConfig.artifactPath        = groupCfg.artifactPath || groupCfg.artyfactPath || ''
@@ -1653,7 +1657,7 @@ ipcMain.handle('agent:doc-run', async (event, {
     loopConfig.sandboxConfig = fullCfg.sandboxConfig || DEFAULT_CONFIG.sandboxConfig
     loopConfig.chatPermissionMode = permissionMode || 'allow_all'
     loopConfig.chatAllowList = []
-    loopConfig.maxOutputTokens = fullCfg.maxOutputTokens || null
+    // Global maxOutputTokens removed — see comment in agent.js earlier call site
     loopConfig.dataPath     = ds.paths().DATA_DIR
     loopConfig.artifactPath = fullCfg.artifactPath || fullCfg.artyfactPath || ''
     loopConfig.skillsPath   = fullCfg.skillsPath   || ''
@@ -2672,7 +2676,10 @@ ipcMain.handle('agent:send-message', async (event, {
       loopConfig.chatPermissionMode = _liveCM.chatMode || 'inherit'
       loopConfig.chatAllowList = _liveCM.chatAllowList || []
       loopConfig.chatDangerOverrides = targetChatMeta.chatDangerOverrides || []
-      loopConfig.maxOutputTokens = fullCfg.maxOutputTokens || null
+      // Global maxOutputTokens removed — see comment in agent.js earlier call site
+      // Chat-level Anthropic thinking effort override; null/undefined lets the
+      // provider default win in applyProviderCredsToConfig.
+      if (targetChatMeta.effort) loopConfig.effort = targetChatMeta.effort
       loopConfig.smtpConfig = fullCfg.smtp || null
       loopConfig.mode = targetChatMeta.mode || 'chat'
       loopConfig.chatWorkingPath = targetChatMeta.chatWorkingPath || null

@@ -386,6 +386,10 @@ export const useChatsStore = defineStore('chats', () => {
     const chatType = options?.chatType || 'chat'
     const analysisTargetAgentId = options?.analysisTargetAgentId || null
     const mode = options?.mode === 'productivity' ? 'productivity' : 'chat'
+    // Anthropic thinking effort tier — snapshotted from provider settings at
+    // create time when caller passes options.effort. Null means "inherit from
+    // provider"; IPC layer falls back via chat → provider → 'medium'.
+    const snapshotEffort = (typeof options?.effort === 'string') ? options.effort : null
     const chat = {
       type: chatType,
       id: uuidv4(),
@@ -406,6 +410,7 @@ export const useChatsStore = defineStore('chats', () => {
       autoTitleAttemptCount: 0,
       provider: null,
       model: null,
+      effort: snapshotEffort,
       isGroupChat: false,
       groupAgentIds: [],
       groupAgentOverrides: {},
@@ -1021,7 +1026,15 @@ export const useChatsStore = defineStore('chats', () => {
     // they round-trip as bare role:'assistant' rows with empty content. Once
     // agent_start splices the in-memory copy, the orphan disk row resurfaces
     // on any reload as a phantom empty bubble. Never persist them.
-    raw.messages = _truncateToolOutputs(raw.messages.filter(m => !m.isWaitingIndicator))
+    //
+    // Also drop role:'system' messages — these are in-session-only banners
+    // (compaction notices, max_tokens warnings, etc). The SQLite schema enforces
+    // role IN ('user','assistant') and would otherwise throw a CHECK constraint.
+    raw.messages = _truncateToolOutputs(raw.messages.filter(m => {
+      if (m.isWaitingIndicator) return false
+      if (m.role && m.role !== 'user' && m.role !== 'assistant') return false
+      return true
+    }))
     return raw
   }
 
@@ -1481,6 +1494,7 @@ export const useChatsStore = defineStore('chats', () => {
         groupAudienceAgentIds: JSON.parse(JSON.stringify(targetChat.groupAudienceAgentIds || [])),
         chatType: targetChat.type || 'chat',
         analysisTargetAgentId: targetChat.analysisTargetAgentId || null,
+        effort: targetChat.effort || null,
       },
     }).catch(err => console.error('[minibar send] IPC error:', err.message))
   }

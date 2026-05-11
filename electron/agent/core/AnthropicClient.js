@@ -7,10 +7,24 @@ const { logger } = require('../../logger')
 
 // Process-wide cache for thinking-mode capability per (baseURL, model).
 // Keyed by `${baseURL}|${model}`. Values: 'adaptive' | 'budget' | 'none'.
-// Populated only on downgrade — absent entries fall back to family defaults
-// in resolveThinkingConfig(). Cleared on app restart so future model upgrades
-// (e.g. Anthropic adding adaptive support to Haiku) get re-probed naturally.
+// Populated only on downgrade — absent entries fall back to effort-driven
+// resolution in resolveThinkingConfig(). Cleared on app restart so future
+// model upgrades (e.g. Anthropic adding adaptive support to Haiku) get
+// re-probed naturally.
 const _thinkingModeCache = new Map()
+
+// User-facing "effort" tier → Anthropic API thinking payload.
+// Mirrors Claude Code's /effort slash command 5-tier slider.
+// Exported for tests and for ConfigView to render tier metadata (name + tokens).
+const EFFORT_TO_THINKING = {
+  low:    { type: 'enabled', budget_tokens: 1024 },
+  medium: { type: 'enabled', budget_tokens: 4096 },
+  high:   { type: 'enabled', budget_tokens: 16384 },
+  xhigh:  { type: 'enabled', budget_tokens: 32768 },
+  max:    { type: 'adaptive' },
+}
+const EFFORT_TIERS = ['low', 'medium', 'high', 'xhigh', 'max']
+const DEFAULT_EFFORT = 'medium'
 
 class AnthropicClient {
   constructor(config) {
@@ -52,19 +66,21 @@ class AnthropicClient {
     return `${this.config.baseURL || ''}|${this.resolveModel()}`
   }
 
-  // Resolve the thinking-mode payload to send for this model, or null to
-  // disable thinking. Family-based defaults: opus/sonnet → adaptive,
-  // haiku → budget. Cache overrides take precedence (set by downgrade).
-  // Unknown families default to disabled to avoid 400s on novel aliases.
-  resolveThinkingConfig() {
+  // Resolve the thinking-mode payload from a Claude-Code-style effort tier.
+  // 5 tiers mapped to Anthropic API `thinking` field:
+  //   low    → budget 1024  (API minimum; fast, minimal planning)
+  //   medium → budget 4096  (default; suits most coding/QA tasks)
+  //   high   → budget 16384 (deep planning for complex code/docs)
+  //   xhigh  → budget 32768 (algorithm/proof-level reasoning)
+  //   max    → adaptive     (model auto-decides up to max_tokens-1024)
+  // Downgrade cache (markThinkingDowngrade) wins over effort — set by API
+  // 400 retry path when a server rejects thinking on this model.
+  resolveThinkingConfig(effort) {
     const cached = _thinkingModeCache.get(this._thinkingCacheKey())
     if (cached === 'none') return null
     if (cached === 'budget') return { type: 'enabled', budget_tokens: 8192 }
     if (cached === 'adaptive') return { type: 'adaptive' }
-    const model = this.resolveModel()
-    if (model.includes('haiku')) return { type: 'enabled', budget_tokens: 8192 }
-    if (model.includes('opus') || model.includes('sonnet')) return { type: 'adaptive' }
-    return null
+    return EFFORT_TO_THINKING[effort] || EFFORT_TO_THINKING.medium
   }
 
   // Move this (baseURL, model) one step down the thinking-support chain
@@ -106,4 +122,4 @@ class AnthropicClient {
   }
 }
 
-module.exports = { AnthropicClient }
+module.exports = { AnthropicClient, EFFORT_TO_THINKING, EFFORT_TIERS, DEFAULT_EFFORT }

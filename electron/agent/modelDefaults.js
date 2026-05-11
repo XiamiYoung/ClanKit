@@ -4,7 +4,7 @@
  * Data sources (in priority order):
  *   1. Online-cached version  — DATA_DIR/litellm-models.json (fetched at startup)
  *   2. Bundled version        — electron/data/litellm-models.json (shipped with app)
- *   3. Fallback               — 32768
+ *   3. Family heuristic       — opus → 32000, others → 64000 (claw-code style)
  *
  * Update the bundled file: `npm run update-models`
  */
@@ -12,7 +12,20 @@ const fs = require('fs')
 const path = require('path')
 const { logger } = require('../logger')
 
-const FALLBACK_MAX_OUTPUT_TOKENS = 32000
+// Catalog-miss fallback: mirrors Anthropic's reference impl (claw-code
+// rust/crates/api/src/providers/mod.rs:205-212). Modern flagships output
+// at least 64K; Opus is intentionally lower because its longer outputs
+// blow up cost. A single 32K constant was bottlenecking every model whose
+// alias the catalog didn't recognize.
+function familyFallback(modelId) {
+  if (!modelId) return 64000
+  const id = String(modelId).toLowerCase()
+  if (id.includes('opus')) return 32000
+  return 64000
+}
+// Legacy export — kept as a permissive default for callers that don't
+// pass a modelId. Equal to the "non-opus" family fallback.
+const FALLBACK_MAX_OUTPUT_TOKENS = 64000
 const LITELLM_URL = 'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json'
 
 // Bundled file path (relative to this file — works in both dev and packaged app)
@@ -126,7 +139,7 @@ function lookupModelMaxOutputTokens(modelId, dataDir) {
   }
   if (bestVal !== null) return bestVal
 
-  return FALLBACK_MAX_OUTPUT_TOKENS
+  return familyFallback(modelId)
 }
 
 /**
@@ -164,7 +177,7 @@ function lookupModelMaxOutputTokensDetailed(modelId, dataDir) {
   }
   if (bestVal !== null) return { value: bestVal, isFallback: false }
 
-  return { value: FALLBACK_MAX_OUTPUT_TOKENS, isFallback: true }
+  return { value: familyFallback(modelId), isFallback: true }
 }
 
 /**

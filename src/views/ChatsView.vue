@@ -680,6 +680,22 @@
                       <option value="all_permissions">{{ t('chats.allPermissions') }}</option>
                     </select>
                   </div>
+                  <!-- Anthropic Effort Selector — only when chat uses Anthropic -->
+                  <div v-if="hasAnthropicAgent" class="flex items-center gap-1">
+                    <label class="text-xs font-medium" style="color:#6B7280; white-space:nowrap;">
+                      {{ t('chats.anthropicEffort') }}:
+                    </label>
+                    <select
+                      v-model="chatEffort"
+                      class="permission-mode-select"
+                      :class="'pms-effort-' + chatEffort"
+                      v-tooltip="t('chats.anthropicEffortTooltip')"
+                    >
+                      <option v-for="tier in EFFORT_TIERS_META" :key="tier.id" :value="tier.id">
+                        {{ t('effortTier.' + tier.id) }} · {{ tier.tokens }}
+                      </option>
+                    </select>
+                  </div>
                   <!-- Status Info -->
                   <span v-if="!isGroupChat && !gridMode" class="text-xs" style="color:#9CA3AF; white-space:nowrap;">
                     {{ enabledSkills.length }} {{ t('chats.statusSkills') }}{{ enabledToolsCount > 0 ? ', ' + enabledToolsCount + ' ' + t('chats.statusTools') : '' }}{{ enabledMcpCount > 0 ? ', ' + enabledMcpCount + ' MCP' : '' }}{{ enabledKnowledgeCount > 0 ? ', ' + enabledKnowledgeCount + ' RAG' : '' }}
@@ -1658,6 +1674,42 @@ const enabledKnowledgeCount = computed(() => {
 // ── Permission mode for quick selector in status bar ──
 const chatPermissionMode = computed({
   get: () => chatsStore.activeChat?.permissionMode || 'inherit'
+})
+
+// ── Anthropic effort tier selector — only visible if at least one active
+//    agent (system, group, or user-agent) uses an Anthropic provider.
+const EFFORT_TIERS_META = [
+  { id: 'low',    tokens: '1,024'  },
+  { id: 'medium', tokens: '4,096'  },
+  { id: 'high',   tokens: '16,384' },
+  { id: 'xhigh',  tokens: '32,768' },
+  { id: 'max',    tokens: 'adaptive' },
+]
+const _agentUsesAnthropic = (agentId) => {
+  if (!agentId) return false
+  const agent = agentsStore.getAgentById(agentId)
+  if (!agent?.providerId) return false
+  const provider = configStore.getProvider(agent.providerId)
+  return provider?.type === 'anthropic'
+}
+const hasAnthropicAgent = computed(() => {
+  const chat = chatsStore.activeChat
+  if (!chat) return false
+  const ids = []
+  if (chat.systemAgentId) ids.push(chat.systemAgentId)
+  if (chat.userAgentId)   ids.push(chat.userAgentId)
+  if (Array.isArray(chat.groupAgentIds)) ids.push(...chat.groupAgentIds)
+  return ids.some(_agentUsesAnthropic)
+})
+const chatEffort = computed({
+  get: () => chatsStore.activeChat?.effort || 'medium',
+  set: (val) => {
+    const chat = chatsStore.activeChat
+    if (chat) {
+      chat.effort = val
+      chatsStore.persistChat?.(chat.id)
+    }
+  },
 })
 
 const permissionModeTitle = computed(() => {
@@ -3515,6 +3567,22 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
 }
 .permission-mode-select.pms-all_permissions {
   color: #B91C1C; background-color: #FEF2F2;
+}
+/* Anthropic effort tiers — color graded from cool (fast) to warm (deep) */
+.permission-mode-select.pms-effort-low {
+  color: #0369A1; background-color: #E0F2FE;
+}
+.permission-mode-select.pms-effort-medium {
+  color: #6D28D9; background-color: #F3E8FF;
+}
+.permission-mode-select.pms-effort-high {
+  color: #9333EA; background-color: #FAE8FF;
+}
+.permission-mode-select.pms-effort-xhigh {
+  color: #C2410C; background-color: #FFEDD5;
+}
+.permission-mode-select.pms-effort-max {
+  color: #B91C1C; background-color: #FEE2E2;
 }
 .permission-mode-select:hover {
   opacity: 0.85;

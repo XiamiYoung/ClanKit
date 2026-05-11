@@ -50,7 +50,7 @@ export const PROVIDER_PRESETS = {
     auth: 'bearer',
     defaultBaseURL: 'https://api.deepseek.com',
     defaultModels: ['deepseek-chat', 'deepseek-coder'],
-    hardLimits: { maxOutputTokens: 65536 },
+    hardLimits: {},
     apiKeyUrl: 'https://platform.deepseek.com/api-keys',
     freeInfo: { badge: 'paid', labelKey: 'onboarding.freeInfo.deepseekPaid' },
   },
@@ -60,7 +60,7 @@ export const PROVIDER_PRESETS = {
     auth: 'bearer',
     defaultBaseURL: 'https://generativelanguage.googleapis.com',
     defaultModels: [],
-    hardLimits: { maxOutputTokens: 8192 },
+    hardLimits: {},
     apiKeyUrl: 'https://aistudio.google.com/api-keys',
     freeInfo: { badge: 'free', labelKey: 'onboarding.freeInfo.googleFree' },
   },
@@ -70,7 +70,7 @@ export const PROVIDER_PRESETS = {
     auth: 'bearer',
     defaultBaseURL: 'https://api.minimax.chat',
     defaultModels: [],
-    hardLimits: { maxOutputTokens: 6144 },
+    hardLimits: {},
     apiKeyUrl: 'https://platform.minimaxi.com/user-center/basic-information/interface-key',
     freeInfo: { badge: 'paid', labelKey: 'onboarding.freeInfo.paid' },
   },
@@ -80,7 +80,7 @@ export const PROVIDER_PRESETS = {
     auth: 'bearer',
     defaultBaseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     defaultModels: ['qwen-max', 'qwen-plus', 'qwen-turbo'],
-    hardLimits: { maxOutputTokens: 8192 },
+    hardLimits: {},
     apiKeyUrl: 'https://bailian.console.aliyun.com/',
     freeInfo: { badge: 'trial', labelKey: 'onboarding.freeInfo.qwenTrial' },
   },
@@ -90,7 +90,7 @@ export const PROVIDER_PRESETS = {
     auth: 'bearer',
     defaultBaseURL: 'https://open.bigmodel.cn/api/paas/v4',
     defaultModels: ['glm-4', 'glm-4-flash', 'glm-3-turbo'],
-    hardLimits: { maxOutputTokens: 4096 },
+    hardLimits: {},
     apiKeyUrl: 'https://open.bigmodel.cn/usercenter/apikeys',
     freeInfo: { badge: 'free', labelKey: 'onboarding.freeInfo.glmFree' },
   },
@@ -140,7 +140,7 @@ export const PROVIDER_PRESETS = {
     auth: 'bearer',
     defaultBaseURL: 'https://api.moonshot.cn/v1',
     defaultModels: ['moonshot-v1-8k', 'moonshot-v1-32k', 'moonshot-v1-128k'],
-    hardLimits: { maxOutputTokens: 8192 },
+    hardLimits: {},
     apiKeyUrl: 'https://platform.moonshot.cn/console/api-keys',
     freeInfo: { badge: 'paid', labelKey: 'onboarding.freeInfo.paid' },
   },
@@ -256,12 +256,12 @@ export const useConfigStore = defineStore('config', () => {
 
   function createProvider(presetType, name = null) {
     const preset = PROVIDER_PRESETS[presetType] || PROVIDER_PRESETS.custom
-    const settings = {
-      maxOutputTokens: preset.hardLimits?.maxOutputTokens || 32768,
-    }
+    const settings = {}
     if (presetType === 'anthropic') {
       settings.opusModel = ''
       settings.haikuModel = ''
+      // Default thinking effort tier — chat creates snapshot this value
+      settings.effort = 'medium'
     }
     if (presetType === 'custom') {
       settings.protocol = 'openai'
@@ -290,8 +290,10 @@ export const useConfigStore = defineStore('config', () => {
     const sanitizedSettings = { ...(provider?.settings || {}) }
     delete sanitizedSettings.temperature
     delete sanitizedSettings.topP
-    if (sanitizedSettings.maxOutputTokens == null) {
-      sanitizedSettings.maxOutputTokens = 32768
+    delete sanitizedSettings.maxOutputTokens
+    // Backfill effort default for older Anthropic providers that predate the field
+    if (provider?.type === 'anthropic' && !sanitizedSettings.effort) {
+      sanitizedSettings.effort = 'medium'
     }
     return {
       ...provider,
