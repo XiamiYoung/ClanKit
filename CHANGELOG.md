@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.0.15](https://github.com/XiamiYoung/ClanKit/compare/v0.0.14...v0.0.15) (2026-05-11)
+
+
+### Features
+
+* **agent:** Anthropic thinking effort tiers + family-heuristic max_tokens fallback ([#21](https://github.com/XiamiYoung/ClanKit/issues/21)) ([47fcbc8](https://github.com/XiamiYoung/ClanKit/commit/47fcbc8b821e74f9cdf1cdc8e97c5df5d71da8b5))
+
+
+### Bug Fixes
+
+* **ci:** dispatch ci.yml on release-please PRs to bypass anti-recursion ([#22](https://github.com/XiamiYoung/ClanKit/issues/22)) ([a354638](https://github.com/XiamiYoung/ClanKit/commit/a3546389a90c769bcd20ac6b2c2534368c9c516b))
+* **manage-tasks:** add missing items schema to plan.allowList ([#14](https://github.com/XiamiYoung/ClanKit/issues/14)) ([58fba2f](https://github.com/XiamiYoung/ClanKit/commit/58fba2f6d84f871634146f17f84833b6b8497403))
+
 ## [0.0.14](https://github.com/XiamiYoung/ClanKit/compare/v0.0.13...v0.0.14) (2026-05-10)
 
 
