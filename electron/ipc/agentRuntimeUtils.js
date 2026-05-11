@@ -26,7 +26,7 @@ function detectModelProviderType(modelId) {
 function resolveProviderCreds(cfg, providerType) {
   if (cfg.providers && Array.isArray(cfg.providers)) {
     const provider = cfg.providers.find(item => item.type === providerType || item.id === providerType)
-    if (provider) return { apiKey: provider.apiKey || '', baseURL: provider.baseURL || '', model: provider.model || '', type: provider.type || providerType, maxOutputTokens: provider.settings?.maxOutputTokens || null, modelSettings: provider.modelSettings || {} }
+    if (provider) return { apiKey: provider.apiKey || '', baseURL: provider.baseURL || '', model: provider.model || '', type: provider.type || providerType, effort: provider.settings?.effort || null, modelSettings: provider.modelSettings || {} }
   }
   const legacy = cfg[providerType]
   if (legacy) return { apiKey: legacy.apiKey || '', baseURL: legacy.baseURL || '', model: legacy.model || '', type: providerType }
@@ -49,14 +49,18 @@ function isProviderActive(cfg, providerType) {
 }
 
 function applyProviderCredsToConfig(cfg, providerType) {
-  const { apiKey, baseURL, type: resolvedType, maxOutputTokens: providerMaxTokens, modelSettings } = resolveProviderCreds(cfg, providerType)
+  const { apiKey, baseURL, type: resolvedType, effort: providerEffort, modelSettings } = resolveProviderCreds(cfg, providerType)
   providerType = resolvedType || providerType
 
   // Always set cfg.provider so AgentLoop constructor can detect provider type
   cfg.provider = { type: providerType, apiKey, baseURL, model: cfg.customModel }
 
-  // Propagate per-provider maxOutputTokens as a hard ceiling
-  if (providerMaxTokens && providerMaxTokens > 0) cfg.providerMaxOutputTokens = providerMaxTokens
+  // Resolve Anthropic thinking effort: chat-level (cfg.effort, set by IPC from
+  // chat.meta) wins; otherwise fall back to provider default; otherwise
+  // 'medium'. AnthropicClient.resolveThinkingConfig maps this to budget_tokens.
+  if (providerType === 'anthropic') {
+    cfg.effort = cfg.effort || providerEffort || 'medium'
+  }
 
   // Propagate per-model settings so AgentLoop can resolve model-level maxOutputTokens
   if (modelSettings && Object.keys(modelSettings).length > 0) cfg._modelSettings = modelSettings

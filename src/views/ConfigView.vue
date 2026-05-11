@@ -715,6 +715,26 @@
                     <label class="form-label">{{ t('config.baseURL') }}</label>
                     <input v-model="selectedProvider.baseURL" type="url" :placeholder="configStore.PROVIDER_PRESETS[selectedProvider.type]?.defaultBaseURL || 'https://...'" class="field" />
                   </div>
+                  <!-- Anthropic thinking effort tier (segmented control) -->
+                  <div v-if="selectedProvider.type === 'anthropic'" class="form-group compact">
+                    <label class="form-label">
+                      {{ t('config.anthropicEffort') }}
+                      <span class="form-label-hint">{{ t('config.anthropicEffortHint') }}</span>
+                    </label>
+                    <div class="effort-segmented">
+                      <button
+                        v-for="tier in EFFORT_TIERS_META"
+                        :key="tier.id"
+                        type="button"
+                        class="effort-seg-btn"
+                        :class="{ 'effort-seg-btn--active': (selectedProvider.settings.effort || 'medium') === tier.id }"
+                        @click="selectedProvider.settings.effort = tier.id"
+                      >
+                        <span class="effort-seg-name">{{ t('effortTier.' + tier.id) }}</span>
+                        <span class="effort-seg-tokens">{{ tier.tokensShort }}</span>
+                      </button>
+                    </div>
+                  </div>
 
                   <!-- Model -->
                   <div class="form-divider"></div>
@@ -892,32 +912,6 @@
                   </template>
 
                   <!-- Advanced Settings (collapsed by default) -->
-                  <div class="form-divider"></div>
-                  <button class="provider-advanced-toggle" @click="providerAdvancedOpen = !providerAdvancedOpen">
-                    <svg class="icon-xs" :style="{ transform: providerAdvancedOpen ? 'rotate(90deg)' : '' }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width: 0.75rem; height: 0.75rem; transition: transform 0.15s;">
-                      <polyline points="9 18 15 12 9 6"/>
-                    </svg>
-                    {{ t('config.advancedSettings') }}
-                  </button>
-                  <div v-if="providerAdvancedOpen" style="margin-top: 0.5rem;">
-                    <div class="form-group">
-                      <label class="form-label">
-                        {{ t('config.maxOutputTokens') }}
-                        <span class="form-label-hint" style="color:#9CA3AF;">{{ t('config.maxOutputTokensProviderFallback') }}</span>
-                        <span v-if="getHardLimit(selectedProvider, 'maxOutputTokens')" class="form-label-hint" style="color:#EF4444;">
-                          {{ t('config.hardLimit', '', { count: getHardLimit(selectedProvider, 'maxOutputTokens') }) }}
-                        </span>
-                      </label>
-                      <input
-                        v-model.number="selectedProvider.settings.maxOutputTokens"
-                        type="number"
-                        min="1"
-                        :max="getHardLimit(selectedProvider, 'maxOutputTokens') || 98304"
-                        class="field font-mono"
-                        style="max-width: 160px;"
-                      />
-                    </div>
-                  </div>
                 </div>
               </template>
             </div>
@@ -3937,9 +3931,7 @@ watch(
   { immediate: true }
 )
 
-const providerAdvancedOpen = ref(false)
 watch(modelsLeftNav, (val) => {
-  providerAdvancedOpen.value = false
   modelsFetchedOnce.value = false
   savedModelsMsg.value = ''
   testResultNew.value = null
@@ -3976,6 +3968,15 @@ const selectedTestModel = ref('')
 const testingProviderNew = ref(false)
 const testResultNew = ref(null)
 const showProviderKey = ref(false)
+
+// Anthropic thinking effort tiers — kept in sync with electron/agent/core/AnthropicClient.js EFFORT_TO_THINKING
+const EFFORT_TIERS_META = [
+  { id: 'low',    tokens: 1024,  tokensShort: '1K'  },
+  { id: 'medium', tokens: 4096,  tokensShort: '4K'  },
+  { id: 'high',   tokens: 16384, tokensShort: '16K' },
+  { id: 'xhigh',  tokens: 32768, tokensShort: '32K' },
+  { id: 'max',    tokens: null,  tokensShort: 'adaptive' },
+]
 
 // Selected provider model fetching state
 const providerModelsFetching = ref(false)
@@ -4510,12 +4511,6 @@ async function enrichProviderContext() {
       ? `${t('config.aiFillContextFailed')} ${result.error}`
       : t('config.aiFillContextFailed')
   }
-}
-
-function getHardLimit(provider, key) {
-  const { PROVIDER_PRESETS } = configStore
-  const preset = PROVIDER_PRESETS[provider.type]
-  return preset?.hardLimits?.[key]
 }
 
 // Per-model max output tokens helpers
@@ -5422,6 +5417,46 @@ async function checkKnowledgeModelIfNeeded() {
    ══════════════════════════════════════════════════════════════════════════ */
 
 .config-page { height: 100%; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-main); }
+
+/* ── Anthropic effort segmented control ──────────────────────────────── */
+.effort-segmented {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border, #E5E7EB);
+  border-radius: 0.5rem;
+  background: var(--bg-card, #FFFFFF);
+  overflow: hidden;
+  width: fit-content;
+}
+.effort-seg-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 0.5rem 0.875rem;
+  background: transparent;
+  border: 0;
+  border-right: 1px solid var(--border, #E5E7EB);
+  cursor: pointer;
+  color: #6B7280;
+  transition: background 0.12s, color 0.12s;
+  min-width: 70px;
+}
+.effort-seg-btn:last-child { border-right: 0; }
+.effort-seg-btn:hover { background: #F9FAFB; color: #1F2937; }
+.effort-seg-btn--active { background: #1F2937; color: #FFFFFF; }
+.effort-seg-btn--active:hover { background: #1F2937; color: #FFFFFF; }
+.effort-seg-name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.effort-seg-tokens {
+  font-size: 0.6875rem;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  opacity: 0.85;
+}
 
 /* ── Header ─────────────────────────────────────────────────────────────── */
 .config-header { padding: 24px 32px 20px; background: var(--bg-card); border-bottom: 1px solid var(--border); flex-shrink: 0; }

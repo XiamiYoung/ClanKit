@@ -191,9 +191,6 @@ function buildAgentConfig(agent, globalCfg) {
       ...customProvider,
       model: agent.modelId || customProvider.model,
     }
-    // Propagate per-provider maxOutputTokens so AgentLoop uses it as the output token limit
-    const providerMax = customProvider.settings?.maxOutputTokens
-    if (providerMax && providerMax > 0) cfg.providerMaxOutputTokens = providerMax
     return cfg
   }
 
