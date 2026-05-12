@@ -3,6 +3,7 @@ import { useChatsStore } from '../stores/chats'
 import { useAgentsStore } from '../stores/agents'
 import { v4 as uuidv4 } from 'uuid'
 import { parseToolLogBlock, deduplicateToolSegments } from '../utils/parseToolLog'
+import { mergeContextMetrics } from '../utils/contextMetricsMerge'
 import { useI18n } from '../i18n/useI18n'
 
 /**
@@ -555,19 +556,34 @@ export function useChunkHandler({
       chatsStore.clearPermissionPending(cId)
     } else if (chunk.type === 'context_update') {
       if (chunk.metrics) {
-        targetChat.contextMetrics = { ...chunk.metrics }
+        // Merge with existing to avoid flashing to zero between turns when the
+        // backend emits a placeholder before the first API response.
+        targetChat.contextMetrics = mergeContextMetrics(targetChat.contextMetrics, chunk.metrics)
         // Store per-agent metrics for group chat inspector
         if (chunk.agentId) {
           if (!targetChat.perAgentContextMetrics) targetChat.perAgentContextMetrics = {}
-          targetChat.perAgentContextMetrics[chunk.agentId] = { agentName: chunk.agentName || chunk.agentId, ...chunk.metrics }
+          const prevAgent = targetChat.perAgentContextMetrics[chunk.agentId]
+          targetChat.perAgentContextMetrics[chunk.agentId] = {
+            agentName: chunk.agentName || prevAgent?.agentName || chunk.agentId,
+            ...mergeContextMetrics(prevAgent, chunk.metrics),
+          }
         }
         const msgId = perChatStreamingMsgId.get(routeKey)
         const streamMsg = msgId
           ? targetChat.messages?.find(m => m.id === msgId)
           : targetChat.messages?.slice().reverse().find(m => m.role === 'assistant' && m.streaming)
-        if (streamMsg && ((chunk.metrics.inputTokens || 0) > 0 || (chunk.metrics.outputTokens || 0) > 0)) {
+        // Per-message bubble uses the INCREMENTAL view: tokens this turn actually
+        // added to the conversation = input_tokens (new, non-cached) + cache_creation
+        // (new, written to cache). cache_read is excluded — it's the model re-reading
+        // history that was counted in earlier turns. Summing per-turn bubbles this
+        // way gives an honest total without double-counting the same content N times.
+        // Distinct from the top-bar effectiveInputTokens, which is the *full payload*
+        // for the latest turn (window-occupancy view).
+        const newInputTokens = (chunk.metrics.inputTokens || 0)
+                             + (chunk.metrics.cacheCreationInputTokens || 0)
+        if (streamMsg && (newInputTokens > 0 || (chunk.metrics.outputTokens || 0) > 0)) {
           streamMsg.tokenUsage = {
-            input: chunk.metrics.inputTokens || 0,
+            input: newInputTokens,
             output: chunk.metrics.outputTokens || 0,
           }
         }

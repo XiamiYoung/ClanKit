@@ -6,6 +6,7 @@ import { useAgentsStore } from '../stores/agents'
 import { useVoiceStore } from '../stores/voice'
 import { useModelsStore } from '../stores/models'
 import { parseMentions } from '../utils/mentions'
+import { mergeContextMetrics } from '../utils/contextMetricsMerge'
 import { useI18n } from '../i18n/useI18n'
 import { useInterrupt } from './useInterrupt'
 
@@ -812,7 +813,7 @@ export function useSendMessage({
         dbg(`Compaction done for ${agentName || 'agent'} — input tokens: ${res.metrics?.inputTokens?.toLocaleString() ?? '?'}`, 'success')
 
         // Update chat-level metrics only for single-agent chats; group chats keep per-agent.
-        if (res.metrics && !agentId) targetChat.contextMetrics = { ...res.metrics }
+        if (res.metrics && !agentId) targetChat.contextMetrics = mergeContextMetrics(targetChat.contextMetrics, res.metrics)
 
         await chatsStore.addMessage(chatId, {
           role: 'user',

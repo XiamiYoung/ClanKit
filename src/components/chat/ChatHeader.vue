@@ -76,12 +76,16 @@
               :aria-label="isProductivity ? t('chats.modeProductivity') : t('chats.modeChat')"
               :aria-haspopup="true"
               :aria-expanded="modeDropdownOpen ? 'true' : 'false'"
+              v-tooltip="isProductivity ? t('chats.modeProductivity') : t('chats.modeChat')"
               @click.stop="modeDropdownOpen = !modeDropdownOpen"
             >
-              <svg v-if="isProductivity" style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-              <svg v-else style="width:12px;height:12px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-              <span class="ch-mode-dd-label">{{ isProductivity ? t('chats.modeProductivity') : t('chats.modeChat') }}</span>
-              <svg class="ch-mode-dd-chevron" :class="{ open: modeDropdownOpen }" style="width:11px;height:11px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+              <!-- Icon-only: text label dropped so the pill fits next to call/settings
+                   in narrow panels (focus mode split). The current mode is still
+                   communicated via the icon (wrench = productivity, chat-bubble = chat),
+                   and the dropdown items below carry full descriptive text. -->
+              <svg v-if="isProductivity" style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+              <svg v-else style="width:13px;height:13px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <svg class="ch-mode-dd-chevron" :class="{ open: modeDropdownOpen }" style="width:10px;height:10px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
             </button>
             <div v-if="modeDropdownOpen" class="ch-mode-dd-menu" role="menu">
               <button
@@ -143,7 +147,8 @@
     <!-- Hamburger tab hanging below the header -->
     <button
       class="ch-header-tab"
-      v-tooltip="headerExpanded ? 'Collapse header' : 'Expand header'"
+      v-tooltip="headerExpanded ? t('chats.collapseHeader') : t('chats.expandHeader')"
+      :aria-label="headerExpanded ? t('chats.collapseHeader') : t('chats.expandHeader')"
       @click.stop="headerExpanded = !headerExpanded"
     >
       <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1095,14 +1100,19 @@ function confirmProductivitySwitch() {
   position: relative;
   z-index: 20;
 }
+/* The tab hangs into the context bar area below the header (it's the toggle
+   for the agent-selectors row). Kept compact + semi-transparent so it covers
+   only a small slice of the progress bar and reads through to the % / token
+   text. Hover grows it to a comfortable click target. Same treatment in both
+   normal and focus mode — no override needed. */
 .ch-header-tab {
   position: absolute;
   bottom: 0;
   left: 50%;
   transform: translate(-50%, 100%);
   z-index: 21;
-  width: 3.5rem;
-  height: 1.4rem;
+  width: 1.75rem;
+  height: 0.875rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1111,11 +1121,14 @@ function confirmProductivitySwitch() {
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #FFFFFF;
   cursor: pointer;
+  opacity: 0.55;
   box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-  transition: height 0.15s ease, background 0.15s ease;
+  transition: width 0.15s ease, height 0.15s ease, opacity 0.15s ease, background 0.15s ease;
 }
 .ch-header-tab:hover {
-  height: 1.875rem;
+  width: 2.25rem;
+  height: 1.125rem;
+  opacity: 1;
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
 }
 
@@ -1140,6 +1153,12 @@ function confirmProductivitySwitch() {
   border: 1px solid var(--border, #E5E5EA);
   box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02);
   transition: none;
+  /* In narrow panels (focus mode split, small windows), cap the badge so it
+     can't run under the absolute-positioned status (left) and actions (right).
+     Status ≤ ~5rem, actions ≤ ~7rem with the icon-only mode pill — reserving
+     14rem total keeps a clean gap. */
+  max-width: calc(100% - 14rem);
+  min-width: 0;
 }
 .ch-title-badge:hover {
   background: var(--bg-hover, #F5F5F5);
@@ -1895,9 +1914,9 @@ function confirmProductivitySwitch() {
 .ch-mode-dd-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: 0.25rem;
   height: 1.875rem;
-  padding: 0 0.625rem;
+  padding: 0 0.4375rem;
   border-radius: 0.5rem;
   border: 1px solid #1A1A1A;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
@@ -1909,6 +1928,7 @@ function confirmProductivitySwitch() {
   white-space: nowrap;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08);
   transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 .ch-mode-dd-btn:hover {
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);

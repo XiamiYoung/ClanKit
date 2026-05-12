@@ -53,6 +53,77 @@ function resolveMaxOutputTokens({ configuredMax, defaultMax }) {
   return defaultMax
 }
 
+// Apply Anthropic prompt-caching breakpoints to an Anthropic-style request.
+// Returns a new { system, messages, tools } with cache_control markers — does
+// NOT mutate inputs. Uses all 4 of Anthropic's allowed breakpoints:
+//   1. system           → caches the system prompt (largest, most stable)
+//   2. last tool        → caches the full tools array
+//   3. 2nd-to-last msg  → "previous-turn checkpoint": lets iter N+1 still
+//                          hit a marker placed by iter N, since iter N's
+//                          last marker moves forward in iter N+1.
+//   4. last msg         → "current-turn checkpoint": caches everything sent
+//                          this iteration so iter N+2 can read it.
+// The dual messages markers fix the iter1→iter2 cache miss seen with a single
+// trailing marker (previous marker disappears when new messages are appended).
+function applyAnthropicPromptCaching({ systemPrompt, messages, tools }) {
+  const EPH = { type: 'ephemeral' }
+
+  // Add cache_control to the last content block of a message.
+  // String content gets normalized to a single-text-block array first.
+  // Returns null if the message has no markable content (null/empty/non-array).
+  const markMessage = (m) => {
+    const c = m.content
+    if (typeof c === 'string') {
+      return { ...m, content: [{ type: 'text', text: c, cache_control: EPH }] }
+    }
+    if (Array.isArray(c) && c.length > 0) {
+      const newContent = c.map((b, j) => {
+        if (j === c.length - 1) return { ...b, cache_control: EPH }
+        return b
+      })
+      return { ...m, content: newContent }
+    }
+    return null
+  }
+
+  // 1. System — convert string to text-block array with cache_control.
+  //    Empty/falsy system stays falsy so the upstream omits the field.
+  let system
+  if (systemPrompt && String(systemPrompt).length > 0) {
+    system = [{ type: 'text', text: String(systemPrompt), cache_control: EPH }]
+  } else {
+    system = systemPrompt
+  }
+
+  // 2. Tools — clone outer array, add cache_control to the last tool only.
+  //    Anthropic caches all preceding tool definitions when the last one is
+  //    marked; marking individually would burn extra breakpoints.
+  let cachedTools = tools
+  if (Array.isArray(tools) && tools.length > 0) {
+    cachedTools = tools.map((t, i) => {
+      if (i === tools.length - 1) return { ...t, cache_control: EPH }
+      return t
+    })
+  }
+
+  // 3 + 4. Messages — mark the LAST and (when available) 2nd-to-last messages.
+  //    Two markers means iter N+1 can hit a marker that iter N placed: iter N's
+  //    "last msg" marker shifts into the "2nd-to-last" slot in iter N+1, so the
+  //    prefix up to that point is still bounded by a marker in the new request.
+  let cachedMessages = messages
+  if (Array.isArray(messages) && messages.length > 0) {
+    const lastIdx = messages.length - 1
+    const secondLastIdx = messages.length - 2
+    cachedMessages = messages.map((m, i) => {
+      if (i !== lastIdx && i !== secondLastIdx) return m
+      const marked = markMessage(m)
+      return marked || m
+    })
+  }
+
+  return { system, messages: cachedMessages, tools: cachedTools }
+}
+
 // Recursively sanitize all strings in an object/array.
 function sanitizeForJson(obj) {
   if (typeof obj === 'string') return stripLoneSurrogates(obj)
@@ -927,8 +998,10 @@ class AgentLoop {
           ? (this.config.provider?.type || 'deepseek')
           : (this.isOpenAI ? 'openai' : 'anthropic'))
 
-    // Emit initial context metrics
-    onChunk({ type: 'context_update', metrics: this.contextManager.getMetrics() })
+    // (Intentionally no initial context_update emit. ContextManager starts
+    // each run at zero — emitting that overwrites the chat's last-known
+    // metrics in the UI, flashing 0% / 0 tokens until the first real usage
+    // arrives. The next emit after the first API response carries real data.)
 
     // Emit agent start signal
     onChunk({ 
@@ -998,16 +1071,37 @@ class AgentLoop {
             }))
           : allToolsAnthropic
 
+        // Apply Anthropic prompt caching when talking to a native Anthropic
+        // endpoint. OpenAI-compat and Google paths use openaiParams later and
+        // have their own caching semantics (none for OpenAI-compat; implicit
+        // for Gemini), so we gate on the real Anthropic path only.
+        let _anthropicSystem = systemPrompt
+        let _anthropicMessages = conversationMessages
+        let _anthropicTools = allTools
+        if (!this.isOpenAI && !this.isGoogle) {
+          const cached = applyAnthropicPromptCaching({
+            systemPrompt,
+            messages: conversationMessages,
+            tools: allTools,
+          })
+          _anthropicSystem = cached.system
+          _anthropicMessages = cached.messages
+          _anthropicTools = cached.tools
+        }
+
         const createParams = {
           model,
           max_tokens: configuredMaxTokens,
-          system: systemPrompt,
-          messages: conversationMessages,
+          system: _anthropicSystem,
+          messages: _anthropicMessages,
           stream: true,
         }
 
         if (allTools.length > 0) {
-          createParams.tools = allTools
+          // Anthropic path gets the cache-marked tools; OpenAI-compat keeps the
+          // raw transformed `allTools` it built above (cache_control would just
+          // be ignored, but keeping the format clean).
+          createParams.tools = (this.isOpenAI || this.isGoogle) ? allTools : _anthropicTools
           // Apply effective tool_choice (Anthropic format).
           // Productivity mode forces 'any' on iteration 1 so the model cannot
           // skip a tool call. See _resolveEffectiveToolChoice.
@@ -2643,4 +2737,4 @@ class AgentLoop {
   }
 }
 
-module.exports = { AgentLoop, _maybeInjectReplyBank, resolveMaxOutputTokens }
+module.exports = { AgentLoop, _maybeInjectReplyBank, resolveMaxOutputTokens, applyAnthropicPromptCaching }

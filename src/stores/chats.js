@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { storage } from '../services/storage'
 import { en, zh } from '../i18n'
 import { parseToolLogBlock, deduplicateToolSegments } from '../utils/parseToolLog'
+import { mergeContextMetrics } from '../utils/contextMetricsMerge'
 import { PREVIEW_LIMITS, isLimitEnforced } from '../utils/guestLimits'
 
 const NEW_CHAT_TITLES = new Set([
@@ -1220,7 +1221,7 @@ export const useChatsStore = defineStore('chats', () => {
     if (chunk.agentId && _uiChunkCallback) {
       if (chunk.type === 'thinking_start') chat.isThinking = true
       else if (chunk.type === 'text') chat.isThinking = false
-      else if (chunk.type === 'context_update' && chunk.metrics) chat.contextMetrics = { ...chunk.metrics }
+      else if (chunk.type === 'context_update' && chunk.metrics) chat.contextMetrics = mergeContextMetrics(chat.contextMetrics, chunk.metrics)
       debouncedPersistChat(chatId)
       return
     }
@@ -1336,7 +1337,7 @@ export const useChatsStore = defineStore('chats', () => {
         msg.planState = 'pending'
       }
     } else if (chunk.type === 'context_update' && chunk.metrics) {
-      chat.contextMetrics = { ...chunk.metrics }
+      chat.contextMetrics = mergeContextMetrics(chat.contextMetrics, chunk.metrics)
     } else if (chunk.type === 'agent_step') {
       const msg = [...chat.messages].reverse().find(m => m.role === 'assistant' && m.streaming)
       if (msg) {

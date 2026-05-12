@@ -82,3 +82,63 @@ describe('ContextManager — known window handling', () => {
     expect(m.percentage).toBe(45)
   })
 })
+
+describe('ContextManager — prompt caching (effectiveInputTokens)', () => {
+  // With Anthropic prompt caching, response.usage.input_tokens is only the *non-cached*
+  // delta. The full payload the model sees is input + cache_creation + cache_read.
+  // shouldCompact/isExhausted/percentage must all use that sum, not raw inputTokens,
+  // or compact will never trigger in long cached conversations.
+
+  it('effectiveInputTokens sums the three cache-related fields', () => {
+    const cm = new ContextManager(null, 1_000_000)
+    cm.inputTokens = 3_210
+    cm.cacheCreationInputTokens = 3_161
+    cm.cacheReadInputTokens = 70_020
+    expect(cm.effectiveInputTokens).toBe(76_391)
+  })
+
+  it('getMetrics percentage uses effectiveInputTokens, not raw inputTokens', () => {
+    const cm = new ContextManager(null, 1_000_000)
+    // Mirrors the bug report: caching makes inputTokens tiny but real occupancy is ~76k
+    cm.inputTokens = 3_210
+    cm.cacheCreationInputTokens = 3_161
+    cm.cacheReadInputTokens = 70_020
+    const m = cm.getMetrics()
+    expect(m.effectiveInputTokens).toBe(76_391)
+    expect(m.percentage).toBe(8)   // round(76391 / 1_000_000 * 100) — not 0
+  })
+
+  it('updateUsage populates all three cache fields from response.usage', () => {
+    const cm = new ContextManager(null, 1_000_000)
+    cm.updateUsage({ usage: {
+      input_tokens: 3_210,
+      output_tokens: 92,
+      cache_creation_input_tokens: 3_161,
+      cache_read_input_tokens: 70_020,
+    }})
+    expect(cm.effectiveInputTokens).toBe(76_391)
+  })
+
+  it('shouldCompact fires on effective occupancy even when raw inputTokens is small', () => {
+    const cm = new ContextManager(null, 100_000)  // trigger at 70_000
+    cm.inputTokens = 5_000                         // raw alone wouldn't trigger
+    cm.cacheReadInputTokens = 68_000               // but cached history pushes us over
+    expect(cm.shouldCompact()).toBe(true)
+  })
+
+  it('isExhausted fires on effective occupancy even when raw inputTokens is small', () => {
+    const cm = new ContextManager(null, 100_000)  // threshold at 90_000
+    cm.inputTokens = 1_000
+    cm.cacheReadInputTokens = 92_000
+    expect(cm.isExhausted()).toBe(true)
+  })
+
+  it('backwards-compatible: behaves identically when cache fields are zero', () => {
+    const cm = new ContextManager(null, 100_000)
+    cm.inputTokens = 75_000
+    // No cache fields set — effective == raw
+    expect(cm.effectiveInputTokens).toBe(75_000)
+    expect(cm.shouldCompact()).toBe(true)
+    expect(cm.getMetrics().percentage).toBe(75)
+  })
+})

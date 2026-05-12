@@ -58,56 +58,88 @@ function tryParseJSON(str) {
 }
 
 /**
+ * Walk an array of lines and group them into tool-log entries.
+ * An entry starts whenever the trimmed line matches ENTRY_HEADER_RE; following
+ * lines that don't match a new header are treated as continuation of the
+ * previous entry's (multi-line) output.
+ * @param {string[]} lines
+ * @returns {Array<{ name: string, input: object|string, output: string, success: boolean }>}
+ */
+function parseEntriesFromLines(lines) {
+  const entries = []
+  let currentEntry = ''
+  for (const line of lines) {
+    if (ENTRY_HEADER_RE.test(line.trim())) {
+      if (currentEntry) {
+        const parsed = parseEntry(currentEntry.trim())
+        if (parsed) entries.push(parsed)
+      }
+      currentEntry = line.trim()
+    } else if (currentEntry) {
+      currentEntry += '\n' + line
+    }
+  }
+  if (currentEntry) {
+    const parsed = parseEntry(currentEntry.trim())
+    if (parsed) entries.push(parsed)
+  }
+  return entries
+}
+
+function toToolSegments(entries) {
+  return entries.map(t => ({
+    type: 'tool',
+    name: t.name,
+    input: t.input,
+    output: t.output || (t.success ? 'Success' : 'Error'),
+    _fromLog: true,
+    toolCallId: null,
+  }))
+}
+
+/**
  * Parse tool execution log blocks from text content.
+ *
+ * Two formats are recognized:
+ *   1. Wrapped: `[Tool execution log from this response:\n…\n]` — the canonical
+ *      form emitted by buildToolLog().
+ *   2. Unwrapped: a tail run of bare entries (`N. ✓/✗ name(…) → …`) without the
+ *      surrounding tags. Models sometimes echo the log this way, leaking the
+ *      JSON dump into the rendered text bubble. Requires ≥2 consecutive entries
+ *      to avoid stripping innocuous prose like a single "1. ✓ build()".
+ *
  * @param {string} text - Message text potentially containing tool log blocks
  * @returns {{ cleanedText: string, parsedTools: Array<{ type: 'tool', name: string, input: object|string, output: string, _fromLog: boolean }> } | null}
  *   Returns null if no log block is found.
  */
 export function parseToolLogBlock(text) {
-  if (!text || !text.includes('[Tool execution log from this response:')) return null
+  if (!text) return null
 
-  const parsedTools = []
-  const cleanedText = text.replace(TOOL_LOG_BLOCK_RE, (match, body) => {
-    // Split body into entries. Each entry starts with "N. ✓/✗" or "✓/✗" at line start.
-    // Multi-line outputs mean we can't just split by \n — we need to find entry boundaries.
-    const lines = body.split('\n')
-    let currentEntry = ''
+  if (text.includes('[Tool execution log from this response:')) {
+    const parsedTools = []
+    const cleanedText = text.replace(TOOL_LOG_BLOCK_RE, (match, body) => {
+      parsedTools.push(...parseEntriesFromLines(body.split('\n')))
+      return ''
+    }).replace(/\n{3,}/g, '\n\n').trim()
 
-    for (const line of lines) {
-      if (ENTRY_HEADER_RE.test(line.trim())) {
-        // New entry starts — flush previous
-        if (currentEntry) {
-          const parsed = parseEntry(currentEntry.trim())
-          if (parsed) parsedTools.push(parsed)
-        }
-        currentEntry = line.trim()
-      } else if (currentEntry) {
-        // Continuation of current entry (multi-line output)
-        currentEntry += '\n' + line
-      }
-    }
-    // Flush last entry
-    if (currentEntry) {
-      const parsed = parseEntry(currentEntry.trim())
-      if (parsed) parsedTools.push(parsed)
-    }
+    if (parsedTools.length === 0 && cleanedText === text.trim()) return null
 
-    return '' // Remove the block from text
-  }).replace(/\n{3,}/g, '\n\n').trim()
-
-  if (parsedTools.length === 0 && cleanedText === text.trim()) return null
-
-  return {
-    cleanedText,
-    parsedTools: parsedTools.map(t => ({
-      type: 'tool',
-      name: t.name,
-      input: t.input,
-      output: t.output || (t.success ? 'Success' : 'Error'),
-      _fromLog: true,
-      toolCallId: null
-    }))
+    return { cleanedText, parsedTools: toToolSegments(parsedTools) }
   }
+
+  // Fallback: unwrapped tail run of ≥2 bare entries.
+  const lines = text.split('\n')
+  let firstEntryIdx = -1
+  for (let i = 0; i < lines.length; i++) {
+    if (ENTRY_HEADER_RE.test(lines[i].trim())) { firstEntryIdx = i; break }
+  }
+  if (firstEntryIdx < 0) return null
+
+  const tailEntries = parseEntriesFromLines(lines.slice(firstEntryIdx))
+  if (tailEntries.length < 2) return null
+
+  const cleanedText = lines.slice(0, firstEntryIdx).join('\n').replace(/\n{3,}/g, '\n\n').trim()
+  return { cleanedText, parsedTools: toToolSegments(tailEntries) }
 }
 
 /**

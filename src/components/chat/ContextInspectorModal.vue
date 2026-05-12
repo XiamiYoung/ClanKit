@@ -236,7 +236,7 @@
             <div class="px-4 py-3" style="border-bottom:1px solid #222222;">
               <p class="mb-2" style="color:#4B5563; font-size:var(--fs-small); font-weight:600; text-transform:uppercase; letter-spacing:0.06em;">{{ t('chats.metrics') }}</p>
               <div class="flex items-center gap-5 flex-wrap" style="font-family:'JetBrains Mono',monospace; font-size:var(--fs-small);">
-                <span style="color:#6B7280;">in <span style="color:#E5E5EA; font-weight:600;">{{ (currentCard.metrics?.inputTokens ?? 0).toLocaleString() }}</span></span>
+                <span style="color:#6B7280;">in <span style="color:#E5E5EA; font-weight:600;">{{ (currentCard.metrics?.effectiveInputTokens ?? currentCard.metrics?.inputTokens ?? 0).toLocaleString() }}</span></span>
                 <span style="color:#6B7280;">out <span style="color:#E5E5EA; font-weight:600;">{{ (currentCard.metrics?.outputTokens ?? 0).toLocaleString() }}</span></span>
                 <span style="color:#6B7280;">ctx <span :style="(currentCard.metrics?.percentage ?? 0) > 85 ? 'color:#f87171;font-weight:600;' : (currentCard.metrics?.percentage ?? 0) > 65 ? 'color:#fbbf24;font-weight:600;' : 'color:#E5E5EA;font-weight:600;'">{{ Math.round(currentCard.metrics?.percentage ?? 0) }}%</span></span>
                 <span v-if="currentCard.metrics?.compactionCount" style="color:#fbbf24; font-weight:600;">{{ currentCard.metrics.compactionCount }} compact</span>
@@ -525,25 +525,34 @@ const derivedMaxTokens = computed(() => {
 })
 
 const aggregateMetrics = computed(() => {
+  // Compact-view metrics: the displayed "context input" is the *current* round's
+  // full payload (input + cache_creation + cache_read), not a cross-turn sum.
+  // Each turn already re-sends the whole history, so summing per-turn inputTokens
+  // would multi-count the same content and have no relation to window occupancy.
+  // The output figure stays cumulative — each turn's output is genuinely new tokens.
   const messages = chatsStore.activeChat?.messages || []
-  // Sum tokenUsage across all messages for conversation-wide totals
-  let totalInputTokens  = 0
   let totalOutputTokens = 0
   for (const msg of messages) {
-    if (msg.tokenUsage) {
-      totalInputTokens  += msg.tokenUsage.input  || 0
-      totalOutputTokens += msg.tokenUsage.output || 0
-    }
+    if (msg.tokenUsage) totalOutputTokens += msg.tokenUsage.output || 0
   }
-  // Prefer the live ContextManager value emitted via context_update chunks;
-  // otherwise fall back to the model's cached context_length.
+
   const liveMax   = props.contextMetrics?.maxTokens || 0
   const maxTokens = liveMax || derivedMaxTokens.value || 0
   const compactionCount = props.contextMetrics?.compactionCount || 0
-  // Recompute percentage from the live current-window inputTokens (not the sum of all turns)
-  const currentInput    = props.contextMetrics?.inputTokens || 0
-  const percentage      = maxTokens ? Math.round((currentInput / maxTokens) * 100) : 0
-  return { inputTokens: totalInputTokens, outputTokens: totalOutputTokens, maxTokens, compactionCount, percentage }
+
+  // Prefer effectiveInputTokens from the backend; fall back to summing the three
+  // cache-related fields ourselves for older snapshots that predate this field.
+  const cm = props.contextMetrics || {}
+  const effInput = cm.effectiveInputTokens
+    ?? ((cm.inputTokens || 0) + (cm.cacheCreationInputTokens || 0) + (cm.cacheReadInputTokens || 0))
+
+  // Always derive percentage from effInput/maxTokens when we have both; only fall
+  // back to the backend value when we lack the data to compute it. This keeps the
+  // displayed % self-consistent with the displayed input token count and immune to
+  // persisted-pre-fix snapshots where backend pct is a stale 0.
+  const percentage = maxTokens ? Math.round((effInput / maxTokens) * 100) : (cm.percentage || 0)
+
+  return { inputTokens: effInput, outputTokens: totalOutputTokens, maxTokens, compactionCount, percentage }
 })
 
 // ── Chat agent IDs ────────────────────────────────────────────────────────────

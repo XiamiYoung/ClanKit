@@ -38,17 +38,26 @@ class ContextManager {
     }
   }
 
+  // Effective context-window occupancy = the full payload the model just processed.
+  // With prompt caching, input_tokens is only the non-cached delta; cache_read and
+  // cache_creation are the rest of the conversation. All three together is what
+  // determines whether the next request will overflow.
+  get effectiveInputTokens() {
+    return this.inputTokens + this.cacheCreationInputTokens + this.cacheReadInputTokens
+  }
+
   /** Get current context metrics */
   getMetrics() {
-    const totalTokens = this.inputTokens + this.outputTokens
+    const eff = this.effectiveInputTokens
     return {
-      inputTokens:  this.inputTokens,
-      outputTokens: this.outputTokens,
-      totalTokens,
+      inputTokens:          this.inputTokens,
+      outputTokens:         this.outputTokens,
+      totalTokens:          this.inputTokens + this.outputTokens,
+      effectiveInputTokens: eff,
       // Only report maxTokens/percentage when the model's context window is actually known;
       // otherwise emit 0 so the UI falls back to its own model lookup instead of displaying a fake value.
-      maxTokens:    this.hasKnownContext ? this.maxContextTokens : 0,
-      percentage:   this.hasKnownContext ? Math.round((this.inputTokens / this.maxContextTokens) * 100) : 0,
+      maxTokens:                this.hasKnownContext ? this.maxContextTokens : 0,
+      percentage:               this.hasKnownContext ? Math.round((eff / this.maxContextTokens) * 100) : 0,
       cacheCreationInputTokens: this.cacheCreationInputTokens,
       cacheReadInputTokens:     this.cacheReadInputTokens,
       compactionCount:          this.compactionCount,
@@ -56,18 +65,19 @@ class ContextManager {
   }
 
   /** Check whether we should compact before the next API call.
+   *  Uses effectiveInputTokens so prompt-caching doesn't hide the real occupancy.
    *  Returns false when the window is unknown — reactive compaction handles
    *  the unknown-window case via provider error detection instead. */
   shouldCompact() {
     if (!this.hasKnownContext) return false
-    return this.inputTokens >= this.compactTrigger
+    return this.effectiveInputTokens >= this.compactTrigger
   }
 
   /** Check whether the context window is nearly exhausted (>90%).
    *  Returns false when the window is unknown. */
   isExhausted() {
     if (!this.hasKnownContext) return false
-    return this.inputTokens >= this.maxContextTokens * 0.9
+    return this.effectiveInputTokens >= this.maxContextTokens * 0.9
   }
 
   /**
