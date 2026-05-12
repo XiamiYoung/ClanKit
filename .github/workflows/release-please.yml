@@ -14,17 +14,42 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     steps:
+      # release-please needs a token to open/update its Release PR and to push
+      # the release tag. The default GITHUB_TOKEN works, BUT GitHub's
+      # anti-recursion rule means PRs (and tag pushes) created with GITHUB_TOKEN
+      # do NOT fire `pull_request` / `push` events — so ci.yml never runs on the
+      # Release PR and the ruleset-required "Test (...)" check stays stuck on
+      # "Expected — Waiting for status to be reported", blocking the merge.
+      #
+      # Real fix: add a repo secret RELEASE_PLEASE_TOKEN — a fine-grained PAT
+      # with Contents:write + Pull requests:write + Workflows:write, or a GitHub
+      # App installation token. PRs/tags it creates trigger workflows normally,
+      # so ci.yml runs as an ordinary PR check and satisfies the ruleset.
+      #
+      # When that secret is absent we fall back to GITHUB_TOKEN plus the manual
+      # `gh workflow run` dispatch below — which makes CI *run* on the Release
+      # PR, but (known GitHub limitation) a workflow_dispatch check run does NOT
+      # satisfy a ruleset-required status check. Set the secret to fix it.
+      - id: token-check
+        env:
+          RP_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+        run: |
+          if [ -n "$RP_TOKEN" ]; then
+            echo "has_pat=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_pat=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - id: release
         uses: googleapis/release-please-action@v4
         with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-      # When release-please merges its Release PR it creates a tag + GitHub
-      # Release. GITHUB_TOKEN-created tag pushes do NOT trigger downstream
-      # workflows (anti-recursion rule), so release.yml's `push: tags` would
-      # be silently ignored. workflow_dispatch is exempt from that rule, so
-      # we explicitly trigger the build here.
+      # release.yml builds on `push: tags`. A PAT-pushed tag triggers it
+      # automatically; a GITHUB_TOKEN-pushed tag does not. We dispatch
+      # explicitly regardless so the build always receives `r2_prefix=stable`.
       - name: Trigger Release Build workflow
         if: steps.release.outputs.release_created
         env:
@@ -35,13 +60,14 @@ jobs:
             --ref "${{ steps.release.outputs.tag_name }}" \
             -f r2_prefix=stable
 
-      # Same anti-recursion rule applies to the Release PR itself: when this
-      # job creates/updates it via GITHUB_TOKEN, ci.yml's `pull_request`
-      # trigger is silently skipped, leaving the PR stuck with required
-      # checks "Expected — Waiting for status to be reported". Re-dispatch
-      # ci.yml against each PR's head branch via workflow_dispatch (exempt).
-      - name: Trigger CI on release PRs
-        if: steps.release.outputs.prs_created == 'true'
+      # No-PAT fallback only: the Release PR was opened with GITHUB_TOKEN, so
+      # ci.yml's `pull_request` trigger was skipped. Dispatch ci.yml via
+      # workflow_dispatch (exempt from anti-recursion) so CI at least runs.
+      # NOTE: this does NOT satisfy a ruleset-required status check — configure
+      # RELEASE_PLEASE_TOKEN for the real fix. Skipped when a PAT is present
+      # (ci.yml then runs as a normal PR check on its own).
+      - name: Trigger CI on release PRs (no-PAT fallback)
+        if: steps.release.outputs.prs_created == 'true' && steps.token-check.outputs.has_pat == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PRS: ${{ steps.release.outputs.prs }}
