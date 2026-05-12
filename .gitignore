@@ -25,8 +25,10 @@ npm-debug.log*
 *.swo
 *~
 
-# Claude Code local settings
-.claude/
+# Claude Code: track settings.json + hooks/ (shared), ignore everything else under .claude/
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
 
 # AI development memory — local-only, contains internal incident notes
 CLAUDE.md
@@ -90,3 +92,8 @@ __pycache__/
 
 # jsc
 *.jsc
+
+# auto-review hook (.claude/hooks/auto-review.mjs) summary artifact; runtime state
+# (.claude/.review-state.json, .claude/.review-tmp/, .claude/.no-auto-review) is
+# already covered by the ".claude/*" rule above.
+REVIEW.md
