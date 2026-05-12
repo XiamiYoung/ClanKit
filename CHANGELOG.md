@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.16](https://github.com/XiamiYoung/ClanKit/compare/v0.0.15...v0.0.16) (2026-05-12)
+
+
+### Features
+
+* **agent:** Anthropic prompt caching + accurate context token accounting ([#23](https://github.com/XiamiYoung/ClanKit/issues/23)) ([1fb6f1a](https://github.com/XiamiYoung/ClanKit/commit/1fb6f1adb229a92a337eb5319ac0096715ac98f6))
+
 ## [0.0.15](https://github.com/XiamiYoung/ClanKit/compare/v0.0.14...v0.0.15) (2026-05-11)
 
 
