@@ -190,10 +190,7 @@
 
     <!-- ══════════════ EDITOR SURFACE ══════════════ -->
     <div class="docx-surface" ref="surfaceRef">
-      <div v-if="loading" class="docx-loading">
-        <svg class="animate-spin" style="width:24px;height:24px;color:#9CA3AF;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>
-        <span>Loading document...</span>
-      </div>
+      <DocsLoadingOverlay v-if="loading" :loading="true" variant="inline" label="Loading document..." />
       <div
         v-else
         class="docx-page"
@@ -259,6 +256,7 @@ import { TableRow } from '@tiptap/extension-table-row'
 import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import mammoth from 'mammoth/mammoth.browser.min.js'
+import DocsLoadingOverlay from './DocsLoadingOverlay.vue'
 
 const props = defineProps({
   base64: { type: String, required: true },
@@ -781,15 +779,6 @@ watch(() => props.base64, (val) => {
   justify-content: center;
   padding: 2rem 1rem;
   
-}
-.docx-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 4rem;
-  color: #9CA3AF;
-  font-size: var(--fs-secondary);
 }
 .docx-page {
   width: 8.5in;

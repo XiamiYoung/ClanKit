@@ -159,10 +159,7 @@
 
     <!-- ══════════════ GRID ══════════════ -->
     <div class="xlsx-grid-wrapper" ref="gridWrapper" @keydown="onGridKeydown" tabindex="0">
-      <div v-if="loading" class="xlsx-loading">
-        <svg class="animate-spin" style="width:24px;height:24px;color:#9CA3AF;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.2-8.6"/></svg>
-        <span>Loading spreadsheet...</span>
-      </div>
+      <DocsLoadingOverlay v-if="loading" :loading="true" variant="inline" label="Loading spreadsheet..." />
       <table v-else class="xlsx-table" @mousedown="onMouseDown" @contextmenu.prevent="onTableContextMenu">
         <!-- Column headers -->
         <thead>
@@ -304,6 +301,7 @@
 
 <script setup>
 import { ref, computed, reactive, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
+import DocsLoadingOverlay from './DocsLoadingOverlay.vue'
 
 const props = defineProps({
   base64: { type: String, required: true },
@@ -1420,15 +1418,6 @@ defineExpose({ getSheetTextContent, getAllSheetsText, performSearchReplace, coun
   overflow: auto;
   outline: none;
   
-}
-.xlsx-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 4rem;
-  color: #9CA3AF;
-  font-size: var(--fs-secondary);
 }
 .xlsx-table {
   border-collapse: collapse;

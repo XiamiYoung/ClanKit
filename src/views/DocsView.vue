@@ -170,14 +170,9 @@
           <!-- Resize blocker: covers the panel during sidebar drag so the webview doesn't swallow mousemove events -->
           <div v-if="isResizing" style="position:absolute;inset:0;z-index:50;cursor:col-resize;"></div>
 
-          <!-- Loading file -->
-          <div v-if="store.fileLoading" class="flex-1 flex items-center justify-center">
-            <div class="text-center">
-              <svg class="mx-auto mb-3 animate-spin" style="width:32px;height:32px;color:#9CA3AF;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <path d="M21 12a9 9 0 1 1-6.2-8.6"/>
-              </svg>
-              <p style="font-family:'Inter',sans-serif; font-size:var(--fs-body); color:#9CA3AF;">{{ t('notes.openingFile') }}</p>
-            </div>
+          <!-- Loading file (disk read phase) -->
+          <div v-if="store.fileLoading" class="flex-1 flex">
+            <DocsLoadingOverlay :loading="true" variant="inline" :label="t('notes.openingFile')" />
           </div>
 
           <!-- File open error -->
@@ -444,13 +439,16 @@
                       <div v-if="htmlWvIsLoading" class="html-wv-url-loader"></div>
                     </div>
                   </div>
-                  <webview
-                    ref="htmlWebviewRef"
-                    class="docs-html-preview"
-                    :src="htmlFileUrl"
-                    @dom-ready="onHtmlWvDomReady"
-                    @did-finish-load="onHtmlWvFinishLoad"
-                  ></webview>
+                  <div class="docs-html-preview-wrap">
+                    <webview
+                      ref="htmlWebviewRef"
+                      class="docs-html-preview"
+                      :src="htmlFileUrl"
+                      @dom-ready="onHtmlWvDomReady"
+                      @did-finish-load="onHtmlWvFinishLoad"
+                    ></webview>
+                    <DocsLoadingOverlay :loading="htmlWvIsLoading" variant="overlay" />
+                  </div>
                 </div>
 
                 <!-- HTML: Source mode (code editor) -->
@@ -867,6 +865,7 @@ import CodeViewer from '../components/notes/CodeViewer.vue'
 import PptxEditor from '../components/notes/PptxEditor.vue'
 import DocxEditor from '../components/notes/DocxEditor.vue'
 import XlsxEditor from '../components/notes/XlsxEditor.vue'
+import DocsLoadingOverlay from '../components/notes/DocsLoadingOverlay.vue'
 import AiMagicPanel from '../components/notes/AiMagicPanel.vue'
 import SearchReplaceBar from '../components/notes/SearchReplaceBar.vue'
 import { marked } from 'marked'
@@ -2451,7 +2450,11 @@ renderer.code = function (code, infostring) {
   return `<pre><code>${_escapeHtml(code)}</code></pre>`
 }
 marked.use({ gfm: true, breaks: true, renderer })
-marked.use(markedKatex({ throwOnError: false, nonStandard: true }))
+// strict:'ignore' silences KaTeX warnings about CJK chars / en-dashes / fullwidth
+// punctuation when content inside `$…$` isn't actually math (very common in
+// Chinese docs where `$` shows up as a literal). nonStandard already tolerates
+// these tokens; without strict:'ignore' KaTeX still floods the console.
+marked.use(markedKatex({ throwOnError: false, nonStandard: true, strict: 'ignore' }))
 marked.use(markedFootnote())
 
 function _escapeHtml(s) {
@@ -3650,6 +3653,12 @@ defineExpose({ docTreeCollapsed })
 @keyframes urlLoad {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
+}
+.docs-html-preview-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
 }
 .docs-html-preview {
   flex: 1;

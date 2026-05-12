@@ -11,8 +11,12 @@
  */
 const { logger } = require('../../logger')
 
-const MAX_TOKENS = 1024
-const COLLAB_MAX_TOKENS = 2048
+// Generous budgets so reasoning models (o1, o3, GPT-5 thinking, Claude extended
+// thinking, Gemini Deep Think) have headroom for hidden reasoning tokens before
+// the visible JSON output. Memory extraction runs at most once per turn so the
+// cost is negligible compared to the main chat.
+const MAX_TOKENS = 4096
+const COLLAB_MAX_TOKENS = 6144
 
 /**
  * Build the extraction prompt dynamically based on whether participants are provided.
@@ -306,13 +310,42 @@ Respond with ONLY valid JSON (no markdown fences, no explanation):
     const clientOpts = { apiKey: this.apiKey }
     if (this.baseURL) clientOpts.baseURL = this.baseURL.replace(/\/+$/, '')
     const client = new Anthropic(clientOpts)
-    const response = await client.messages.create({
-      model: this.model,
-      max_tokens: maxTokens,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userContent }],
-    })
-    return response.content?.filter(b => b.type === 'text').map(b => b.text).join('') || ''
+    // Assistant prefill: by seeding the response with `{` we force Claude into
+    // JSON mode without needing a beta header. Works on Opus/Sonnet/Haiku and
+    // is a no-op if extended thinking is also on (thinking blocks emit first,
+    // then the prefilled text continuation). We prepend `{` back to the output
+    // so downstream parser sees the full object.
+    try {
+      const response = await client.messages.create({
+        model: this.model,
+        max_tokens: maxTokens,
+        system: systemPrompt,
+        messages: [
+          { role: 'user', content: userContent },
+          { role: 'assistant', content: '{' },
+        ],
+      })
+      const text = response.content?.filter(b => b.type === 'text').map(b => b.text).join('') || ''
+      return text.trimStart().startsWith('{') ? text : '{' + text
+    } catch (err) {
+      // Some Anthropic-compatible proxies / restricted models reject assistant
+      // prefill ("does not support assistant message prefill" / "must end with
+      // a user message"). Retry without the prefill — _parseResponse handles
+      // markdown fences and leading prose.
+      const msg = String(err?.message || err || '')
+      const prefillRejected = /assistant message prefill|must end with a user message/i.test(msg)
+      if (!prefillRejected) throw err
+      logger.debug('MemoryExtractor: assistant prefill rejected, retrying without', msg.slice(0, 160))
+      const response = await client.messages.create({
+        model: this.model,
+        max_tokens: maxTokens,
+        system: systemPrompt,
+        messages: [
+          { role: 'user', content: userContent },
+        ],
+      })
+      return response.content?.filter(b => b.type === 'text').map(b => b.text).join('') || ''
+    }
   }
 
   async _callOpenAI(systemPrompt, userContent, maxTokens) {
@@ -327,15 +360,33 @@ Respond with ONLY valid JSON (no markdown fences, no explanation):
       _directAuth: this.directAuth,
     }
     const client = new OpenAIClient(cfg).getClient()
-    const response = await client.chat.completions.create({
+    // Try structured JSON mode first — supported by OpenAI (gpt-4o+, gpt-5),
+    // DeepSeek, and most OpenAI-compatible providers. Some custom endpoints
+    // reject the `response_format` parameter; fall back to a plain request in
+    // that case so memory extraction still works (the parser handles prose).
+    const baseParams = {
       model: this.model,
       max_tokens: maxTokens,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userContent },
       ],
-    })
-    return response.choices?.[0]?.message?.content || ''
+    }
+    try {
+      const response = await client.chat.completions.create({
+        ...baseParams,
+        response_format: { type: 'json_object' },
+      })
+      return response.choices?.[0]?.message?.content || ''
+    } catch (err) {
+      // Common error fragments from providers that don't support response_format
+      const m = String(err?.message || '')
+      const unsupported = /response_format|json_object|not\s+support|unknown\s+param|unrecognized/i.test(m)
+      if (!unsupported) throw err
+      logger.debug('MemoryExtractor: response_format unsupported, retrying without', m.slice(0, 120))
+      const response = await client.chat.completions.create(baseParams)
+      return response.choices?.[0]?.message?.content || ''
+    }
   }
 
   _buildUserContent(userMsg, assistantMsg, userMemory, systemMemory, participants) {
@@ -361,16 +412,118 @@ Respond with ONLY valid JSON (no markdown fences, no explanation):
   }
 
   _parseResponse(text) {
+    if (!text) return null
+
+    // Strip reasoning/thinking wrappers emitted by reasoning models that ignore
+    // the system prompt and narrate first. We don't need this for Anthropic
+    // (`_callAnthropic` already filters thinking blocks at the SDK level) but
+    // OpenAI / OpenRouter / DeepSeek may surface these as inline tags in the
+    // content string, and so can poorly-tuned local models.
+    let cleaned = String(text)
+      .replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')
+      .replace(/<think>[\s\S]*?<\/think>/gi, '')
+      .replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, '')
+      .replace(/<analysis>[\s\S]*?<\/analysis>/gi, '')
+      // Markdown fences — ```json … ``` or plain ```
+      .replace(/```(?:json|JSON)?\s*/g, '')
+      .replace(/```/g, '')
+
+    // Fast path: whole cleaned response is valid JSON (the model behaved). Handles
+    // a top-level array (`[{...},{...}]`) which the brace iterator below would miss.
     try {
-      // Extract the first JSON object from the response, ignoring markdown fences,
-      // reasoning text, or any other content the model may have appended.
-      const start = text.indexOf('{')
-      const end = text.lastIndexOf('}')
-      if (start === -1 || end === -1 || end < start) return null
-      return JSON.parse(text.slice(start, end + 1))
+      const obj = JSON.parse(cleaned.trim())
+      const found = this._findMemoriesArray(obj)
+      if (found) return { memories: found }
     } catch {
-      logger.warn('MemoryExtractor: failed to parse JSON response', text.slice(0, 200))
+      // not a single clean JSON value — try candidate extraction below
+    }
+
+    // Try every brace-balanced JSON object in the response. Reasoning models
+    // and misbehaving utility models often emit prose + an unrelated `{...}`
+    // (e.g. a tool-call payload, an example, a partial schema); we want the
+    // one that actually contains a `memories` array.
+    for (const candidate of this._iterJsonObjects(cleaned)) {
+      try {
+        const obj = JSON.parse(candidate)
+        const found = this._findMemoriesArray(obj)
+        if (found) return { memories: found }
+      } catch {
+        // Skip malformed candidates (e.g. Windows path: `D:\c...` is not a
+        // valid JSON escape, so the substring fails to parse).
+      }
+    }
+
+    // Best-effort last-ditch: slice from the first `{` to the last `}`. Kept
+    // for cases where brace-balance was thrown off by unescaped `{` / `}` in
+    // string content (the iterator over-segments those).
+    try {
+      const start = cleaned.indexOf('{')
+      const end = cleaned.lastIndexOf('}')
+      if (start !== -1 && end > start) {
+        const obj = JSON.parse(cleaned.slice(start, end + 1))
+        const found = this._findMemoriesArray(obj)
+        if (found) return { memories: found }
+      }
+    } catch {
+      // fall through
+    }
+
+    // Memory extraction is best-effort — a turn with no extractable memory or
+    // an off-task utility model is normal, not a bug. Log at debug so it stays
+    // out of the default console flow.
+    logger.debug('MemoryExtractor: no parseable memories in response', text.slice(0, 200))
+    return null
+  }
+
+  /**
+   * Find an array under any `memories` key at any depth of a parsed JSON value.
+   * Handles top-level `{memories:[...]}`, wrapper schemas like
+   * `{result:{memories:[...]}}`, and array-of-memories without a wrapper.
+   * Returns the array or null. Bounded by a small depth limit to avoid
+   * pathological inputs.
+   */
+  _findMemoriesArray(value, depth = 0) {
+    if (!value || depth > 6) return null
+    if (Array.isArray(value)) {
+      // Heuristic: if it's an array of objects with the right shape, treat it
+      // as the memories array even if not nested under a `memories` key.
+      if (value.length === 0) return value
+      if (value.every(m => m && typeof m === 'object' && 'entry' in m && 'section' in m)) return value
       return null
+    }
+    if (typeof value !== 'object') return null
+    if (Array.isArray(value.memories)) return value.memories
+    for (const key of Object.keys(value)) {
+      const found = this._findMemoriesArray(value[key], depth + 1)
+      if (found) return found
+    }
+    return null
+  }
+
+  /**
+   * Yield every brace-balanced top-level `{...}` substring in the text, in order.
+   * Naive scanner — does not track strings, so it can over-segment inputs with
+   * `{` or `}` inside string literals. That's fine here: we hand each candidate
+   * to JSON.parse, which rejects invalid ones, and we keep iterating until we
+   * find one with the right shape.
+   */
+  *_iterJsonObjects(text) {
+    let depth = 0
+    let start = -1
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i]
+      if (ch === '{') {
+        if (depth === 0) start = i
+        depth++
+      } else if (ch === '}') {
+        if (depth > 0) {
+          depth--
+          if (depth === 0 && start !== -1) {
+            yield text.slice(start, i + 1)
+            start = -1
+          }
+        }
+      }
     }
   }
 }

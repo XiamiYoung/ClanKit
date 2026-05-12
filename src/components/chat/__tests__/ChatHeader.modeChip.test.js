@@ -127,7 +127,9 @@ describe('ChatHeader mode dropdown', () => {
     const btn = wrapper.find('.ch-mode-dd-btn')
     expect(btn.exists()).toBe(true)
     expect(btn.classes()).not.toContain('ch-mode-dd-btn--productivity')
-    expect(wrapper.find('.ch-mode-dd-label').text()).toMatch(/chat|聊天|Chat/i)
+    // Pill is icon-only now; the mode label moved to aria-label + tooltip so
+    // screen readers and hover still surface "chat" vs "productivity".
+    expect(btn.attributes('aria-label')).toMatch(/chats\.modeChat|chat|聊天/i)
   })
 
   it('shows productivity class when chat.mode === "productivity"', () => {

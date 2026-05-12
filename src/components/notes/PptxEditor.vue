@@ -290,12 +290,7 @@
         </div>
 
         <!-- Loading -->
-        <div v-else-if="loading" class="pptx-empty">
-          <svg class="animate-spin" style="width:32px;height:32px;color:#9CA3AF;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <path d="M21 12a9 9 0 1 1-6.2-8.6"/>
-          </svg>
-          <p style="margin-top:0.75rem;">Parsing presentation...</p>
-        </div>
+        <DocsLoadingOverlay v-else-if="loading" :loading="true" variant="inline" label="Parsing presentation..." />
 
         <!-- Parse error -->
         <div v-else-if="parseError" class="pptx-empty">
@@ -516,6 +511,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import DocsLoadingOverlay from './DocsLoadingOverlay.vue'
 
 const props = defineProps({
   base64: { type: String, required: true },

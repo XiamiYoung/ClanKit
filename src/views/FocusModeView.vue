@@ -99,12 +99,21 @@ watch(() => focusStore.isFocusMode, async (active) => {
     chatsStore.setActiveChat(focusStore.lastChatId)
   }
 
-  // Restore last doc, or open first available doc
+  // Restore last doc. Priority:
+  //   1. focusStore.lastDocPath — set during this app session by the watch below.
+  //   2. obsidian.activeFile — already-open file in AIDoc.
+  //   3. obsidian.restoreLastOpenedDoc() — persisted across app restarts via
+  //      main-process config; this is the path that handles the case where the
+  //      user kills the app and re-enters focus mode before visiting AIDoc.
+  //   4. first file in the vault tree.
   if (focusStore.lastDocPath) {
     await obsidian.openFile(focusStore.lastDocPath, focusStore.lastDocName)
   } else if (!obsidian.activeFile) {
-    const first = findFirstFile(obsidian.fileTree)
-    if (first) await obsidian.openFile(first.path, first.name)
+    await obsidian.restoreLastOpenedDoc()
+    if (!obsidian.activeFile) {
+      const first = findFirstFile(obsidian.fileTree)
+      if (first) await obsidian.openFile(first.path, first.name)
+    }
   }
 })
 

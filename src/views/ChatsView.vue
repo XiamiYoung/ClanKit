@@ -261,8 +261,8 @@
       <button
         @click="chatSidebarCollapsed = !chatSidebarCollapsed"
         class="chat-sidebar-expand-tab"
-        v-tooltip="chatSidebarCollapsed ? 'Expand chat list' : 'Collapse chat list'"
-        :aria-label="chatSidebarCollapsed ? 'Expand chat list' : 'Collapse chat list'"
+        v-tooltip="chatSidebarCollapsed ? t('chats.expandChatList') : t('chats.collapseChatList')"
+        :aria-label="chatSidebarCollapsed ? t('chats.expandChatList') : t('chats.collapseChatList')"
       >
         <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/>
@@ -704,7 +704,7 @@
                     {{ attachments.length === 1 ? t('chats.filesAttached', { count: attachments.length }) : t('chats.filesAttachedPlural', { count: attachments.length }) }}
                   </span>
                 </div>
-                <p class="text-xs" style="color:#9CA3AF;">
+                <p v-if="!focusModeStore.isFocusMode" class="text-xs" style="color:#9CA3AF;">
                   {{ t('chats.keyboardHintsEnterToSend') }}
                 </p>
               </div>
@@ -1462,21 +1462,54 @@ provide('interruptShared', {
 
 // Per-chat state — reads from the active chat object in the store (must be before useSendMessage)
 const activeRunning = computed(() => chatsStore.activeChat?.isRunning ?? false)
-const activeContextMetrics = computed(() => chatsStore.activeChat?.contextMetrics ?? { inputTokens: 0, outputTokens: 0, totalTokens: 0, maxTokens: 0, percentage: 0, compactionCount: 0 })
+// Normalized context metrics: handles three sources of staleness so the bar
+// stays correct even before the next turn refreshes the backend snapshot:
+//   1. Persisted percentage from before the effectiveInputTokens fix is stuck at 0
+//      because it was computed from raw inputTokens (which prompt caching makes
+//      tiny). Recompute from effectiveInputTokens / maxTokens when needed.
+//   2. Older snapshots have no effectiveInputTokens field. Synthesize it from
+//      the three cache-related fields.
+//   3. activeChat absent → safe zeros.
+const activeContextMetrics = computed(() => {
+  const cm = chatsStore.activeChat?.contextMetrics || null
+  if (!cm) {
+    return { inputTokens: 0, outputTokens: 0, totalTokens: 0, maxTokens: 0, effectiveInputTokens: 0, percentage: 0, compactionCount: 0 }
+  }
+  const effInput = cm.effectiveInputTokens
+    ?? ((cm.inputTokens || 0) + (cm.cacheCreationInputTokens || 0) + (cm.cacheReadInputTokens || 0))
+  const maxTokens = cm.maxTokens || 0
+  // Always derive percentage from effInput/maxTokens when we have both. This
+  // makes the bar self-consistent with the displayed "X 输入" number and
+  // immune to stale persisted percentages from before the fix.
+  const percentage = maxTokens ? Math.round((effInput / maxTokens) * 100) : (cm.percentage || 0)
+  return {
+    inputTokens: cm.inputTokens || 0,
+    outputTokens: cm.outputTokens || 0,
+    totalTokens: cm.totalTokens || 0,
+    maxTokens,
+    effectiveInputTokens: effInput,
+    percentage,
+    compactionCount: cm.compactionCount || 0,
+  }
+})
 const activePerAgentMetrics = computed(() => chatsStore.activeChat?.perAgentContextMetrics ?? {})
-const hasContextData = computed(() => activeContextMetrics.value.inputTokens > 0)
+const hasContextData = computed(() => activeContextMetrics.value.effectiveInputTokens > 0 || activeContextMetrics.value.inputTokens > 0)
 const hasMessages = computed(() => (chatsStore.activeChat?.messages?.length ?? 0) > 0)
-// Cumulative token totals across the whole chat (sum of per-message tokenUsage).
-// The header display uses these so users see chat-wide consumption instead of
-// just the latest request's usage, which matches what Inspector already shows.
+// Header display (next to the % bar):
+//   input  — current round's full payload (effectiveInputTokens). It must match
+//            what the percentage is computed from, otherwise the user sees
+//            "8% used" alongside a 1M+ "in" number and gets confused.
+//            Each turn re-sends the entire history, so cross-turn summing
+//            multi-counts the same content and has no relation to occupancy.
+//   output — genuine per-turn new tokens; cumulative across the chat is meaningful.
 const activeCumulativeTokens = computed(() => {
+  const cm = chatsStore.activeChat?.contextMetrics || {}
+  const input = cm.effectiveInputTokens
+    ?? ((cm.inputTokens || 0) + (cm.cacheCreationInputTokens || 0) + (cm.cacheReadInputTokens || 0))
   const messages = chatsStore.activeChat?.messages || []
-  let input = 0, output = 0
+  let output = 0
   for (const msg of messages) {
-    if (msg.tokenUsage) {
-      input  += msg.tokenUsage.input  || 0
-      output += msg.tokenUsage.output || 0
-    }
+    if (msg.tokenUsage) output += msg.tokenUsage.output || 0
   }
   return { input, output }
 })
@@ -2295,6 +2328,20 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   width: 1.875rem;
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
 }
+/* Focus mode: the chat panel can be short (split with docs, or small window),
+   so 50% center can collide with the header. Pin to a fixed offset that always
+   clears the title row (~52px) + context bar (~36px) ≈ 6.5rem. */
+.focus-chat-panel .chat-sidebar-expand-tab {
+  top: 6.5rem;
+  transform: none;
+}
+/* Same defensive treatment for short viewports outside focus mode. */
+@media (max-height: 600px) {
+  .chat-sidebar-expand-tab {
+    top: 6.5rem;
+    transform: none;
+  }
+}
 .chat-sidebar-resize {
   width: 4px;
   cursor: col-resize;
@@ -2761,6 +2808,13 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   gap: 0.75rem;
   background: #FFFFFF;
   border-bottom: 1px solid #E5E5EA;
+}
+/* Protect the labels/percentage/tokens from being clipped in narrow panels
+   (e.g. focus mode with a split docs view). The progress bar carries the
+   `flex-1` so it absorbs the shrink budget; everything else stays full-width. */
+.chat-context-bar > span,
+.chat-context-bar > button {
+  flex-shrink: 0;
 }
 
 /* ── Messages area ──────────────────────────────────────────────────────── */
