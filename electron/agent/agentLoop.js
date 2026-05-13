@@ -207,8 +207,9 @@ class AgentLoop {
       // this.anthropicClient.resolveModel() (e.g. contextManager) doesn't crash.
       this.anthropicClient = {
         resolveModel: () => this.geminiClient.resolveModel(),
-        resolveThinkingConfig: () => null,
-        markThinkingDowngrade: () => null,
+        resolveThinkingConfig: () => ({ thinking: null }),
+        markThinkingDowngrade: () => ({ thinking: null }),
+        markUseAdaptiveEffort: () => ({ thinking: null }),
         getClient: () => null,
         countTokens: async () => 0,
       }
@@ -396,7 +397,17 @@ class AgentLoop {
 
     // decision === 'ask' — pause and prompt the user
     const blockId = require('crypto').randomUUID()
-    logger.agent('PermissionGate: ASK', { toolName, blockId })
+    logger.agent('PermissionGate: ASK', {
+      toolName,
+      blockId,
+      // Diagnostic dump — figure out which input made the gate fall through.
+      gateChatMode: this.permissionGate.chatMode,
+      gateGlobalMode: this.permissionGate.globalMode,
+      gateChatAllowListLen: this.permissionGate.chatAllowList?.length || 0,
+      gateSandboxAllowListLen: this.permissionGate.sandboxAllowList?.length || 0,
+      commandStr: check.commandStr,
+      reason: check.reason,
+    })
 
     const userDecision = await new Promise((resolve) => {
       this._pendingPermissions.set(blockId, resolve)
@@ -1112,7 +1123,9 @@ class AgentLoop {
           // mainly there for OpenAI-compat fallbacks anyway.
           const effectiveChoice = this._resolveEffectiveToolChoice(iteration, true)
           if (effectiveChoice === 'required' || effectiveChoice === 'any') {
-            if (!thinkingCfg) createParams.tool_choice = { type: 'any' }
+            // Thinking and forced tool_choice are mutex on Anthropic — skip forcing
+            // when any thinking config is active (budget or adaptive).
+            if (!thinkingCfg?.thinking) createParams.tool_choice = { type: 'any' }
           } else if (effectiveChoice === 'none' && this.toolChoice === 'none') {
             // Honour explicit user 'none' setting (don't suppress mid-loop)
             createParams.tool_choice = { type: 'none' }
@@ -1162,14 +1175,19 @@ class AgentLoop {
         }
 
         // ── Thinking configuration ──
-        // Family-based defaults via AnthropicClient.resolveThinkingConfig().
+        // thinkingCfg is { thinking, output_config? } from resolveThinkingConfig.
+        // Older models accept thinking.type='enabled' (budget mode); newer Opus
+        // requires thinking.type='adaptive' + output_config.effort=<tier>.
         // Budget mode requires max_tokens > budget_tokens; bump if needed.
-        if (thinkingCfg) {
-          createParams.thinking = thinkingCfg
-          if (thinkingCfg.type === 'enabled' && thinkingCfg.budget_tokens) {
-            createParams.max_tokens = Math.max(createParams.max_tokens, thinkingCfg.budget_tokens + 1024)
+        const _thinking = thinkingCfg?.thinking
+        const _outputConfig = thinkingCfg?.output_config
+        if (_thinking) {
+          createParams.thinking = _thinking
+          if (_thinking.type === 'enabled' && _thinking.budget_tokens) {
+            createParams.max_tokens = Math.max(createParams.max_tokens, _thinking.budget_tokens + 1024)
           }
         }
+        if (_outputConfig) createParams.output_config = _outputConfig
 
         // ── Context-exhaustion check ──
         // Emergency flush + compact instead of stopping — conversations never interrupted.
@@ -1240,6 +1258,7 @@ class AgentLoop {
         let assistantContent = []
         let currentTextBlock = ''
         let currentToolUse = null
+        let currentThinkingBlock = null
         let stopReason = null
 
         // Emit step event for LLM call
@@ -1253,7 +1272,7 @@ class AgentLoop {
             model,
             provider,
             tools: allTools.length,
-            thinking: !!thinkingCfg,
+            thinking: !!thinkingCfg?.thinking,
             msgs: createParams.messages.length,
             inputTokens: this.contextManager.inputTokens || 0,
             outputTokens: this.contextManager.outputTokens || 0,
@@ -2110,6 +2129,41 @@ class AgentLoop {
 
             stream = null
             try {
+              // Diagnostic: detect empty user-message content before Anthropic
+              // 400s us. Empty here means: content is '' / [] / { content: [] }.
+              // Logs index + neighbours so we can trace which code path produced
+              // it (renderer history vs. iteration push vs. compaction).
+              const _emptyIdxs = []
+              for (let _i = 0; _i < createParams.messages.length; _i++) {
+                const _m = createParams.messages[_i]
+                const _isEmpty = _m.role === 'user' && (
+                  _m.content === '' ||
+                  _m.content == null ||
+                  (Array.isArray(_m.content) && _m.content.length === 0)
+                )
+                if (_isEmpty) _emptyIdxs.push(_i)
+              }
+              if (_emptyIdxs.length > 0) {
+                logger.warn('Empty user message(s) about to be sent to Anthropic', {
+                  iteration,
+                  total: createParams.messages.length,
+                  emptyIndexes: _emptyIdxs,
+                  neighbourSummary: _emptyIdxs.map(_i => ({
+                    idx: _i,
+                    prev: createParams.messages[_i - 1] && {
+                      role: createParams.messages[_i - 1].role,
+                      contentType: Array.isArray(createParams.messages[_i - 1].content) ? 'array' : typeof createParams.messages[_i - 1].content,
+                      contentLen: typeof createParams.messages[_i - 1].content === 'string' ? createParams.messages[_i - 1].content.length : (Array.isArray(createParams.messages[_i - 1].content) ? createParams.messages[_i - 1].content.length : null),
+                    },
+                    self: { role: _m.role, content: _m.content },
+                    next: createParams.messages[_i + 1] && {
+                      role: createParams.messages[_i + 1].role,
+                      contentType: Array.isArray(createParams.messages[_i + 1].content) ? 'array' : typeof createParams.messages[_i + 1].content,
+                    },
+                  })),
+                })
+              }
+
               if (createParams.betas && createParams.betas.length > 0) {
                 const { betas, ...restParams } = createParams
                 stream = await client.beta.messages.stream({ ...restParams, betas }, {
@@ -2121,28 +2175,44 @@ class AgentLoop {
                 })
               }
             } catch (streamErr) {
-              // Thinking-mode rejected (400) → downgrade adaptive→budget→none,
-              // persist in process cache, retry once with the new payload.
-              // Cache survives this loop so subsequent calls and other chats
-              // skip straight to the working mode.
+              // Thinking-mode rejected (400). Two distinct failure modes:
+              //   A) Server requires the newer adaptive+output_config.effort shape
+              //      (current Opus models reject thinking.type.enabled).
+              //      → sideways switch to 'adaptive_effort', retry.
+              //   B) Server doesn't support any thinking on this model.
+              //      → downgrade adaptive→budget→none chain.
+              // Cache survives this loop so subsequent calls skip the bad mode.
               const errMsg = streamErr.message || ''
-              const thinkingRejected = !!thinkingCfg && streamErr.status === 400 && (
+              const prevThinking = thinkingCfg?.thinking
+              const thinkingRejected = !!prevThinking && streamErr.status === 400 && (
                 /thinking/i.test(errMsg) ||
                 /adaptive/i.test(errMsg) ||
-                /budget_tokens/i.test(errMsg)
+                /budget_tokens/i.test(errMsg) ||
+                /output_config/i.test(errMsg)
               )
               if (thinkingRejected) {
-                const prevType = thinkingCfg.type
-                thinkingCfg = this.anthropicClient.markThinkingDowngrade(prevType)
+                // Detect failure mode A: explicit "use adaptive + output_config.effort"
+                const needsAdaptiveEffort = (
+                  /thinking\.type\.enabled.*not supported/i.test(errMsg) ||
+                  /output_config\.effort/i.test(errMsg) ||
+                  /use.*thinking\.type\.adaptive/i.test(errMsg)
+                )
+                thinkingCfg = needsAdaptiveEffort
+                  ? this.anthropicClient.markUseAdaptiveEffort()
+                  : this.anthropicClient.markThinkingDowngrade(prevThinking.type)
                 const retryParams = { ...createParams }
-                if (thinkingCfg) {
-                  retryParams.thinking = thinkingCfg
-                  if (thinkingCfg.type === 'enabled' && thinkingCfg.budget_tokens) {
-                    retryParams.max_tokens = Math.max(retryParams.max_tokens, thinkingCfg.budget_tokens + 1024)
+                const newThinking = thinkingCfg?.thinking
+                const newOutputConfig = thinkingCfg?.output_config
+                if (newThinking) {
+                  retryParams.thinking = newThinking
+                  if (newThinking.type === 'enabled' && newThinking.budget_tokens) {
+                    retryParams.max_tokens = Math.max(retryParams.max_tokens, newThinking.budget_tokens + 1024)
                   }
                 } else {
                   delete retryParams.thinking
                 }
+                if (newOutputConfig) retryParams.output_config = newOutputConfig
+                else delete retryParams.output_config
                 try {
                   if (retryParams.betas && retryParams.betas.length > 0) {
                     const { betas, ...rest } = retryParams
@@ -2151,6 +2221,7 @@ class AgentLoop {
                     stream = await client.messages.stream(retryParams, { signal: this._abortController.signal })
                   }
                   createParams.thinking = retryParams.thinking
+                  createParams.output_config = retryParams.output_config
                   createParams.max_tokens = retryParams.max_tokens
                   // Successful — fall through to stream consumption
                 } catch (retryErr) {
@@ -2245,6 +2316,7 @@ class AgentLoop {
               assistantContent = []
               currentTextBlock = ''
               currentToolUse = null
+              currentThinkingBlock = null
               stopReason = null
 
               for await (const event of stream) {
@@ -2252,13 +2324,30 @@ class AgentLoop {
 
             if (event.type === 'content_block_start') {
               // Log unexpected block types to discover image response format
-              if (!['text','thinking','tool_use'].includes(event.content_block.type)) {
+              if (!['text','thinking','redacted_thinking','tool_use'].includes(event.content_block.type)) {
                 logger.agent('UNKNOWN content_block_start type', { type: event.content_block.type, block: JSON.stringify(event.content_block).slice(0, 200) })
               }
               if (event.content_block.type === 'text') {
                 currentTextBlock = ''
               } else if (event.content_block.type === 'thinking') {
+                // Initialize thinking block so deltas (thinking + signature) can
+                // accumulate. Pushed to assistantContent on content_block_stop —
+                // Anthropic requires thinking blocks to be echoed back verbatim
+                // (with signature) on subsequent turns when tool_use is involved.
+                if (currentTextBlock) {
+                  assistantContent.push({ type: 'text', text: currentTextBlock })
+                  currentTextBlock = ''
+                }
+                currentThinkingBlock = { type: 'thinking', thinking: '', signature: '' }
                 onChunk({ type: 'thinking_start' })
+              } else if (event.content_block.type === 'redacted_thinking') {
+                // Redacted thinking arrives complete in the start event — opaque
+                // encrypted data, no deltas follow. Must be passed back verbatim.
+                if (currentTextBlock) {
+                  assistantContent.push({ type: 'text', text: currentTextBlock })
+                  currentTextBlock = ''
+                }
+                assistantContent.push({ type: 'redacted_thinking', data: event.content_block.data })
               } else if (event.content_block.type === 'tool_use') {
                 if (currentTextBlock) {
                   assistantContent.push({ type: 'text', text: currentTextBlock })
@@ -2273,7 +2362,7 @@ class AgentLoop {
               }
 
             } else if (event.type === 'content_block_delta') {
-              if (!['text_delta','thinking_delta','input_json_delta','image_delta'].includes(event.delta.type)) {
+              if (!['text_delta','thinking_delta','signature_delta','input_json_delta','image_delta'].includes(event.delta.type)) {
                 logger.agent('UNKNOWN content_block_delta type', { type: event.delta.type, delta: JSON.stringify(event.delta).slice(0, 200) })
               }
               if (event.delta.type === 'text_delta') {
@@ -2281,7 +2370,14 @@ class AgentLoop {
                 finalText += event.delta.text
                 onChunk({ type: 'text', text: event.delta.text })
               } else if (event.delta.type === 'thinking_delta') {
+                if (currentThinkingBlock) currentThinkingBlock.thinking += event.delta.thinking
                 onChunk({ type: 'thinking', text: event.delta.thinking })
+              } else if (event.delta.type === 'signature_delta') {
+                // Cryptographic signature stamped onto the thinking block by
+                // Anthropic. Required on the assistant message in the next turn
+                // when extended thinking + tool_use are mixed, otherwise the
+                // API rejects with 400. Streamed in fragments — concat.
+                if (currentThinkingBlock) currentThinkingBlock.signature += (event.delta.signature || '')
               } else if (event.delta.type === 'input_json_delta' && currentToolUse) {
                 currentToolUse.input += event.delta.partial_json
               }
@@ -2290,6 +2386,14 @@ class AgentLoop {
               if (currentTextBlock) {
                 assistantContent.push({ type: 'text', text: currentTextBlock })
                 currentTextBlock = ''
+              }
+              if (currentThinkingBlock) {
+                // Drop empty signature field — only present on real thinking
+                // blocks. The thinking text itself can legitimately be empty
+                // (rare, but Anthropic doesn't forbid it).
+                if (!currentThinkingBlock.signature) delete currentThinkingBlock.signature
+                assistantContent.push(currentThinkingBlock)
+                currentThinkingBlock = null
               }
               if (currentToolUse) {
                 try {
@@ -2337,7 +2441,7 @@ class AgentLoop {
                 // Adaptive thinking models (Opus 4.6+, Sonnet 4.6+) emit
                 // server-side compaction blocks inside finalMessage.content
                 // that must be preserved across turns to keep compaction state.
-                if (thinkingCfg?.type === 'adaptive' && finalMessage.content) {
+                if (thinkingCfg?.thinking?.type === 'adaptive' && finalMessage.content) {
                   this.contextManager.appendAssistantContent(conversationMessages, finalMessage.content)
                 } else {
                   conversationMessages.push({ role: 'assistant', content: assistantContent })
@@ -2355,6 +2459,47 @@ class AgentLoop {
                 logger.warn(`Stream empty-response error on attempt ${streamAttempt}, will retry`, streamIterErr.message)
                 continue
               }
+
+              // The Anthropic SDK's `messages.stream()` returns a stream object
+              // synchronously; the actual HTTP request fires inside `for await`.
+              // So all 400-class errors (thinking unsupported, max_tokens out of
+              // range, etc.) surface HERE, not in the outer catch at line ~2131.
+              // We detect the thinking-rejection variants and retry once with a
+              // downgraded / adaptive_effort thinking config.
+              const errMsg = streamIterErr.message || ''
+              const prevThinking = thinkingCfg?.thinking
+              const thinkingRejected = !!prevThinking && streamIterErr.status === 400 && (
+                /thinking/i.test(errMsg) ||
+                /adaptive/i.test(errMsg) ||
+                /budget_tokens/i.test(errMsg) ||
+                /output_config/i.test(errMsg)
+              )
+              if (thinkingRejected) {
+                const needsAdaptiveEffort = (
+                  /thinking\.type\.enabled.*not supported/i.test(errMsg) ||
+                  /output_config\.effort/i.test(errMsg) ||
+                  /use.*thinking\.type\.adaptive/i.test(errMsg)
+                )
+                thinkingCfg = needsAdaptiveEffort
+                  ? this.anthropicClient.markUseAdaptiveEffort()
+                  : this.anthropicClient.markThinkingDowngrade(prevThinking.type)
+                const newThinking = thinkingCfg?.thinking
+                const newOutputConfig = thinkingCfg?.output_config
+                if (newThinking) {
+                  createParams.thinking = newThinking
+                  if (newThinking.type === 'enabled' && newThinking.budget_tokens) {
+                    createParams.max_tokens = Math.max(createParams.max_tokens, newThinking.budget_tokens + 1024)
+                  }
+                } else {
+                  delete createParams.thinking
+                }
+                if (newOutputConfig) createParams.output_config = newOutputConfig
+                else delete createParams.output_config
+                // Loop continues — next streamAttempt will open a fresh stream
+                // using the now-patched createParams. Counts as a retry attempt.
+                if (streamAttempt <= MAX_STREAM_RETRIES) continue
+              }
+
               throw streamIterErr
             }
           } // end retry while loop
@@ -2367,10 +2512,22 @@ class AgentLoop {
           // in assistantContent has a fully-parsed input. Executing them lets
           // the agent recover from truncation instead of breaking silently.
           const _toolUseBlocks = assistantContent.filter(b => b.type === 'tool_use')
-          const _shouldExecuteTools = !this.stopped && (
-            stopReason === 'tool_use' ||
-            (stopReason === 'max_tokens' && _toolUseBlocks.length > 0)
+          // stopReason==='tool_use' is normally accompanied by ≥1 tool_use block
+          // in assistantContent, but Anthropic occasionally returns the stop
+          // reason without a usable tool_use block (mid-stream truncation,
+          // thinking-block edge cases). If we entered the branch with zero
+          // tool_use blocks we'd push { role:'user', content: [] } at the end,
+          // and Anthropic 400s the next iteration ("user messages must have
+          // non-empty content"). Require at least one tool_use block.
+          const _shouldExecuteTools = !this.stopped && _toolUseBlocks.length > 0 && (
+            stopReason === 'tool_use' || stopReason === 'max_tokens'
           )
+          if (stopReason === 'tool_use' && _toolUseBlocks.length === 0) {
+            logger.warn('stopReason=tool_use but no tool_use blocks in assistantContent — treating as end_turn', {
+              iteration,
+              blockTypes: assistantContent.map(b => b.type),
+            })
+          }
           if (stopReason === 'max_tokens' && _toolUseBlocks.length > 0) {
             // Surface the truncation so the UI can render a banner even though
             // execution will continue with the tools we got.
@@ -2389,7 +2546,7 @@ class AgentLoop {
                 provider,
                 tools: toolUseBlocks.length,
                 currentTools: toolUseBlocks.map(b => b.name).join(', '),
-                thinking: !!thinkingCfg,
+                thinking: !!thinkingCfg?.thinking,
                 msgs: conversationMessages.length,
                 inputTokens: this.contextManager.inputTokens,
                 outputTokens: this.contextManager.outputTokens

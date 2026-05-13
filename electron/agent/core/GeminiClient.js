@@ -19,8 +19,9 @@ class GeminiClient {
   }
 
   // Gemini does not use Anthropic-style thinking blocks
-  resolveThinkingConfig() { return null }
-  markThinkingDowngrade() { return null }
+  resolveThinkingConfig() { return { thinking: null } }
+  markThinkingDowngrade() { return { thinking: null } }
+  markUseAdaptiveEffort() { return { thinking: null } }
 
   getClient() { return this.client }
 }

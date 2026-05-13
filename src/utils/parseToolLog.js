@@ -13,6 +13,24 @@ const TOOL_LOG_BLOCK_RE = /\n?\n?\[Tool execution log from this response:\n([\s\
 // The entry header: optional number + dot, then ✓/✗, then tool name
 const ENTRY_HEADER_RE = /^(?:\d+\.\s*)?([✓✗])\s+(\w+)\(/
 
+// Lines that look like leftover fragments of a buildToolLog() dump whose leading
+// entry header(s) were dropped (e.g. model echoed entries 3-6 only, leaving the
+// truncated payload tail of entry 2 dangling above entry 3). Used to widen the
+// strip window in the unwrapped fallback path so JSON debris doesn't leak into
+// the rendered bubble.
+const RESIDUE_FIELD_RE = /"(?:text|exit_code|truncated|totalLines|totalBytes|replaced|path)"\s*:/
+const RESIDUE_ARROW_RE = /\)\s*→\s*[{"]/
+const RESIDUE_PUNCT_ONLY_RE = /^[\s){}\[\]"',.;]+$/
+
+function looksLikeToolLogResidue(line) {
+  const t = line.trim()
+  if (!t) return true
+  if (RESIDUE_FIELD_RE.test(t)) return true
+  if (RESIDUE_ARROW_RE.test(t)) return true
+  if (RESIDUE_PUNCT_ONLY_RE.test(t)) return true
+  return false
+}
+
 /**
  * Parse a single tool log entry line.
  * Format: "N. ✓ tool_name(inputJSON) → outputText"
@@ -138,7 +156,16 @@ export function parseToolLogBlock(text) {
   const tailEntries = parseEntriesFromLines(lines.slice(firstEntryIdx))
   if (tailEntries.length < 2) return null
 
-  const cleanedText = lines.slice(0, firstEntryIdx).join('\n').replace(/\n{3,}/g, '\n\n').trim()
+  // When the model echoes only entries N..M (not from 1), the truncated tail of
+  // entry N-1 — JSON debris like `}...')"]}) → {` and `"exit_code": 0` — sits
+  // immediately above the first detected header. Walk backward past contiguous
+  // residue lines so they don't leak into the rendered bubble as prose.
+  let stripFrom = firstEntryIdx
+  while (stripFrom > 0 && looksLikeToolLogResidue(lines[stripFrom - 1])) {
+    stripFrom--
+  }
+
+  const cleanedText = lines.slice(0, stripFrom).join('\n').replace(/\n{3,}/g, '\n\n').trim()
   return { cleanedText, parsedTools: toToolSegments(tailEntries) }
 }
 

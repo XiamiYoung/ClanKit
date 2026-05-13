@@ -47,8 +47,9 @@ class OpenAIClient {
   }
 
   // OpenAI-compat endpoints don't use Anthropic-style thinking blocks
-  resolveThinkingConfig() { return null }
-  markThinkingDowngrade() { return null }
+  resolveThinkingConfig() { return { thinking: null } }
+  markThinkingDowngrade() { return { thinking: null } }
+  markUseAdaptiveEffort() { return { thinking: null } }
 
   /** Get the raw OpenAI SDK client */
   getClient() { return this.client }

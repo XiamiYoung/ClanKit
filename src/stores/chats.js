@@ -35,7 +35,12 @@ export const useChatsStore = defineStore('chats', () => {
   const scrollToBottomSignal = ref(0)
   function requestScrollToBottom() { scrollToBottomSignal.value++ }
 
-  // UI chunk callback — set by ChatsView when mounted, cleared on unmount
+  // UI chunk callback — stack so nested ChatsView instances (route + focus mode
+  // overlay) can both register without one clobbering the other on unmount.
+  // Current = top of stack. clearUiChunkCallback(cb) removes by reference,
+  // so focus mode's unmount only pops its own entry and the route's callback
+  // is restored as current.
+  const _uiChunkStack = []
   let _uiChunkCallback = null
   // Task chunk callback — set by TaskEngineView when a plan is running manually
   let _taskChunkCallback = null
@@ -178,11 +183,22 @@ export const useChatsStore = defineStore('chats', () => {
           chat.messages = full.messages.filter(m => {
             if (m.isWaitingIndicator) return false
             if (m.role !== 'assistant') return true
-            const noContent = !m.content && (!m.segments || m.segments.length === 0)
-            const noAgentTag = !m.agentId && !m.agentName
+            const noContent = !(m.content && String(m.content).trim()) && (!m.segments || m.segments.length === 0)
             const noError = !m.errorDetail && !m.isError
-            // Orphan signature: assistant + zero content + no agent attribution + not an error
-            if (noContent && noAgentTag && noError) return false
+            const noPlan = !m.planData
+            const noBanner = !m.compaction && !m.maxTokensReached
+            // Drop any persisted empty assistant placeholder. Two known sources:
+            //   1. Legacy "ghost WaitingIndicator orphan" — no agentId/agentName
+            //      (early app versions persisted waiting indicators).
+            //   2. Phantom from _applyChunk fallback when the ChatsView UI callback
+            //      was cleared mid-stream (focus-mode unmount bug). Those have
+            //      agentId/agentName set but never received any chunks, so they
+            //      end up streaming=false with empty content/segments.
+            // The check intentionally ignores agentId/agentName so both shapes
+            // are dropped. A legitimate "model produced nothing" turn would not
+            // reach here — that path either errors out or gets _No response_
+            // text injected (see streaming branch below) before persistence.
+            if (noContent && noError && noPlan && noBanner) return false
             return true
           })
           for (const msg of chat.messages) {
@@ -1034,6 +1050,21 @@ export const useChatsStore = defineStore('chats', () => {
     raw.messages = _truncateToolOutputs(raw.messages.filter(m => {
       if (m.isWaitingIndicator) return false
       if (m.role && m.role !== 'user' && m.role !== 'assistant') return false
+      // Drop phantom empty assistant placeholders. These can leak through
+      // when chunks fall back to _applyChunk (e.g. ChatsView callback was
+      // cleared mid-stream) — the orphan placeholder gets streaming=false
+      // by send_message_complete but no content/segments/plan/error.
+      // Persisting them produces a permanent ghost bubble on next load.
+      if (
+        m.role === 'assistant' &&
+        !m.streaming &&
+        !(m.content && String(m.content).trim()) &&
+        !(m.segments && m.segments.length > 0) &&
+        !m.planData &&
+        !m.errorDetail &&
+        !m.compaction &&
+        !m.maxTokensReached
+      ) return false
       return true
     }))
     return raw
@@ -1102,8 +1133,27 @@ export const useChatsStore = defineStore('chats', () => {
   }
 
   // ── Chunk listener (persistent, lives for the app's lifetime) ────────────
-  function setUiChunkCallback(cb) { _uiChunkCallback = cb }
-  function clearUiChunkCallback() { _uiChunkCallback = null }
+  // Stack-based registration: each ChatsView mount pushes its callback; unmount
+  // pops by reference. This way the focus-mode overlay's ChatsView can mount
+  // on top of the route's ChatsView without its unmount orphaning the route's
+  // callback (which leaves chunks falling through to _applyChunk and producing
+  // phantom empty assistant bubbles).
+  function setUiChunkCallback(cb) {
+    if (!cb) return
+    _uiChunkStack.push(cb)
+    _uiChunkCallback = cb
+  }
+  function clearUiChunkCallback(cb) {
+    // If a reference is provided, remove only that entry. Otherwise pop the top
+    // (back-compat for any caller that doesn't pass the reference).
+    if (cb) {
+      const idx = _uiChunkStack.lastIndexOf(cb)
+      if (idx !== -1) _uiChunkStack.splice(idx, 1)
+    } else {
+      _uiChunkStack.pop()
+    }
+    _uiChunkCallback = _uiChunkStack[_uiChunkStack.length - 1] || null
+  }
   function setTaskChunkCallback(cb) { _taskChunkCallback = cb }
   function clearTaskChunkCallback() { _taskChunkCallback = null }
 
@@ -1285,13 +1335,32 @@ export const useChatsStore = defineStore('chats', () => {
         const waitIdx = chat.messages.findIndex(m => m.isWaitingIndicator)
         if (waitIdx >= 0) chat.messages.splice(waitIdx, 1)
       }
-      // Finalize any still-streaming messages
+      // Finalize any still-streaming messages, and drop ones with no activity —
+      // mirrors handleChunk's agent_end contract so orphan placeholders left
+      // behind by a missing UI callback don't survive as phantom empty bubbles.
+      const _toRemove = []
       for (const m of chat.messages) {
         if (m.streaming) {
           m.streaming = false
           if (m.streamingStartedAt) m.durationMs = Date.now() - m.streamingStartedAt
           m.timestamp = Date.now()
         }
+        if (m.role === 'assistant' && !m.isWaitingIndicator) {
+          const hasActivity = !!(m.content && String(m.content).trim()) ||
+            (m.segments || []).some(s => {
+              if (s.type === 'text') return !!s.content?.trim()
+              if (s.type === 'tool') return s.output !== undefined
+              if (s.type === 'agent_step') return false
+              return true
+            }) ||
+            !!m.planData ||
+            !!m.errorDetail
+          if (!hasActivity) _toRemove.push(m)
+        }
+      }
+      for (const m of _toRemove) {
+        const idx = chat.messages.indexOf(m)
+        if (idx !== -1) chat.messages.splice(idx, 1)
       }
       if (chunk.type === 'send_message_error') {
         const errMsg = [...chat.messages].reverse().find(m => m.role === 'assistant')

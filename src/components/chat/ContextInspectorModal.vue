@@ -569,17 +569,42 @@ const isGroupChat = computed(() => chatAgentIds.value.length > 1)
 
 // ── Agent cards ───────────────────────────────────────────────────────────────
 
+// Per-agent cumulative output across all turns: each turn's output is genuinely
+// new tokens (no double-counting issue like input has), so summing per agent gives
+// a meaningful "how much has this agent written in this chat" number. In single-agent
+// chats, messages without an agentId tag are attributed to the lone system agent.
+const cumulativeOutputByAgent = computed(() => {
+  const messages = chatsStore.activeChat?.messages || []
+  const ids = chatAgentIds.value
+  const isSingle = ids.length === 1
+  const lone = isSingle ? ids[0] : null
+  const out = {}
+  for (const m of messages) {
+    if (m.role !== 'assistant' || !m.tokenUsage) continue
+    const aId = m.agentId || lone
+    if (!aId) continue
+    out[aId] = (out[aId] || 0) + (m.tokenUsage.output || 0)
+  }
+  return out
+})
+
 const agentCards = computed(() => {
   const snaps = contextSnapshot.value?.agentSnapshots || []
   const snapMap = {}
   snaps.forEach(s => { if (s.agentId) snapMap[s.agentId] = s })
   const isSingle = chatAgentIds.value.length === 1
+  const cumOut = cumulativeOutputByAgent.value
 
   return chatAgentIds.value.map(agentId => {
     const agent = agentsStore.getAgentById(agentId)
     // Single-agent: use the top-level snapshot; group: use per-agent snap
     const snap = snapMap[agentId] || (isSingle ? contextSnapshot.value : null)
-    const metrics = props.perAgentContextMetrics?.[agentId] || null
+    const rawMetrics = props.perAgentContextMetrics?.[agentId] || null
+    // Override output with cumulative-across-all-turns to match the top-of-panel
+    // "Total output tokens" view. `in` / `ctx %` stay as live snapshot (window occupancy).
+    const metrics = rawMetrics
+      ? { ...rawMetrics, outputTokens: cumOut[agentId] ?? rawMetrics.outputTokens }
+      : (cumOut[agentId] ? { outputTokens: cumOut[agentId] } : null)
 
     const skills = (agent?.requiredSkillIds || [])
       .map(id => skillsStore.skills.find(s => s.id === id)).filter(Boolean)
