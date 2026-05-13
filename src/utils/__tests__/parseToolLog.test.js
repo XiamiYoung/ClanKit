@@ -77,5 +77,43 @@ describe('parseToolLogBlock', () => {
       const text = '1. install deps\n2. run tests\n3. ship'
       expect(parseToolLogBlock(text)).toBeNull()
     })
+
+    it('strips orphaned tool-log debris that sits above the first detected entry', () => {
+      // Reproduces the regression: model echoed entries 3-6 only, leaving the
+      // truncated payload tail of entries 1-2 dangling above entry 3.
+      const text = [
+        '要不要把 Launcher 也确认下名字？',
+        '}...\')"]}) → {',
+        '  "text": "@22023: ...e=\\"16\\" font-weight=\\"600\\" fill=\\"#fff\\"&gt;Teams Bot...",',
+        '  "exit_code": 0,',
+        '  "truncated": false,',
+        '  "totalLines": 2',
+        '}',
+        '3. ✓ file_operation({"operation":"edit","path":"D:/x.html"}) → {"text":"Edited","replaced":1}',
+        '4. ✓ execute_shell({"command":"git"}) → {"text":"ok","exit_code":0}',
+      ].join('\n')
+
+      const r = parseToolLogBlock(text)
+      expect(r).not.toBeNull()
+      expect(r.cleanedText).toBe('要不要把 Launcher 也确认下名字？')
+      expect(r.parsedTools).toHaveLength(2)
+      expect(r.parsedTools[0].name).toBe('file_operation')
+      expect(r.parsedTools[1].name).toBe('execute_shell')
+    })
+
+    it('preserves legitimate prose lines that happen to mention JSON-looking words', () => {
+      const text = [
+        'I will check the "text" field of each response carefully.',
+        'Then I ran two commands:',
+        '1. ✓ shell({"cmd":"ls"}) → file_a',
+        '2. ✓ shell({"cmd":"pwd"}) → /home',
+      ].join('\n')
+
+      const r = parseToolLogBlock(text)
+      expect(r).not.toBeNull()
+      expect(r.cleanedText).toContain('I will check the "text" field')
+      expect(r.cleanedText).toContain('Then I ran two commands:')
+      expect(r.parsedTools).toHaveLength(2)
+    })
   })
 })

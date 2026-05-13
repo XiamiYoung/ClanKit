@@ -66,26 +66,43 @@ class AnthropicClient {
     return `${this.config.baseURL || ''}|${this.resolveModel()}`
   }
 
-  // Resolve the thinking-mode payload from a Claude-Code-style effort tier.
-  // 5 tiers mapped to Anthropic API `thinking` field:
-  //   low    → budget 1024  (API minimum; fast, minimal planning)
-  //   medium → budget 4096  (default; suits most coding/QA tasks)
-  //   high   → budget 16384 (deep planning for complex code/docs)
-  //   xhigh  → budget 32768 (algorithm/proof-level reasoning)
-  //   max    → adaptive     (model auto-decides up to max_tokens-1024)
-  // Downgrade cache (markThinkingDowngrade) wins over effort — set by API
-  // 400 retry path when a server rejects thinking on this model.
+  // Resolve thinking payload from a Claude-Code-style effort tier.
+  // Returns { thinking, output_config? }. Most call sites only spread `thinking`
+  // into the request, but newer Opus models reject `thinking.type.enabled` and
+  // require `thinking.type.adaptive` + `output_config.effort: <tier>` instead.
+  // We detect that 400 once and cache the model as 'adaptive_effort'.
+  //
+  // 5 tiers (legacy/budget path) mapped to Anthropic API `thinking` field:
+  //   low    → budget 1024   (API minimum; fast, minimal planning)
+  //   medium → budget 4096   (default; suits most coding/QA tasks)
+  //   high   → budget 16384  (deep planning for complex code/docs)
+  //   xhigh  → budget 32768  (algorithm/proof-level reasoning)
+  //   max    → adaptive      (model auto-decides up to max_tokens-1024)
+  //
+  // Cache states (per baseURL+model):
+  //   undefined        → use EFFORT_TO_THINKING[effort] (legacy budget path)
+  //   'adaptive_effort'→ new API: thinking=adaptive + output_config.effort=<tier>
+  //   'adaptive'       → thinking=adaptive only (no output_config)
+  //   'budget'         → thinking=enabled, budget_tokens=8192 (downgraded)
+  //   'none'           → null (thinking disabled entirely)
   resolveThinkingConfig(effort) {
+    const tier = effort && EFFORT_TO_THINKING[effort] ? effort : DEFAULT_EFFORT
     const cached = _thinkingModeCache.get(this._thinkingCacheKey())
-    if (cached === 'none') return null
-    if (cached === 'budget') return { type: 'enabled', budget_tokens: 8192 }
-    if (cached === 'adaptive') return { type: 'adaptive' }
-    return EFFORT_TO_THINKING[effort] || EFFORT_TO_THINKING.medium
+    if (cached === 'none') return { thinking: null }
+    if (cached === 'adaptive_effort') {
+      return {
+        thinking: { type: 'adaptive' },
+        output_config: { effort: tier },
+      }
+    }
+    if (cached === 'budget') return { thinking: { type: 'enabled', budget_tokens: 8192 } }
+    if (cached === 'adaptive') return { thinking: { type: 'adaptive' } }
+    return { thinking: EFFORT_TO_THINKING[tier] }
   }
 
   // Move this (baseURL, model) one step down the thinking-support chain
   // and persist in the process cache: adaptive → budget → none.
-  // Returns the new resolved config (same shape as resolveThinkingConfig).
+  // Returns the new resolved config — same { thinking, output_config? } shape.
   markThinkingDowngrade(currentType) {
     const next = currentType === 'adaptive' ? 'budget' : 'none'
     _thinkingModeCache.set(this._thinkingCacheKey(), next)
@@ -93,6 +110,18 @@ class AnthropicClient {
       model: this.resolveModel(),
       from: currentType || 'none',
       to: next,
+    })
+    return this.resolveThinkingConfig()
+  }
+
+  // Sideways switch: model rejected `thinking.type.enabled` (budget mode) and
+  // demanded the newer `thinking.type.adaptive` + `output_config.effort` shape.
+  // Cache this so future calls to the same (baseURL, model) skip the failed
+  // attempt and use the new shape directly. Returns the resolved config.
+  markUseAdaptiveEffort() {
+    _thinkingModeCache.set(this._thinkingCacheKey(), 'adaptive_effort')
+    logger.warn('Anthropic thinking switched to adaptive+effort', {
+      model: this.resolveModel(),
     })
     return this.resolveThinkingConfig()
   }

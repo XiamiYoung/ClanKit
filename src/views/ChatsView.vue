@@ -1001,6 +1001,10 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
+// Stable reference to this instance's chunk callback — registered with the
+// store's stack on mount, popped by reference on unmount. Set in onMounted.
+let _myChunkCb = null
+
 
 const enabledSkillObjects = computed(() => {
   const agent = currentSingleAgent.value
@@ -1479,8 +1483,8 @@ const activeContextMetrics = computed(() => {
     ?? ((cm.inputTokens || 0) + (cm.cacheCreationInputTokens || 0) + (cm.cacheReadInputTokens || 0))
   const maxTokens = cm.maxTokens || 0
   // Always derive percentage from effInput/maxTokens when we have both. This
-  // makes the bar self-consistent with the displayed "X 输入" number and
-  // immune to stale persisted percentages from before the fix.
+  // keeps the bar self-consistent with the displayed input number and immune
+  // to stale persisted percentages from before the effectiveInputTokens fix.
   const percentage = maxTokens ? Math.round((effInput / maxTokens) * 100) : (cm.percentage || 0)
   return {
     inputTokens: cm.inputTokens || 0,
@@ -2078,10 +2082,12 @@ onMounted(async () => {
   nextTick(() => mentionInputRef.value?.focus())
   document.addEventListener('click', handlePopoverOutsideClick)
 
-  // Register UI chunk callback with the store (store owns the persistent IPC listener)
-  chatsStore.setUiChunkCallback((cId, chunk) => {
-    handleChunk(cId, chunk)
-  })
+  // Register UI chunk callback with the store (store owns the persistent IPC listener).
+  // Keep a stable reference so onUnmounted can pop exactly this entry from the
+  // store's callback stack — without a ref, a nested ChatsView (focus mode
+  // overlay) unmounting would orphan the route's callback.
+  _myChunkCb = (cId, chunk) => handleChunk(cId, chunk)
+  chatsStore.setUiChunkCallback(_myChunkCb)
 
   // Reconnect to any agent loops that survived a page refresh or minibar transition.
   // setUiChunkCallback is registered BEFORE this await so chunks arriving
@@ -2261,7 +2267,8 @@ onUnmounted(() => {
   stopSpeaking()
   cleanupVoiceListeners()
 
-  chatsStore.clearUiChunkCallback()
+  chatsStore.clearUiChunkCallback(_myChunkCb)
+  _myChunkCb = null
 
   document.removeEventListener('click', handlePopoverOutsideClick)
   document.removeEventListener('dragover', preventNav)

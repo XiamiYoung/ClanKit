@@ -356,7 +356,7 @@ export function useChunkHandler({
                 // followed by an EXPLICIT impersonation marker: [Name]:, @Name:,
                 // or "Name:" — the colon is what flags "Name said". A bare @Name
                 // after \n\n is a normal address (e.g. agent reads file, then
-                // writes "\n\n@Other 我看到几个问题..."), NOT roleplay, and must
+                // writes "\n\n@Other I see a few issues..."), NOT roleplay, and must
                 // be left intact — otherwise the agent's own review prose gets
                 // chopped off.
                 if (cutAt === -1) {
