@@ -60,7 +60,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import appIconUrl from '@/assets/icon.png'
 import { useFocusModeStore } from '../../stores/focusMode'
 import { useI18n } from '../../i18n/useI18n'
@@ -80,9 +80,42 @@ const DRAG_THRESHOLD = 4
 
 const barStyle = computed(() => {
   if (!pos.value) {
-    return { top: '2rem', left: '0.75rem' }
+    // Pre-measurement frame: hide off-screen so the user never sees the
+    // top-left flash before onMounted computes the docs-panel center.
+    return { top: '-9999px', left: '-9999px' }
   }
   return { left: pos.value.left + 'px', top: pos.value.top + 'px', transform: 'none' }
+})
+
+// Default position: horizontally centered over the docs panel, vertically
+// centered with the docs panel's catalog header (the row containing the
+// refresh button). Falls back to viewport top-center if the panel isn't
+// rendered yet.
+function computeDefaultPos() {
+  if (!barEl.value) return null
+  const barW = barEl.value.offsetWidth   // not affected by entry animation transform
+  const barH = barEl.value.offsetHeight
+  const docsPanel = document.querySelector('.focus-docs-panel')
+  const header    = docsPanel?.querySelector('.docs-catalog-header')
+  if (docsPanel && header) {
+    const panelR  = docsPanel.getBoundingClientRect()
+    const headerR = header.getBoundingClientRect()
+    if (panelR.width > 0 && headerR.height > 0) {
+      return {
+        left: Math.round(panelR.left + panelR.width / 2 - barW / 2),
+        top:  Math.round(headerR.top + headerR.height / 2 - barH / 2),
+      }
+    }
+  }
+  return {
+    left: Math.round(window.innerWidth / 2 - barW / 2),
+    top:  40,
+  }
+}
+
+onMounted(async () => {
+  await nextTick()
+  pos.value = computeDefaultPos()
 })
 
 function onBarMousedown(e) {
