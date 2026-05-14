@@ -158,7 +158,11 @@
         <div class="flex-1 flex flex-col overflow-hidden" style="background:#fff;position:relative;" @mouseup="onEditorMouseUp" @mousedown="onEditorMouseDown">
           <!-- Hamburger toggle tab -->
           <button
+            ref="hamburgerBtnRef"
+            @mousedown="docHamburgerDrag.onMouseDown"
+            @click.capture="docHamburgerDrag.onClickCapture"
             @click="docTreeCollapsed = !docTreeCollapsed"
+            :style="docHamburgerDrag.dynamicStyle.value"
             class="doc-tree-expand-tab"
             v-tooltip="docTreeCollapsed ? t('notes.expandTree') : t('notes.collapseTree')"
             :aria-label="docTreeCollapsed ? t('notes.expandTree') : t('notes.collapseTree')"
@@ -887,6 +891,7 @@ import { useMcpStore } from '../stores/mcp'
 import { useToolsStore } from '../stores/tools'
 import { useKnowledgeStore } from '../stores/knowledge'
 import { useAiMagic } from '../composables/useAiMagic'
+import { useDraggableHamburger } from '../composables/useDraggableHamburger'
 import { getAvatarDataUri } from '../components/agents/agentAvatars'
 import { useFocusModeStore } from '../stores/focusMode'
 import { useVoiceStore } from '../stores/voice'
@@ -3184,6 +3189,23 @@ const notesSidebarWidth = ref(280)
 const docTreeCollapsed = ref(false)
 const isResizing = ref(false)
 
+// ── Draggable hamburger toggle ──
+// Clamp range = focus-mode panel when embedded in focus, else the button's own
+// editor pane (the closest position:relative ancestor).
+const hamburgerBtnRef = ref(null)
+const docHamburgerDrag = useDraggableHamburger({
+  buttonRef: hamburgerBtnRef,
+  getPanelEl: () => {
+    const btn = hamburgerBtnRef.value
+    if (!btn) return null
+    return btn.closest('.focus-docs-panel') || btn.offsetParent || btn.parentElement
+  },
+  storeY: computed({
+    get: () => focusModeStore.docHamburgerY,
+    set: (v) => { focusModeStore.docHamburgerY = v },
+  }),
+})
+
 function startNotesResize(e) {
   e.preventDefault()
   isResizing.value = true
@@ -4177,10 +4199,11 @@ defineExpose({ docTreeCollapsed })
   border-radius: 0 0.5rem 0.5rem 0;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #FFFFFF;
-  cursor: pointer;
+  cursor: grab;
   box-shadow: 2px 0 8px rgba(0,0,0,0.12);
   transition: width 0.15s ease, background 0.15s ease;
 }
+.doc-tree-expand-tab:active { cursor: grabbing; }
 .doc-tree-expand-tab:hover {
   width: 1.875rem;
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);

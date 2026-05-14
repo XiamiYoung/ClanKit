@@ -16,6 +16,11 @@ export const useFocusModeStore = defineStore('focusMode', () => {
   // Pending message to auto-populate chat input (set by "Send to Chat" in AI Edit)
   const pendingChatMessage = ref('')
 
+  // Session-only Y offset (px) for the draggable hamburger toggle tabs in
+  // ChatsView and DocsView. null = use the default CSS position.
+  const chatHamburgerY = ref(null)
+  const docHamburgerY = ref(null)
+
   let _exitTimer = null
 
   function enter() {
@@ -44,5 +49,5 @@ export const useFocusModeStore = defineStore('focusMode', () => {
     showDocs.value = !showDocs.value
   }
 
-  return { isFocusMode, showChat, showDocs, justExited, lastDocPath, lastDocName, lastChatId, pendingChatMessage, enter, exit, toggleChat, toggleDocs, isMinibarMode, enterMinibar, exitMinibar }
+  return { isFocusMode, showChat, showDocs, justExited, lastDocPath, lastDocName, lastChatId, pendingChatMessage, chatHamburgerY, docHamburgerY, enter, exit, toggleChat, toggleDocs, isMinibarMode, enterMinibar, exitMinibar }
 })

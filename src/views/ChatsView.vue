@@ -259,7 +259,11 @@
     >
       <!-- Hamburger toggle tab -->
       <button
+        ref="hamburgerBtnRef"
+        @mousedown="chatHamburgerDrag.onMouseDown"
+        @click.capture="chatHamburgerDrag.onClickCapture"
         @click="chatSidebarCollapsed = !chatSidebarCollapsed"
+        :style="chatHamburgerDrag.dynamicStyle.value"
         class="chat-sidebar-expand-tab"
         v-tooltip="chatSidebarCollapsed ? t('chats.expandChatList') : t('chats.collapseChatList')"
         :aria-label="chatSidebarCollapsed ? t('chats.expandChatList') : t('chats.collapseChatList')"
@@ -982,6 +986,7 @@ import { useChunkHandler } from '../composables/useChunkHandler'
 import { useAgentCollaboration } from '../composables/useAgentCollaboration'
 import { useSendMessage } from '../composables/useSendMessage'
 import { useGridMode } from '../composables/useGridMode'
+import { useDraggableHamburger } from '../composables/useDraggableHamburger'
 import { useAttachments } from '../composables/useAttachments'
 import { useAvatarTooltip } from '../composables/useAvatarTooltip'
 
@@ -1663,6 +1668,18 @@ const {
   gridNewChat, gridSelectChat, gridSwapChat, gridOpenChatSettings,
 } = useGridMode({ showChatConfigModal, triggerMemoryExtractionOnSwitch })
 
+// ── Draggable hamburger toggle ──
+// Clamp range = the focus-mode panel when in focus mode, else the chat window itself.
+const hamburgerBtnRef = ref(null)
+const chatHamburgerDrag = useDraggableHamburger({
+  buttonRef: hamburgerBtnRef,
+  getPanelEl: () => hamburgerBtnRef.value?.closest('.focus-chat-panel, .chat-window') || null,
+  storeY: computed({
+    get: () => focusModeStore.chatHamburgerY,
+    set: (v) => { focusModeStore.chatHamburgerY = v },
+  }),
+})
+
 // Catch rendering errors from child components (e.g. MessageRenderer) to prevent silent breakage
 onErrorCaptured((err, instance, info) => {
   console.error('[ChatsView] Render error caught:', err, '\nComponent:', instance?.$options?.name || instance, '\nInfo:', info)
@@ -2327,10 +2344,11 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   border-radius: 0 0.5rem 0.5rem 0;
   background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
   color: #FFFFFF;
-  cursor: pointer;
+  cursor: grab;
   box-shadow: 2px 0 8px rgba(0,0,0,0.12);
   transition: width 0.15s ease, background 0.15s ease;
 }
+.chat-sidebar-expand-tab:active { cursor: grabbing; }
 .chat-sidebar-expand-tab:hover {
   width: 1.875rem;
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);

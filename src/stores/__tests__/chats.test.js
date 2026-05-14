@@ -203,6 +203,111 @@ describe('chatsStore', () => {
       expect(msgs.find(m => m.isWaitingIndicator)).toBeUndefined()
       expect(msgs).toHaveLength(1)
     })
+
+    // ── Empty agent-stamped row cleanup (regression for LESSONS.md "agentId-stamp
+    // orphans bypass agent_end splice"). These rows escape to disk when an
+    // abnormal exit path (send_message_error, IPC failure, user-stop before
+    // agent_start) skips useChunkHandler's agent_end empty-splice, leaving a
+    // bare role:'assistant' row stamped with agentId but no content.
+    it('drops empty assistant rows with agentId set, no content, no segments, no error', async () => {
+      storage.getChat.mockResolvedValue({
+        id: 'c1',
+        messages: [
+          { id: 'u1', role: 'user', content: 'Hi' },
+          { id: 'orphan', role: 'assistant', agentId: '__default_system__', content: '', segments: [] },
+          { id: 'real', role: 'assistant', agentId: '__default_system__', content: 'real reply', segments: [{ type: 'text', content: 'real reply' }] },
+        ],
+      })
+      storage.getChatIndex.mockResolvedValue([{ type: 'chat', id: 'c1', title: 'Test' }])
+      const store = useChatsStore()
+      await store.loadChats()
+      await store.ensureMessages('c1')
+      const msgs = store.chats[0].messages
+      expect(msgs.find(m => m.id === 'orphan')).toBeUndefined()
+      expect(msgs.find(m => m.id === 'real')).toBeDefined()
+    })
+
+    it('KEEPS assistant rows that have a non-text segment (tool, permission, plan)', async () => {
+      storage.getChat.mockResolvedValue({
+        id: 'c1',
+        messages: [
+          { id: 'tool-only', role: 'assistant', agentId: 'a1', content: '', segments: [{ type: 'tool', name: 'execute_shell', input: {} }] },
+          { id: 'perm-only', role: 'assistant', agentId: 'a1', content: '', segments: [{ type: 'permission', blockId: 'b1', status: 'pending' }] },
+          { id: 'plan-only', role: 'assistant', agentId: 'a1', content: '', segments: [], planData: { title: 'p', steps: [] } },
+        ],
+      })
+      storage.getChatIndex.mockResolvedValue([{ type: 'chat', id: 'c1', title: 'Test' }])
+      const store = useChatsStore()
+      await store.loadChats()
+      await store.ensureMessages('c1')
+      const msgs = store.chats[0].messages
+      expect(msgs.find(m => m.id === 'tool-only')).toBeDefined()
+      expect(msgs.find(m => m.id === 'perm-only')).toBeDefined()
+      expect(msgs.find(m => m.id === 'plan-only')).toBeDefined()
+    })
+
+    it('KEEPS empty assistant rows that have errorDetail or isError set', async () => {
+      storage.getChat.mockResolvedValue({
+        id: 'c1',
+        messages: [
+          { id: 'err-detail', role: 'assistant', agentId: 'a1', content: '', segments: [], errorDetail: 'rate limited' },
+          { id: 'err-flag', role: 'assistant', agentId: 'a1', content: '', segments: [], isError: true },
+        ],
+      })
+      storage.getChatIndex.mockResolvedValue([{ type: 'chat', id: 'c1', title: 'Test' }])
+      const store = useChatsStore()
+      await store.loadChats()
+      await store.ensureMessages('c1')
+      const msgs = store.chats[0].messages
+      expect(msgs.find(m => m.id === 'err-detail')).toBeDefined()
+      expect(msgs.find(m => m.id === 'err-flag')).toBeDefined()
+    })
+  })
+
+  // ── _serializeChat (regression: write-side guard against agent-stamped orphans) ──
+  describe('_serializeChat empty-row filter', () => {
+    async function setupChatWithMessages(messages) {
+      storage.getChat.mockResolvedValue({ id: 'c1', messages: [{ id: 'u1', role: 'user', content: 'Hi' }] })
+      storage.getChatIndex.mockResolvedValue([{ type: 'chat', id: 'c1', title: 'Test' }])
+      const store = useChatsStore()
+      await store.loadChats()
+      await store.ensureMessages('c1')
+      // Push the test messages directly (bypass addMessage so we control the shape exactly)
+      store.chats[0].messages.push(...messages)
+      return store
+    }
+
+    it('drops empty non-streaming assistant rows on persist', async () => {
+      const store = await setupChatWithMessages([
+        { id: 'orphan', role: 'assistant', agentId: 'a1', content: '', segments: [], streaming: false },
+        { id: 'real', role: 'assistant', agentId: 'a1', content: 'hi', segments: [{ type: 'text', content: 'hi' }] },
+      ])
+      storage.saveChat.mockClear()
+      await store.persist()
+      const saved = storage.saveChat.mock.calls.find(c => c[0].id === 'c1')[0]
+      expect(saved.messages.find(m => m.id === 'orphan')).toBeUndefined()
+      expect(saved.messages.find(m => m.id === 'real')).toBeDefined()
+    })
+
+    it('KEEPS streaming=true rows even when content is empty (in-flight reply)', async () => {
+      const store = await setupChatWithMessages([
+        { id: 'in-flight', role: 'assistant', agentId: 'a1', content: '', segments: [], streaming: true },
+      ])
+      storage.saveChat.mockClear()
+      await store.persist()
+      const saved = storage.saveChat.mock.calls.find(c => c[0].id === 'c1')[0]
+      expect(saved.messages.find(m => m.id === 'in-flight')).toBeDefined()
+    })
+
+    it('KEEPS empty assistant rows that have planData', async () => {
+      const store = await setupChatWithMessages([
+        { id: 'plan', role: 'assistant', agentId: 'a1', content: '', segments: [], streaming: false, planData: { title: 'p', steps: [] } },
+      ])
+      storage.saveChat.mockClear()
+      await store.persist()
+      const saved = storage.saveChat.mock.calls.find(c => c[0].id === 'c1')[0]
+      expect(saved.messages.find(m => m.id === 'plan')).toBeDefined()
+    })
   })
 
   // ── Folder operations ──
