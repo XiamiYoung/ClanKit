@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.17](https://github.com/XiamiYoung/ClanKit/compare/v0.0.16...v0.0.17) (2026-05-14)
+
+
+### Features
+
+* **focus:** draggable hamburger toggles + bar centers over docs header ([#28](https://github.com/XiamiYoung/ClanKit/issues/28)) ([ecd878f](https://github.com/XiamiYoung/ClanKit/commit/ecd878f9ee3e5e6c53735254b370ae8890b7cec2))
+
 ## [0.0.16](https://github.com/XiamiYoung/ClanKit/compare/v0.0.15...v0.0.16) (2026-05-12)
 
 
