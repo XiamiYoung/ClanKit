@@ -304,38 +304,72 @@
         <div class="chat-context-bar-wrap">
         <div class="chat-context-bar">
           <span style="color:#6B7280; font-size:var(--fs-small); white-space:nowrap;">{{ t('chats.context') }}</span>
-          <!-- Progress bar -->
-          <div class="flex-1 h-1.5 rounded-full overflow-hidden" style="background:#E5E5EA;">
+          <!-- Bar slots: one per agent (1 in solo, N in group). Each slot
+               is an equal share of the bar area and starts with that agent's
+               avatar so a glance is enough to identify whose context window
+               each bar represents. Fill color rotates by agent index through
+               the same 8-color palette used by chat-tree row highlights
+               (palette shared with the tree, indexing is per-agent here vs.
+               per-chat-sibling there). Per-agent percentage is conveyed via
+               fill width + hover tooltip; we don't render a single numeric
+               % when multiple bars would make it ambiguous. -->
+          <div class="flex-1 flex" style="gap:0.5rem; min-width:0;">
             <div
-              class="h-full rounded-full transition-all duration-500"
-              :style="{
-                width: Math.min(activeContextMetrics.percentage, 100) + '%',
-                background: activeContextMetrics.percentage > 85 ? '#FF3B30' : activeContextMetrics.percentage > 65 ? '#FF9500' : '#1A1A1A'
-              }"
-            />
+              v-for="bar in agentContextBars"
+              :key="bar.agentId || ('slot-' + bar.agentIdx)"
+              class="flex-1 flex items-center"
+              style="gap:0.375rem; min-width:0;"
+              v-tooltip="`${bar.agentName} · ${formatTokenCount(bar.inputTokens)}${bar.maxTokens ? ' / ' + formatTokenCount(bar.maxTokens) : ''} · ${bar.pct}%`"
+            >
+              <img
+                v-if="bar.agentAvatar"
+                :src="bar.agentAvatar"
+                :alt="bar.agentName"
+                class="shrink-0"
+                style="width:1.125rem; height:1.125rem; border-radius:50%; background:#F2F2F7;"
+              />
+              <span
+                v-else
+                class="shrink-0 inline-block"
+                :style="`width:1.125rem; height:1.125rem; border-radius:50%; background:rgb(${bar.baseRgb});`"
+                :aria-label="bar.agentName"
+              ></span>
+              <div
+                class="flex-1 h-1.5 rounded-full overflow-hidden"
+                style="background:#E5E5EA; min-width:0;"
+              >
+                <div
+                  class="h-full rounded-full transition-all duration-500"
+                  :style="{ width: Math.min(bar.pct, 100) + '%', background: bar.fillColor }"
+                />
+              </div>
+            </div>
           </div>
-          <!-- Percentage and token counts -->
-          <span style="font-size:var(--fs-small); white-space:nowrap;"
-            :style="activeContextMetrics.percentage > 85 ? 'color:#dc2626;' : 'color:#9CA3AF;'"
+          <!-- Solo: single % readout. Group: hidden — per-agent % is in each tooltip. -->
+          <span
+            v-if="!isGroupChat"
+            style="font-size:var(--fs-small); white-space:nowrap;"
+            :style="(agentContextBars[0]?.pct || 0) > 85 ? 'color:#dc2626;' : 'color:#9CA3AF;'"
           >
-            {{ Math.round(activeContextMetrics.percentage) }}%
+            {{ Math.round(agentContextBars[0]?.pct || 0) }}%
           </span>
           <span style="color:#9CA3AF; font-size:var(--fs-small); white-space:nowrap;">
             {{ formatTokenCount(activeCumulativeTokens.input) }} {{ t('chats.tokenIn') }} / {{ formatTokenCount(activeCumulativeTokens.output) }} {{ t('chats.tokenOut') }}
           </span>
-          <!-- Inspect button — always clickable -->
+          <!-- Inspect button — always clickable. Tooltip clarifies the
+               button is chat-wide in group chats. -->
           <button
             @click="inspectContext"
             class="flex items-center justify-center rounded-md transition-colors cursor-pointer shrink-0"
             style="width:1.75rem; height:1.75rem; background:linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%); color:#FFFFFF; border:1px solid #1A1A1A; box-shadow:0 2px 8px rgba(0,0,0,0.12), 0 1px 3px rgba(0,0,0,0.08);"
-            v-tooltip="t('chats.inspect')"
+            v-tooltip="isGroupChat ? t('chats.inspectAllAgents') : t('chats.inspect')"
           >
             <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
             </svg>
           </button>
 
-          <!-- Compact button -->
+          <!-- Compact button — chat-wide (applies to every agent's loop). -->
           <button
             @click="compactContext"
             :disabled="isCompacting || (!activeRunning && !hasMessages)"
@@ -347,7 +381,11 @@
                 : 'width:1.75rem; height:1.75rem; background:#F5F5F5; color:#D1D1D6; border:1px solid #E5E5EA; cursor:not-allowed;'"
             @mouseenter="e => { if (!isCompacting && (activeRunning || hasMessages)) e.currentTarget.style.background='linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%)' }"
             @mouseleave="e => { if (!isCompacting && (activeRunning || hasMessages)) e.currentTarget.style.background='linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%)' }"
-            v-tooltip="isCompacting ? t('chats.compacting') : activeRunning ? t('chats.compactOnNext') : t('chats.compactContextWindow')"
+            v-tooltip="isCompacting
+              ? t('chats.compacting')
+              : isGroupChat
+                ? (activeRunning ? t('chats.compactAllOnNext') : t('chats.compactAllAgentsContextWindow'))
+                : (activeRunning ? t('chats.compactOnNext') : t('chats.compactContextWindow'))"
           >
             <svg v-if="isCompacting" class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
@@ -440,6 +478,7 @@
           :chatId="chatsStore.activeChatId"
           :showQuote="true"
           :showDelete="true"
+          :pulseRgb="activeChatTreeRgb"
           @send="handleChatWindowSend"
           @resend-message="handleResendMessage"
           @retry-waiting-indicator="handleRetryWaitingIndicator"
@@ -970,6 +1009,8 @@ import ChatWindow from '../components/chat/ChatWindow.vue'
 import ChatHeader from '../components/chat/ChatHeader.vue'
 import ChatMentionInput from '../components/chat/ChatMentionInput.vue'
 import { parseMentions } from '../utils/mentions'
+import { paletteRgb, rgbForChat } from '../utils/chatPalette'
+import { computeContextBars } from '../utils/contextBars'
 import { v4 as uuidv4 } from 'uuid'
 import AppButton from '../components/common/AppButton.vue'
 import AppTooltip from '../components/common/AppTooltip.vue'
@@ -1505,22 +1546,18 @@ const activePerAgentMetrics = computed(() => chatsStore.activeChat?.perAgentCont
 const hasContextData = computed(() => activeContextMetrics.value.effectiveInputTokens > 0 || activeContextMetrics.value.inputTokens > 0)
 const hasMessages = computed(() => (chatsStore.activeChat?.messages?.length ?? 0) > 0)
 // Header display (next to the % bar):
-//   input  — current round's full payload (effectiveInputTokens). It must match
-//            what the percentage is computed from, otherwise the user sees
-//            "8% used" alongside a 1M+ "in" number and gets confused.
-//            Each turn re-sends the entire history, so cross-turn summing
-//            multi-counts the same content and has no relation to occupancy.
+//   input  — solo: current round's full payload (effectiveInputTokens).
+//            group: sum of per-agent effectiveInputTokens so the number
+//            reflects what the whole chat is spending, not just the last
+//            agent that sent a context_update.
 //   output — genuine per-turn new tokens; cumulative across the chat is meaningful.
 const activeCumulativeTokens = computed(() => {
-  const cm = chatsStore.activeChat?.contextMetrics || {}
-  const input = cm.effectiveInputTokens
-    ?? ((cm.inputTokens || 0) + (cm.cacheCreationInputTokens || 0) + (cm.cacheReadInputTokens || 0))
   const messages = chatsStore.activeChat?.messages || []
   let output = 0
   for (const msg of messages) {
     if (msg.tokenUsage) output += msg.tokenUsage.output || 0
   }
-  return { input, output }
+  return { input: groupInputTokensSum.value, output }
 })
 // True when the active chat's primary model has no known context window.
 // Shows a red "!" next to the compact button so users know automatic
@@ -1541,6 +1578,48 @@ const activeSystemAgentIds = computed(() => {
   const id = chat.systemAgentId || agentsStore.defaultSystemAgent?.id
   return id ? [id] : []
 })
+
+// Tree-row color for the active chat. Derived purely from the chat node's
+// sibling index inside chatTree (mirrors ChatTreeNodeView's gradientForChat
+// call), so the context bar and the scroll-to-bottom pulse stay in sync
+// with the sidebar regardless of whether the row is currently rendered
+// (collapsed folder, hidden sidebar, search-activated chat, etc.).
+function _findChatSiblingIndex(nodes, chatId) {
+  for (let i = 0; i < nodes.length; i++) {
+    const n = nodes[i]
+    if (n.id === chatId) return { node: n, index: i }
+    if (n.type === 'folder' && n.children?.length) {
+      const found = _findChatSiblingIndex(n.children, chatId)
+      if (found) return found
+    }
+  }
+  return null
+}
+const activeChatTreeRgb = computed(() => {
+  const chatId = chatsStore.activeChatId
+  if (!chatId) return paletteRgb(0)
+  const found = _findChatSiblingIndex(chatsStore.chatTree, chatId)
+  // rgbForChat handles missing node by falling back to id-hash; for "node
+  // truly not in tree yet" (just-created chat mid-mount) we use the active
+  // chat object directly so the color is at least deterministic from id.
+  return rgbForChat(found?.node || chatsStore.activeChat, found?.index)
+})
+
+// Per-agent context bars + total input. Order follows chat.groupAgentIds
+// for group chat (stable, color rotation matches chat-tree sibling rotation);
+// solo gets a single slot tinted by the chat-tree color. Implementation is
+// in src/utils/contextBars.js so it can be unit-tested in isolation.
+const _ctxBarResult = computed(() => computeContextBars({
+  chat: chatsStore.activeChat,
+  sharedMetrics: activeContextMetrics.value,
+  resolveName: (id) => agentsStore.getAgentById(id)?.name,
+  resolveAvatar: (id) => getAvatarDataUriForAgent(agentsStore.getAgentById(id)),
+  defaultAgentId: agentsStore.defaultSystemAgent?.id,
+  paletteRgb,
+  soloRgb: activeChatTreeRgb.value,
+}))
+const agentContextBars = computed(() => _ctxBarResult.value.bars)
+const groupInputTokensSum = computed(() => _ctxBarResult.value.inputSum)
 
 // ── Send message orchestration ──
 const {
@@ -2334,7 +2413,10 @@ defineExpose({ chatSidebarCollapsed, chatHeaderRef })
   top: 50%;
   left: 0;
   transform: translateY(-50%);
-  z-index: 20;
+  /* Sit above the chat header (z-index:20) so the toggle stays clickable
+     whether the user is in standard or focus mode. Modal backdrops (200+)
+     and the drag overlay (9998) still cover it. */
+  z-index: 50;
   display: flex;
   align-items: center;
   justify-content: center;

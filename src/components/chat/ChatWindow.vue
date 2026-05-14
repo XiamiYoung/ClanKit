@@ -1,5 +1,5 @@
 <template>
-  <div class="cw-root">
+  <div class="cw-root" :style="{ '--cw-pulse-rgb': pulseRgb }">
     <!-- Messages area wrapper (relative positioning context for floating scroll buttons) -->
     <div class="cw-messages-wrap">
     <!-- Messages area -->
@@ -326,6 +326,7 @@
         </button>
         <button
           class="cw-scroll-btn-float"
+          :class="{ 'cw-scroll-btn-float--alert': hasNewContentBelow }"
           @click="forceScrollToBottom"
           v-tooltip="t('chats.scrollToBottom')"
           :aria-label="t('chats.scrollToBottom')"
@@ -514,6 +515,9 @@ const props = defineProps({
   onApprovePlan: { type: Function, default: null },
   onRejectPlan:  { type: Function, default: null },
   onRefinePlan:  { type: Function, default: null },
+  // RGB triplet ('r, g, b') of the active chat's palette slot — used by
+  // the scroll-to-bottom alert pulse so it visually echoes the sidebar.
+  pulseRgb: { type: String, default: '37, 99, 235' },
 })
 
 const emit = defineEmits(['send', 'stop', 'escape-retrieve', 'quote', 'delete-message', 'send-with-attachments', 'resend-message', 'quote-image', 'retry-waiting-indicator', 'speak-message'])
@@ -557,6 +561,7 @@ const hasDefaultBlobs = computed(() => Object.keys(defaultLongBlobs.value).lengt
 const copiedId = ref(null)
 const attachments = ref([])
 const userScrolled = ref(false)
+const hasNewContentBelow = ref(false)
 const showScrollToTop = ref(false)
 const isLoadingHistory = ref(false)
 let programmaticScrollCount = 0
@@ -923,7 +928,11 @@ function scrollToTop() {
 }
 
 // Watch message count changes for auto-scroll (skip during history loading)
-watch(() => chat.value?.messages?.length, () => { if (!isLoadingHistory.value) scrollToBottom() }, { flush: 'post' })
+watch(() => chat.value?.messages?.length, (newLen, oldLen) => {
+  if (isLoadingHistory.value) return
+  scrollToBottom()
+  if (userScrolled.value && newLen > (oldLen ?? 0)) hasNewContentBelow.value = true
+}, { flush: 'post' })
 // Watch last message content/segments for streaming auto-scroll.
 // Group chat agents stream via segments (content stays ''), so we must also
 // track total segment count across recent messages.
@@ -939,7 +948,15 @@ watch(() => {
     segTotal += msgs[i]?.segments?.reduce((acc, s) => acc + (s.content?.length ?? 0), 0) ?? 0
   }
   return contentLen + segTotal
-}, () => { scrollToBottom() }, { flush: 'post' })
+}, (newTotal, oldTotal) => {
+  scrollToBottom()
+  if (userScrolled.value && newTotal > (oldTotal ?? 0)) hasNewContentBelow.value = true
+}, { flush: 'post' })
+
+// Clear the new-content flag when user returns to the bottom
+watch(userScrolled, (scrolled) => {
+  if (!scrolled) hasNewContentBelow.value = false
+})
 
 // When messages finish lazy-loading (null → array), scroll to bottom
 watch(() => chat.value?.messages, (msgs, oldMsgs) => {
@@ -989,13 +1006,16 @@ function setupVisibilityDetection() {
     
     observer.observe(messagesEl.value)
     
-    // Also watch for ResizeObserver to catch when the container size changes (view switch)
+    // Also watch for ResizeObserver to catch when the container size changes.
+    // Use force=false so userScrolled is respected — this fires on every
+    // sibling-element layout shift during streaming (group activity bar
+    // toggling, tool labels changing, etc.) and would otherwise yank the
+    // user back to the bottom while they're reading history. View-switch
+    // re-mount is already covered by IntersectionObserver above (force=true).
     if (typeof ResizeObserver !== 'undefined') {
       resizeObserver = new ResizeObserver(() => {
-        // When container is resized (e.g., coming back from another view)
-        // and there are messages, scroll to bottom (skip during history loading)
         if (chat.value?.messages?.length > 0 && !isLoadingHistory.value) {
-          scrollToBottom(true)
+          scrollToBottom(false)
         }
       })
       resizeObserver.observe(messagesEl.value)
@@ -1115,8 +1135,11 @@ function defaultStop() {
   emit('escape-retrieve')
 }
 
-// Expose scrollToBottom so parents can trigger it
-defineExpose({ scrollToBottom })
+// Expose scrollToBottom so parents can trigger it.
+// userScrolled / hasNewContentBelow are exposed for tests so the alert-pulse
+// behavior can be exercised without relying on real scroll geometry under
+// happy-dom (scrollTop/scrollHeight are not faithfully simulated there).
+defineExpose({ scrollToBottom, userScrolled, hasNewContentBelow })
 </script>
 
 <style scoped>
@@ -1782,6 +1805,40 @@ defineExpose({ scrollToBottom })
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28), 0 2px 6px rgba(0, 0, 0, 0.15);
   transform: scale(1.08);
+}
+/* New-content-below pulse: gentle glow ring, slow easing.
+   ~2s cycle so it never feels frantic; pauses on hover so users
+   can target it without strobing. Color comes from --cw-pulse-rgb,
+   set on .cw-root from the active chat's palette slot so the halo
+   matches the sidebar item. */
+.cw-scroll-btn-float--alert {
+  animation: cw-scroll-pulse 2s ease-in-out infinite;
+}
+.cw-scroll-btn-float--alert:hover { animation: none; }
+@keyframes cw-scroll-pulse {
+  0%, 100% {
+    box-shadow:
+      0 2px 8px rgba(0, 0, 0, 0.2),
+      0 1px 3px rgba(0, 0, 0, 0.12),
+      0 0 0 0 rgba(var(--cw-pulse-rgb, 0, 122, 255), 0.55);
+  }
+  50% {
+    box-shadow:
+      0 2px 8px rgba(0, 0, 0, 0.2),
+      0 1px 3px rgba(0, 0, 0, 0.12),
+      0 0 0 8px rgba(var(--cw-pulse-rgb, 0, 122, 255), 0);
+  }
+}
+/* Honor users who opted out of motion: drop the animation and show a
+   static 2px ring in the same color so the affordance still works. */
+@media (prefers-reduced-motion: reduce) {
+  .cw-scroll-btn-float--alert {
+    animation: none;
+    box-shadow:
+      0 2px 8px rgba(0, 0, 0, 0.2),
+      0 1px 3px rgba(0, 0, 0, 0.12),
+      0 0 0 2px rgba(var(--cw-pulse-rgb, 0, 122, 255), 0.6);
+  }
 }
 /* scroll-to-bottom transition */
 .cw-scroll-btn-enter-active,

@@ -4189,7 +4189,9 @@ defineExpose({ docTreeCollapsed })
   top: 50%;
   left: 0;
   transform: translateY(-50%);
-  z-index: 20;
+  /* Sit above the doc header so the toggle stays clickable whether the user
+     is in standard or focus mode. Modal backdrops (200+) still cover it. */
+  z-index: 50;
   display: flex;
   align-items: center;
   justify-content: center;
