@@ -8,12 +8,14 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { shallowMount } from '@vue/test-utils'
-import { ref } from 'vue'
+import { ref, reactive } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 
 // ── Module mocks (before imports) ──────────────────────────────────────────
 
-const mockChat = {
+// Reactive so the component's watchers fire on post-mount mutations
+// (e.g. messages.push during a streaming-content test).
+const mockChat = reactive({
   id: 'c1',
   messages: [],
   isRunning: false,
@@ -21,7 +23,7 @@ const mockChat = {
   groupAgentIds: [],
   systemAgentId: null,
   userAgentId: null,
-}
+})
 
 vi.mock('../../../stores/chats', () => ({
   useChatsStore: () => ({
@@ -183,6 +185,56 @@ describe('ChatWindow', () => {
         { id: 'm1', role: 'user', content: 'hi' },
       ])
       expect(wrapper.findAll('.cw-mode-divider').length).toBe(0)
+    })
+  })
+
+  // 8. New-content alert pulse on the scroll-to-bottom button
+  describe('scroll-to-bottom alert pulse', () => {
+    it('does not flag new content when user is at the bottom', async () => {
+      const wrapper = mountWindow([
+        { id: 'm1', role: 'assistant', content: 'one', streaming: false },
+      ])
+      expect(wrapper.vm.userScrolled).toBe(false)
+      expect(wrapper.vm.hasNewContentBelow).toBe(false)
+
+      mockChat.messages.push({ id: 'm2', role: 'assistant', content: 'two', streaming: false })
+      await wrapper.vm.$nextTick()
+      await wrapper.vm.$nextTick()
+
+      expect(wrapper.vm.hasNewContentBelow).toBe(false)
+      expect(wrapper.find('.cw-scroll-btn-float--alert').exists()).toBe(false)
+    })
+
+    it('flags new content when content grows while user is scrolled up', async () => {
+      const wrapper = mountWindow([
+        { id: 'm1', role: 'assistant', content: 'one', streaming: false },
+      ])
+
+      wrapper.vm.userScrolled = true
+      mockChat.messages.push({ id: 'm2', role: 'assistant', content: 'two', streaming: false })
+      await wrapper.vm.$nextTick()
+      await wrapper.vm.$nextTick()
+
+      expect(wrapper.vm.hasNewContentBelow).toBe(true)
+      expect(wrapper.find('.cw-scroll-btn-float--alert').exists()).toBe(true)
+    })
+
+    it('clears the new-content flag when user returns to the bottom', async () => {
+      const wrapper = mountWindow([
+        { id: 'm1', role: 'assistant', content: 'one', streaming: false },
+      ])
+
+      wrapper.vm.userScrolled = true
+      mockChat.messages.push({ id: 'm2', role: 'assistant', content: 'two', streaming: false })
+      await wrapper.vm.$nextTick()
+      await wrapper.vm.$nextTick()
+      expect(wrapper.vm.hasNewContentBelow).toBe(true)
+
+      wrapper.vm.userScrolled = false
+      await wrapper.vm.$nextTick()
+
+      expect(wrapper.vm.hasNewContentBelow).toBe(false)
+      expect(wrapper.find('.cw-scroll-btn-float--alert').exists()).toBe(false)
     })
   })
 })

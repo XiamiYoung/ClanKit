@@ -1,35 +1,6 @@
 import { defineComponent, ref, h } from 'vue'
 import { useI18n } from '../../i18n/useI18n'
-
-// Per-chat hover palette — 8 colored gradients (no grayscale, so every chat
-// looks distinct from both the resting/active states on hover).
-const CHAT_HOVER_GRADIENTS = [
-  'linear-gradient(135deg, #1E3A5F 0%, #2563EB 60%, #3B82F6 100%)',
-  'linear-gradient(135deg, #4C1D95 0%, #7C3AED 60%, #8B5CF6 100%)',
-  'linear-gradient(135deg, #065F46 0%, #059669 60%, #10B981 100%)',
-  'linear-gradient(135deg, #92400E 0%, #D97706 60%, #F59E0B 100%)',
-  'linear-gradient(135deg, #991B1B 0%, #DC2626 60%, #EF4444 100%)',
-  'linear-gradient(135deg, #164E63 0%, #0891B2 60%, #06B6D4 100%)',
-  'linear-gradient(135deg, #713F12 0%, #CA8A04 60%, #EAB308 100%)',
-  'linear-gradient(135deg, #831843 0%, #BE185D 60%, #EC4899 100%)',
-]
-
-// Pick a color slot from the 8-color palette. Sibling index guarantees adjacent
-// chats never share a color; createdAt / id hash are fallbacks only.
-function gradientForChat(node, idx) {
-  const palette = CHAT_HOVER_GRADIENTS
-  if (typeof idx === 'number') {
-    return palette[((idx % palette.length) + palette.length) % palette.length]
-  }
-  if (node && typeof node.createdAt === 'number') {
-    return palette[node.createdAt % palette.length]
-  }
-  const id = node?.id || ''
-  if (!id) return palette[0]
-  let hash = 0
-  for (let i = 0; i < id.length; i++) hash = ((hash << 5) - hash + id.charCodeAt(i)) | 0
-  return palette[Math.abs(hash) % palette.length]
-}
+import { gradientForChat } from '../../utils/chatPalette'
 
 /**
  * Recursive tree node component for the chat sidebar.

@@ -479,7 +479,13 @@ function setGpPermissionMode(val) {
   chatsStore.persistChat?.(chat.value.id)
   // Mirror ChatsView's live-state plumbing — backend listens for this event
   // so a mid-turn flip propagates to running agent loops in this chat.
-  window.electronAPI?.updatePermissionMode?.(chat.value.id, { chatPermissionMode: val })
+  // Key MUST be `chatMode` (the agent:update-permission-mode handler
+  // destructures `{ chatMode, chatAllowList }` — a different key gets
+  // silently dropped and the live state resets to undefined → 'inherit').
+  window.electronAPI?.updatePermissionMode?.(chat.value.id, {
+    chatMode: val,
+    chatAllowList: JSON.parse(JSON.stringify(chat.value?.chatAllowList || [])),
+  })
 }
 const gpHasAnthropicAgent = computed(() => {
   const c = chat.value
@@ -820,6 +826,9 @@ async function onMentionSend(text) {
             httpTools: JSON.parse(JSON.stringify(filterByRequired(toolsStore.tools, agent.requiredToolIds ?? []))),
 
             knowledgeConfig: { knowledgeBases: JSON.parse(JSON.stringify(knowledgeStore.kbConfigs || {})) },
+            chatPermissionMode: targetChat.permissionMode || 'inherit',
+            chatAllowList: JSON.parse(JSON.stringify(targetChat.chatAllowList || [])),
+            chatDangerOverrides: JSON.parse(JSON.stringify(targetChat.chatDangerOverrides || [])),
           })
           const currentChat = chatsStore.chats.find(c => c.id === chatId)
           if (currentChat?.messages) {
@@ -938,6 +947,9 @@ async function onSend(text, pendingAttachments = [], longBlobs = {}) {
       mcpServers: JSON.parse(JSON.stringify(filterByRequired(mcpStore.servers, sysAgent?.requiredMcpServerIds ?? []))),
       httpTools: JSON.parse(JSON.stringify(filterByRequired(toolsStore.tools, sysAgent?.requiredToolIds ?? []))),
       knowledgeConfig: { knowledgeBases: JSON.parse(JSON.stringify(knowledgeStore.kbConfigs || {})) },
+      chatPermissionMode: targetChat.permissionMode || 'inherit',
+      chatAllowList: JSON.parse(JSON.stringify(targetChat.chatAllowList || [])),
+      chatDangerOverrides: JSON.parse(JSON.stringify(targetChat.chatDangerOverrides || [])),
     })
     if (targetChat.messages) {
       const msg = targetChat.messages.find(m => m.id === streamingMsgId)

@@ -63,7 +63,12 @@
             <table style="width:100%; font-size:var(--fs-body);">
               <tbody>
                 <tr style="border-bottom:1px solid #1E1E1E;">
-                  <td class="py-1.5 pr-4" style="color:#6B7280; white-space:nowrap;">{{ t('chats.totalInputTokens') }}</td>
+                  <td class="py-1.5 pr-4" style="color:#6B7280; white-space:nowrap;">
+                    {{ t('chats.totalInputTokens') }}
+                    <span v-if="isGroupChat" style="color:#4B5563; font-size:var(--fs-caption); margin-left:0.25rem;">
+                      ({{ t('chats.totalInputAcrossAgents', { n: chatAgentIds.length }) }})
+                    </span>
+                  </td>
                   <td class="py-1.5 font-medium" style="font-family:'JetBrains Mono',monospace; color:#E5E5EA;">{{ fmtTokens(aggregateMetrics.inputTokens ?? 0) }}</td>
                 </tr>
                 <tr style="border-bottom:1px solid #1E1E1E;">
@@ -543,8 +548,29 @@ const aggregateMetrics = computed(() => {
   // Prefer effectiveInputTokens from the backend; fall back to summing the three
   // cache-related fields ourselves for older snapshots that predate this field.
   const cm = props.contextMetrics || {}
-  const effInput = cm.effectiveInputTokens
+  const fallbackEffInput = cm.effectiveInputTokens
     ?? ((cm.inputTokens || 0) + (cm.cacheCreationInputTokens || 0) + (cm.cacheReadInputTokens || 0))
+
+  // In group chats, props.contextMetrics is a shared bucket that gets overwritten
+  // by whichever agent emitted the most recent context_update — so it represents
+  // "one agent's current round" rather than "the chat's current spend." Sum
+  // per-agent effectiveInputTokens instead so the user sees the real total
+  // tokens being pumped through providers this round. Solo chats fall through
+  // to the shared bucket value (same as before).
+  const chatAgentIdsLocal = chatAgentIds.value
+  let effInput = fallbackEffInput
+  if (chatAgentIdsLocal.length > 1) {
+    let sum = 0
+    const perAgent = props.perAgentContextMetrics || {}
+    for (const agentId of chatAgentIdsLocal) {
+      const m = perAgent[agentId]
+      if (!m) continue
+      const e = m.effectiveInputTokens
+        ?? ((m.inputTokens || 0) + (m.cacheCreationInputTokens || 0) + (m.cacheReadInputTokens || 0))
+      sum += e || 0
+    }
+    effInput = sum
+  }
 
   // Always derive percentage from effInput/maxTokens when we have both; only fall
   // back to the backend value when we lack the data to compute it. This keeps the
@@ -565,7 +591,11 @@ const chatAgentIds = computed(() => {
   return []
 })
 
-const isGroupChat = computed(() => chatAgentIds.value.length > 1)
+// Single source of truth: chat.isGroupChat flag (matches ChatsView). The
+// inspector must agree with the context bar above the chat — otherwise a
+// flag-true chat with 1 agent left renders as "group" in one place and
+// "solo" in the other, and users doubt the data.
+const isGroupChat = computed(() => chatsStore.activeChat?.isGroupChat ?? false)
 
 // ── Agent cards ───────────────────────────────────────────────────────────────
 
