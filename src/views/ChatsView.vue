@@ -480,6 +480,7 @@
           :showDelete="true"
           :pulseRgb="activeChatTreeRgb"
           @send="handleChatWindowSend"
+          @continue-after-truncation="handleContinueAfterTruncation"
           @resend-message="handleResendMessage"
           @retry-waiting-indicator="handleRetryWaitingIndicator"
           @escape-retrieve="interrupt(chatsStore.activeChatId)"
@@ -1417,6 +1418,7 @@ const {
   formatTime,
   formatTokenCount,
   handleChatWindowSend,
+  handleContinueAfterTruncation,
   handleRetryWaitingIndicator,
   handleResendMessage,
 } = useMessageOps({

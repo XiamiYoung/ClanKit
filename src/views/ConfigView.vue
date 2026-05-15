@@ -766,15 +766,36 @@
                     </div>
                     <div class="form-group compact">
                       <label class="form-label">{{ t('config.sonnetModel') }}</label>
-                      <input v-model="selectedProvider.model" type="text" class="field font-mono" placeholder="e.g. claude-sonnet-4-6" />
+                      <div class="cv-anthropic-model-row">
+                        <input v-model="selectedProvider.model" type="text" class="field font-mono" placeholder="e.g. claude-sonnet-4-6" />
+                        <AppTooltip :text="editModelLimitsLabel">
+                          <button type="button" class="cv-model-out-edit" :disabled="!selectedProvider.model" @click.stop="openAnthropicModelLimits('sonnet')">
+                            <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                          </button>
+                        </AppTooltip>
+                      </div>
                     </div>
                     <div class="form-group compact">
                       <label class="form-label">{{ t('config.opusModel') }}</label>
-                      <input v-model="selectedProvider.settings.opusModel" type="text" class="field font-mono" placeholder="e.g. claude-opus-4-7" />
+                      <div class="cv-anthropic-model-row">
+                        <input v-model="selectedProvider.settings.opusModel" type="text" class="field font-mono" placeholder="e.g. claude-opus-4-7" />
+                        <AppTooltip :text="editModelLimitsLabel">
+                          <button type="button" class="cv-model-out-edit" :disabled="!selectedProvider.settings.opusModel" @click.stop="openAnthropicModelLimits('opus')">
+                            <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                          </button>
+                        </AppTooltip>
+                      </div>
                     </div>
                     <div class="form-group compact">
                       <label class="form-label">{{ t('config.haikuModel') }}</label>
-                      <input v-model="selectedProvider.settings.haikuModel" type="text" class="field font-mono" placeholder="e.g. claude-haiku-4-5" />
+                      <div class="cv-anthropic-model-row">
+                        <input v-model="selectedProvider.settings.haikuModel" type="text" class="field font-mono" placeholder="e.g. claude-haiku-4-5" />
+                        <AppTooltip :text="editModelLimitsLabel">
+                          <button type="button" class="cv-model-out-edit" :disabled="!selectedProvider.settings.haikuModel" @click.stop="openAnthropicModelLimits('haiku')">
+                            <svg style="width:10px;height:10px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                          </button>
+                        </AppTooltip>
+                      </div>
                     </div>
                     <div class="test-connection-row" style="margin-top: 0.5rem;">
                       <select v-model="selectedTestModel" class="field font-mono" style="flex:1;">
@@ -4032,6 +4053,39 @@ const selectedProvider = computed(() => {
   return configStore.config.providers.find(p => p.id === modelsLeftNav.value)
 })
 
+// Deep-link: `/config?tab=models&openModelLimits=<providerId>:<modelId>` jumps
+// straight to that provider's model and opens the limits editor. Used by the
+// chat-window "Raise output cap" banner action so the user lands on the right
+// field in one click instead of digging through Config.
+// Placed AFTER `selectedProvider` / `modelsLeftNav` so the immediate handler
+// doesn't TDZ on a fresh `/config?openModelLimits=...` deep-link mount.
+watch(() => route.query.openModelLimits, async (raw) => {
+  if (!raw || typeof raw !== 'string') return
+  const sep = raw.indexOf(':')
+  if (sep < 0) return
+  const providerId = raw.slice(0, sep)
+  const modelId    = raw.slice(sep + 1)
+  if (!providerId || !modelId) return
+  const provider = (configStore.config.providers || []).find(p => p.id === providerId)
+  if (!provider) return
+  modelsLeftNav.value = provider.id
+  await nextTick()
+  // Anthropic uses a 3-slot UI (no model list rows); route to the matching slot
+  // so the banner badges and field state mirror the user's existing setup.
+  if (provider.type === 'anthropic') {
+    if (provider.model === modelId)                    openAnthropicModelLimits('sonnet')
+    else if (provider.settings?.opusModel  === modelId) openAnthropicModelLimits('opus')
+    else if (provider.settings?.haikuModel === modelId) openAnthropicModelLimits('haiku')
+    else openModelLimitsEditor({ id: modelId, name: modelId })
+  } else {
+    const fetched = modelsStore.getModelsForProvider(provider.id || provider.type) || []
+    const m = fetched.find(x => x.id === modelId) || { id: modelId }
+    openModelLimitsEditor(m)
+  }
+  // Consume the query param so re-visiting Config doesn't reopen the modal.
+  router.replace({ path: route.path, query: { ...route.query, openModelLimits: undefined } })
+}, { immediate: true })
+
 // Local UI state — which model the user has highlighted for testing. Does NOT
 // persist; clicking a row only marks it as the Test button's target. Only the
 // explicit "set as default" star in the row updates `provider.model` (the
@@ -4774,6 +4828,17 @@ function applyCatalogEntryFromDialog(entry) {
 
 function clearSelectedCatalogEntry() {
   selectedCatalogEntry.value = null
+}
+
+function openAnthropicModelLimits(slot) {
+  const p = selectedProvider.value
+  if (!p || p.type !== 'anthropic') return
+  let id, name, ctx
+  if (slot === 'sonnet')      { id = p.model;                   name = 'Sonnet'; ctx = 1000000 }
+  else if (slot === 'opus')   { id = p.settings?.opusModel;     name = 'Opus';   ctx = 1000000 }
+  else if (slot === 'haiku')  { id = p.settings?.haikuModel;    name = 'Haiku';  ctx = 200000  }
+  if (!id) return
+  openModelLimitsEditor({ id, name, context_length: ctx })
 }
 
 function openModelLimitsEditor(model) {
@@ -7177,6 +7242,26 @@ async function checkKnowledgeModelIfNeeded() {
   background: rgba(255,255,255,0.18);
   border-color: rgba(255,255,255,0.3);
   color: #FFFFFF;
+}
+.cv-model-out-edit:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Anthropic input + edit-limits pencil row */
+.cv-anthropic-model-row {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+.cv-anthropic-model-row > .field { flex: 1; min-width: 0; }
+.cv-anthropic-model-row .cv-model-out-edit {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+.cv-anthropic-model-row .cv-model-out-edit svg {
+  width: 0.75rem !important;
+  height: 0.75rem !important;
 }
 
 /* Edit mode input */
