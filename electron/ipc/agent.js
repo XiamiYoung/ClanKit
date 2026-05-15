@@ -946,6 +946,12 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
     agentPrompts.systemAgentPrompt = (agentPrompts.systemAgentPrompt || '') + block
   }
 
+  // Stamp solo-path chunks with the speaking agent's id/name so the renderer
+  // (e.g. max_tokens_reached banner → "Raise output cap") can resolve which
+  // model truncated without falling back to chat.systemAgentId. Matches the
+  // groupchat wrapper at runGroupRound's onChunk for consistency.
+  const _soloAgentId   = agentPrompts?.systemAgentId || null
+  const _soloAgentName = null
   try {
     const result = await loop.run(
       messages,
@@ -953,7 +959,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       enabledSkills,
       (chunk) => {
         if (!event.sender.isDestroyed()) {
-          event.sender.send('agent:chunk', { chatId, chunk })
+          event.sender.send('agent:chunk', { chatId, chunk: { ...chunk, agentId: chunk.agentId || _soloAgentId, agentName: chunk.agentName || _soloAgentName } })
         }
       },
       currentAttachments,

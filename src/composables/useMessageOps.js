@@ -129,6 +129,28 @@ export function useMessageOps({
     sendMessage()
   }
 
+  // Bridge for ChatWindow's continue-after-truncation event. Unlike a plain
+  // 'send', this MUST preserve any in-progress draft the user typed while
+  // reading the banner — clobbering inputText with the continue prompt would
+  // silently eat their next question. Strategy: snapshot draft+attachments+
+  // quote, swap in the continue prompt, call sendMessage (its sync portion
+  // captures the prompt and clears the inputs), then restore the snapshot.
+  // Works because sendMessage's input-clearing happens synchronously before
+  // its first `await`.
+  function handleContinueAfterTruncation(text) {
+    if (!text) return
+    const savedText = inputText.value
+    const savedAttachments = [...attachments.value]
+    const savedQuote = quotedMessage.value
+    inputText.value = text
+    attachments.value = []
+    quotedMessage.value = null
+    sendMessage()
+    inputText.value = savedText
+    attachments.value = savedAttachments
+    quotedMessage.value = savedQuote
+  }
+
   function handleRetryWaitingIndicator(msg) {
     const chatId = chatsStore.activeChatId
     if (!chatId || !msg) return
@@ -199,6 +221,7 @@ export function useMessageOps({
     formatTime,
     formatTokenCount,
     handleChatWindowSend,
+    handleContinueAfterTruncation,
     handleRetryWaitingIndicator,
     handleResendMessage,
   }

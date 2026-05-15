@@ -115,6 +115,18 @@
                 </span>
               </template>
             </template>
+            <template v-else-if="item.data.maxTokensReached">
+              <span class="cw-system-banner-text">{{ item.data.content }}</span>
+              <template v-if="item.data.truncated !== 'mid-tool_use'">
+                <span class="cw-system-banner-sep">·</span>
+                <button type="button" class="cw-banner-action" @click="onContinueAfterTruncation(item.data)">
+                  {{ t('chats.maxTokensContinue') }}
+                </button>
+                <button v-if="_resolveBannerProviderModel(item.data)" type="button" class="cw-banner-action cw-banner-action--link" @click="onRaiseOutputCap(item.data)">
+                  {{ t('chats.maxTokensRaiseCap') }}
+                </button>
+              </template>
+            </template>
             <span v-else class="cw-system-banner-text">{{ item.data.content }}</span>
           </div>
 
@@ -520,7 +532,7 @@ const props = defineProps({
   pulseRgb: { type: String, default: '37, 99, 235' },
 })
 
-const emit = defineEmits(['send', 'stop', 'escape-retrieve', 'quote', 'delete-message', 'send-with-attachments', 'resend-message', 'quote-image', 'retry-waiting-indicator', 'speak-message'])
+const emit = defineEmits(['send', 'stop', 'escape-retrieve', 'quote', 'delete-message', 'send-with-attachments', 'resend-message', 'quote-image', 'retry-waiting-indicator', 'speak-message', 'continue-after-truncation'])
 
 const router = useRouter()
 const chatsStore = useChatsStore()
@@ -534,6 +546,37 @@ function openAgentBody(msg) {
   const agent = agentsStore.getAgentById?.(agentId)
   const path = agent?.type === 'user' ? '/personas' : '/agents'
   router.push({ path, query: { openAgentId: agentId } })
+}
+
+// Banner action: "Continue" after the model hit max_tokens with no tool_use.
+// Sends a short follow-up that nudges the model to resume from where it stopped.
+// Routed via a dedicated event (not 'send') so ChatsView can save/restore any
+// in-progress draft / attachments / quote the user may have typed while reading
+// the banner — emitting plain 'send' would clobber inputText silently.
+function onContinueAfterTruncation(msg) {
+  if (msg?.truncated === 'mid-tool_use') return
+  emit('continue-after-truncation', t('chats.maxTokensContinuePrompt'))
+}
+
+// Whether the banner can deep-link to a specific model. Resolves provider+model
+// from msg.agentId (group) or chat.systemAgentId (solo). When the referenced
+// agent has been deleted (or never had providerId/modelId), no deep-link is
+// possible — caller should hide the action instead of falling back to a generic
+// /config landing that confuses the user.
+function _resolveBannerProviderModel(msg) {
+  const chat = chatsStore.chats.find(ch => ch.id === props.chatId)
+  const agentId = msg?.agentId || chat?.systemAgentId || agentsStore.defaultSystemAgent?.id
+  const agent = agentId ? agentsStore.getAgentById?.(agentId) : null
+  if (!agent?.providerId || !agent?.modelId) return null
+  return { providerId: agent.providerId, modelId: agent.modelId }
+}
+
+// Banner action: jump to ConfigView with the right provider tab + open the
+// model-limits editor for the model that just truncated.
+function onRaiseOutputCap(msg) {
+  const target = _resolveBannerProviderModel(msg)
+  if (!target) return  // button is hidden in this case; defensive no-op
+  router.push({ path: '/config', query: { tab: 'models', openModelLimits: `${target.providerId}:${target.modelId}` } })
 }
 
 const voiceConfigured = computed(() => {
@@ -1335,6 +1378,33 @@ defineExpose({ scrollToBottom, userScrolled, hasNewContentBelow })
   line-height: 1.4;
   display: block;
 }
+.cw-banner-action {
+  font-size: 0.7rem;
+  line-height: 1;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  background: rgba(0,0,0,0.06);
+  border: 1px solid rgba(0,0,0,0.12);
+  color: inherit;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+.cw-banner-action:hover {
+  background: rgba(0,0,0,0.1);
+  border-color: rgba(0,0,0,0.2);
+}
+.cw-banner-action--link {
+  background: transparent;
+  border-color: transparent;
+  text-decoration: underline;
+  opacity: 0.8;
+}
+.cw-banner-action--link:hover {
+  background: transparent;
+  border-color: transparent;
+  opacity: 1;
+}
+
 .cw-system-banner-agent {
   font-family: 'JetBrains Mono', monospace;
   font-size: var(--fs-small);

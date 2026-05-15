@@ -110,22 +110,28 @@ describe('useDraggableHamburger', () => {
     dispatch('mouseup', 320)
   })
 
-  it('clamps button against panel top/bottom regardless of offsetParent', () => {
+  it('clamps button to intersection of panel and offsetParent bounds', () => {
+    // Panel spans viewport [100..700]; offsetParent sits BELOW the panel top
+    // at [150..700]. The button must never render above its offsetParent's
+    // top edge — otherwise an ancestor's `overflow: hidden` clips it and the
+    // user has no way to drag it back. So the effective top is max(panel, op)
+    // and effective bottom is min(panel, op), here [150..700].
     const { btn, panel } = setup({ offsetParentTop: 150 })
     const storeY = makeStore()
     const d = mkComposable({ btn, panel, storeY })
 
-    // Try to drag way below the panel: max desired viewport top = panelBottom - 48 - 8 = 700 - 56 = 644
+    // Drag way below: max desired viewport top = min(panel,op).bottom - 48 - 8 = 700 - 56 = 644
     // local = 644 - 150 = 494
     d.onMouseDown(new MouseEvent('mousedown', { clientY: 300, button: 0 }))
     dispatch('mousemove', 99999)
     expect(storeY.value).toBe(700 - 48 - 8 - 150)
     dispatch('mouseup', 99999)
 
-    // Drag above: min desired viewport top = panelTop + 8 = 108, local = 108 - 150 = -42
+    // Drag above: min desired viewport top = max(panel,op).top + 8 = 158
+    // local = 158 - 150 = 8 (button hugs offsetParent top, NOT panel top)
     d.onMouseDown(new MouseEvent('mousedown', { clientY: 300, button: 0 }))
     dispatch('mousemove', -99999)
-    expect(storeY.value).toBe(100 + 8 - 150)
+    expect(storeY.value).toBe(150 + 8 - 150)
     dispatch('mouseup', -99999)
   })
 

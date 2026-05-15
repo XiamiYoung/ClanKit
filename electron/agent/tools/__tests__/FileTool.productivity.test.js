@@ -210,4 +210,81 @@ describe('FileTool productivity additions', () => {
       expect(r.text).not.toContain('image.png')
     })
   })
+
+  // --- read: size-based refusal + pagination metadata ---
+
+  describe('read size policy', () => {
+    it('whole-file read under 1 MB returns full content with metadata', async () => {
+      const f = path.join(tmp, 'small.txt')
+      fs.writeFileSync(f, 'line1\nline2\nline3')
+      const tool = new FileTool()
+      const r = await tool.execute('id', { operation: 'read', path: f })
+      expect(r.success).toBe(true)
+      expect(r.text).toBe('line1\nline2\nline3')
+      expect(r.details.totalLines).toBe(3)
+      expect(r.details.startLine).toBe(1)
+      expect(r.details.numLines).toBe(3)
+      expect(r.details.bytes).toBe(17)
+    })
+
+    it('whole-file read over 1 MB is REFUSED with pagination hint', async () => {
+      const f = path.join(tmp, 'big.txt')
+      // Build a >1 MB file: 12000 lines * ~100 bytes each = ~1.2 MB
+      const line = 'x'.repeat(99) + '\n'
+      const content = line.repeat(12000)
+      fs.writeFileSync(f, content)
+      expect(fs.statSync(f).size).toBeGreaterThan(1024 * 1024)
+
+      const tool = new FileTool()
+      const r = await tool.execute('id', { operation: 'read', path: f })
+      expect(r.success).toBe(false)
+      expect(r.error).toMatch(/too large/i)
+      expect(r.error).toMatch(/offset.*limit/i) // suggests pagination
+      expect(r.details.totalLines).toBeGreaterThan(0)
+      expect(r.details.bytes).toBeGreaterThan(1024 * 1024)
+      expect(r.details.maxBytes).toBe(1024 * 1024)
+    })
+
+    it('paginated read of a >1 MB file works with sensible limit', async () => {
+      const f = path.join(tmp, 'big.txt')
+      const line = 'x'.repeat(99) + '\n'
+      fs.writeFileSync(f, line.repeat(12000))
+
+      const tool = new FileTool()
+      const r = await tool.execute('id', { operation: 'read', path: f, offset: 1, limit: 100 })
+      expect(r.success).toBe(true)
+      expect(r.details.totalLines).toBe(12001) // 12000 lines + trailing empty
+      expect(r.details.startLine).toBe(1)
+      expect(r.details.numLines).toBe(100)
+      // 100 lines of 100 bytes = ~10 KB, well under cap
+      expect(r.details.bytes).toBeLessThan(20 * 1024)
+    })
+
+    it('paginated read with second-page offset returns correct slice metadata', async () => {
+      const f = path.join(tmp, 'pages.txt')
+      const lines = Array.from({ length: 50 }, (_, i) => `line ${i + 1}`).join('\n')
+      fs.writeFileSync(f, lines)
+
+      const tool = new FileTool()
+      const r = await tool.execute('id', { operation: 'read', path: f, offset: 20, limit: 10 })
+      expect(r.success).toBe(true)
+      expect(r.text).toMatch(/^line 20\n/)
+      expect(r.text).toMatch(/line 29$/)
+      expect(r.details.totalLines).toBe(50)
+      expect(r.details.startLine).toBe(20)
+      expect(r.details.numLines).toBe(10)
+    })
+
+    it('paginated read with oversized limit is REFUSED with hint to reduce', async () => {
+      const f = path.join(tmp, 'big.txt')
+      const line = 'x'.repeat(99) + '\n'
+      fs.writeFileSync(f, line.repeat(12000))
+
+      const tool = new FileTool()
+      const r = await tool.execute('id', { operation: 'read', path: f, offset: 1, limit: 999999 })
+      expect(r.success).toBe(false)
+      expect(r.error).toMatch(/too large/i)
+      expect(r.error).toMatch(/reduce limit/i)
+    })
+  })
 })

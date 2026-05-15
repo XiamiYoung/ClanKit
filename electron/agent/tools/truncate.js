@@ -1,16 +1,32 @@
 /**
- * truncate.js — unified output truncation for tool results.
+ * truncate.js — output limiting for tool results.
  *
- * Two independent limits — whichever is hit first wins:
- *   - Line limit (default: 2000 lines)
- *   - Byte limit  (default: 50 KB)
+ * Two distinct policies, picked by call site:
  *
- * Returns the truncated string and a human-readable notice appended at the end
- * so the LLM knows output was cut.
+ *   truncateOutput(text)      — for EPHEMERAL output (shell, HTTP body, git).
+ *                                Silently truncates at the limits below and
+ *                                appends a "[Output truncated]" marker so the
+ *                                LLM knows output was cut.
+ *
+ *   MAX_FILE_READ_BYTES       — hard ceiling for ADDRESSABLE file reads.
+ *                                FileTool.read uses this as a refuse-to-read
+ *                                threshold, not a silent-truncate threshold:
+ *                                if a read would return more than this, the
+ *                                tool errors and tells the model to paginate
+ *                                via offset+limit. Rationale: files are
+ *                                stable, line-addressable resources, so
+ *                                "refuse + paginate" is cleaner than
+ *                                "silently cut the middle".
  */
 
 const DEFAULT_MAX_LINES = 2000
-const DEFAULT_MAX_BYTES = 50 * 1024 // 50 KB
+const DEFAULT_MAX_BYTES = 50 * 1024 // 50 KB — ephemeral output cap
+
+// File-read cap. Picked at 1 MB to safely fit even CJK content into a 1M-token
+// context window (≈350K tokens English / ≈500K tokens CJK) while still leaving
+// room for the system prompt, tools, and conversation history. Files larger
+// than this must be paginated by the model via offset+limit, NOT silently cut.
+const MAX_FILE_READ_BYTES = 1024 * 1024 // 1 MB
 
 /**
  * Truncate text to fit within line and byte limits.
@@ -60,4 +76,4 @@ function _kb(bytes) {
   return bytes < 1024 ? `${bytes}B` : `${(bytes / 1024).toFixed(1)}KB`
 }
 
-module.exports = { truncateOutput, DEFAULT_MAX_LINES, DEFAULT_MAX_BYTES }
+module.exports = { truncateOutput, DEFAULT_MAX_LINES, DEFAULT_MAX_BYTES, MAX_FILE_READ_BYTES }

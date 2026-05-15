@@ -1,9 +1,15 @@
 const { BaseTool } = require('./BaseTool')
-const { truncateOutput } = require('./truncate')
+const { MAX_FILE_READ_BYTES } = require('./truncate')
 const fs = require('fs')
 const path = require('path')
 const os = require('os')
 const picomatch = require('picomatch')
+
+function _mb(bytes) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
+}
 
 class FileTool extends BaseTool {
   constructor() {
@@ -24,7 +30,7 @@ class FileTool extends BaseTool {
           description: [
             'Which operation to run. Pick the most specific match for the user request:',
             '- "list": enumerate immediate children of a directory (files + subdirs). Use when user asks "what files are in X" or "what\'s in this folder". REQUIRED params: path (directory).',
-            '- "read": read full text of a file. Use when user asks "what does X say" or "show me X" or before editing a file. REQUIRED: path (file). OPTIONAL: offset (1-indexed start line), limit (max lines).',
+            '- "read": read full text of a file. Use when user asks "what does X say" or "show me X" or before editing a file. REQUIRED: path (file). OPTIONAL: offset (1-indexed start line), limit (max lines). The entire file is returned by default — no middle-of-file truncation. Files larger than 1 MB are refused with an error that includes totalLines; in that case re-call with offset+limit (e.g. offset:1, limit:2000) to paginate. The response carries totalLines, startLine, numLines so you can tell whether you have the whole file or a slice; trust those numbers and do NOT re-read the same range suspecting truncation.',
             '- "write": create or overwrite a file. REQUIRED: path, content. Prefer "edit" over "write" when changing existing files — write loses any content you did not include in `content`.',
             '- "edit": replace EXACT text within a file. Use this for any modification of an existing file you can describe by a substring. REQUIRED: path, oldText (the literal text to find), newText (the replacement). OPTIONAL: occurrences ("unique" default, "first", "all"). The tool errors if oldText is not found OR matches multiple times under "unique" — in that case, fetch more context with read and try again with a longer oldText.',
             '- "append": add to the end of a file (creates if missing). REQUIRED: path, content.',
@@ -86,19 +92,65 @@ class FileTool extends BaseTool {
       switch (operation) {
         case 'read': {
           if (!fs.existsSync(safePath)) return this._err('File not found')
-          const raw = fs.readFileSync(safePath, 'utf8')
-          let data = raw
 
-          // Apply offset/limit if requested
-          if (offset != null || limit != null) {
-            const lines = raw.split('\n')
-            const start = offset != null ? Math.max(0, offset - 1) : 0
-            const end   = limit  != null ? start + limit : lines.length
-            data = lines.slice(start, end).join('\n')
+          // Stat first so we can reject oversized whole-file reads without
+          // loading the entire file into memory.
+          const stat = fs.statSync(safePath)
+          if (!stat.isFile()) return this._err('Not a regular file')
+          const fileBytes = stat.size
+          const isPaged = offset != null || limit != null
+
+          // Whole-file read: refuse if the file exceeds the cap. Force the
+          // model to paginate explicitly instead of silently slicing it.
+          if (!isPaged && fileBytes > MAX_FILE_READ_BYTES) {
+            // Cheap line count without holding the full text in a JS string
+            // longer than necessary — but for the error message we need it
+            // anyway. The file is by definition > 1 MB so this read is
+            // intentional and bounded by the OS cache, not unbounded.
+            const totalLines = fs.readFileSync(safePath, 'utf8').split('\n').length
+            return this._err(
+              `File too large to read in one shot (${_mb(fileBytes)}, ${totalLines} lines; max ${_mb(MAX_FILE_READ_BYTES)}). ` +
+              `Use offset + limit to paginate, e.g. { operation: 'read', path: '${safePath.replace(/\\/g, '\\\\')}', offset: 1, limit: 2000 } reads lines 1-2000. ` +
+              `Only read the ranges you actually need — do not blindly page through the whole file.`,
+              { path: safePath, bytes: fileBytes, totalLines, maxBytes: MAX_FILE_READ_BYTES }
+            )
           }
 
-          const { text, truncated, totalLines, totalBytes } = truncateOutput(data)
-          return this._ok(text, { truncated, totalLines, totalBytes, path: safePath })
+          const raw = fs.readFileSync(safePath, 'utf8')
+          const lines = raw.split('\n')
+          const totalLines = lines.length
+
+          let data, startLine, numLines
+          if (isPaged) {
+            const start = offset != null ? Math.max(0, offset - 1) : 0
+            const end   = limit  != null ? Math.min(start + limit, lines.length) : lines.length
+            data = lines.slice(start, end).join('\n')
+            startLine = start + 1
+            numLines = Math.max(0, end - start)
+          } else {
+            data = raw
+            startLine = 1
+            numLines = totalLines
+          }
+
+          // A page that itself exceeds the byte cap (e.g. limit:999999 on a
+          // huge file) is also refused, with a hint to reduce the limit.
+          const returnedBytes = Buffer.byteLength(data, 'utf8')
+          if (returnedBytes > MAX_FILE_READ_BYTES) {
+            return this._err(
+              `Requested slice is too large (${_mb(returnedBytes)}, ${numLines} lines; max ${_mb(MAX_FILE_READ_BYTES)}). ` +
+              `Reduce limit. File has ${totalLines} lines total.`,
+              { path: safePath, bytes: returnedBytes, totalLines, numLines, startLine, maxBytes: MAX_FILE_READ_BYTES }
+            )
+          }
+
+          return this._ok(data, {
+            path: safePath,
+            bytes: returnedBytes,
+            totalLines,
+            startLine,
+            numLines
+          })
         }
 
         case 'write':
