@@ -15,7 +15,7 @@
       class="focus-bar-btn"
       :class="{ 'panel-on': focusStore.showChat, 'panel-off': !focusStore.showChat }"
       @click="onClickChat"
-      :title="focusStore.showChat ? t('focusMode.hideChat') : t('focusMode.showChat')"
+      v-tooltip="focusStore.showChat ? t('focusMode.hideChat') : t('focusMode.showChat')"
     >
       <svg v-if="focusStore.showChat" style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -31,7 +31,7 @@
       class="focus-bar-btn"
       :class="{ 'panel-on': focusStore.showDocs, 'panel-off': !focusStore.showDocs }"
       @click="onClickDocs"
-      :title="focusStore.showDocs ? t('focusMode.hideDocs') : t('focusMode.showDocs')"
+      v-tooltip="focusStore.showDocs ? t('focusMode.hideDocs') : t('focusMode.showDocs')"
     >
       <svg v-if="focusStore.showDocs" style="width:15px;height:15px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
@@ -49,8 +49,9 @@
     <!-- Exit -->
     <button
       class="focus-bar-exit"
+      :class="{ 'focus-bar-exit--flashing': exitFlashing }"
       @click="onClickExit"
-      :title="t('focusMode.exitFocusMode')"
+      v-tooltip="t('focusMode.exitFocusMode')"
     >
       <svg style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -67,6 +68,9 @@ import { useI18n } from '../../i18n/useI18n'
 
 const focusStore = useFocusModeStore()
 const { t } = useI18n()
+
+const exitFlashing = ref(false)
+let _exitFlashTimer = null
 
 const barEl = ref(null)
 
@@ -116,6 +120,12 @@ function computeDefaultPos() {
 onMounted(async () => {
   await nextTick()
   pos.value = computeDefaultPos()
+  // Flash the exit button 3x on every focus-mode entry so the user always
+  // sees how to leave. The bar is teleported under `v-if="isFocusMode"` so
+  // it mounts/unmounts per session — onMounted is the right trigger.
+  exitFlashing.value = true
+  if (_exitFlashTimer) clearTimeout(_exitFlashTimer)
+  _exitFlashTimer = setTimeout(() => { exitFlashing.value = false; _exitFlashTimer = null }, 3000)
 })
 
 function onBarMousedown(e) {
@@ -166,6 +176,7 @@ function onClickExit() {
 onUnmounted(() => {
   document.removeEventListener('mousemove', onMousemove)
   document.removeEventListener('mouseup', onMouseup)
+  if (_exitFlashTimer) { clearTimeout(_exitFlashTimer); _exitFlashTimer = null }
 })
 </script>
 
@@ -246,6 +257,24 @@ onUnmounted(() => {
 .focus-bar-exit:hover {
   background: rgba(220,38,38,0.18);
   color: #EF4444;
+}
+
+/* Entry-time attention flash — 3 silver pulses, 1s per cycle (3s total).
+   Runs once per focus-mode entry; hover still wins after it completes. */
+.focus-bar-exit--flashing {
+  animation: focusBarExitFlash 3s ease-in-out;
+}
+@keyframes focusBarExitFlash {
+  0%, 33.3%, 66.6%, 100% {
+    background: transparent;
+    color: #6B7280;
+    box-shadow: none;
+  }
+  16.7%, 50%, 83.3% {
+    background: rgba(192, 192, 192, 0.32);
+    color: #F5F5F5;
+    box-shadow: 0 0 12px 2px rgba(220, 220, 220, 0.55);
+  }
 }
 
 @keyframes focusBarEnter {

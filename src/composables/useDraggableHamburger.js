@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount } from 'vue'
+import { computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 
 const DRAG_THRESHOLD_PX = 4
 const BUTTON_HEIGHT_PX = 48
@@ -82,8 +82,14 @@ export function useDraggableHamburger({ buttonRef, getPanelEl, storeY }) {
     const btnRect = btn.getBoundingClientRect()
     const op = btn.offsetParent || btn.parentElement
     const opRect = op.getBoundingClientRect()
-    panelTop = panelRect.top
-    panelBottom = panelRect.top + panelRect.height
+    // Clamp is the intersection of the requested panel AND the button's
+    // offsetParent — when the caller picks a wider panel (e.g. focus-docs-panel
+    // spans above the editor's top), dragging beyond the offsetParent's bounds
+    // pushes the button into an `overflow: hidden` clip region of its parent
+    // and it disappears with no way to recover. Intersection keeps the button
+    // inside its own visible scroll/clip box.
+    panelTop = Math.max(panelRect.top, opRect.top)
+    panelBottom = Math.min(panelRect.top + panelRect.height, opRect.top + opRect.height)
     offsetParentTop = opRect.top
     startMouseY = e.clientY
     grabOffset = e.clientY - btnRect.top
@@ -120,10 +126,15 @@ export function useDraggableHamburger({ buttonRef, getPanelEl, storeY }) {
     const panelRect = panel.getBoundingClientRect()
     const op = btn.offsetParent || btn.parentElement
     if (!op) return
-    const opTop = op.getBoundingClientRect().top
+    const opRect = op.getBoundingClientRect()
+    const opTop = opRect.top
+    // Same intersection clamp as onMouseDown — never let the button render
+    // outside its offsetParent's visible box even if the requested panel is wider.
+    const effectiveTop    = Math.max(panelRect.top, opRect.top)
+    const effectiveBottom = Math.min(panelRect.top + panelRect.height, opRect.top + opRect.height)
     const currentVpTop = storeY.value + opTop
-    const minVpTop = panelRect.top + EDGE_PAD_PX
-    const maxVpTop = panelRect.top + panelRect.height - BUTTON_HEIGHT_PX - EDGE_PAD_PX
+    const minVpTop = effectiveTop + EDGE_PAD_PX
+    const maxVpTop = effectiveBottom - BUTTON_HEIGHT_PX - EDGE_PAD_PX
     const clampedVp = Math.max(minVpTop, Math.min(maxVpTop, currentVpTop))
     if (clampedVp !== currentVpTop) {
       storeY.value = clampedVp - opTop
@@ -131,6 +142,13 @@ export function useDraggableHamburger({ buttonRef, getPanelEl, storeY }) {
   }
 
   window.addEventListener('resize', onWindowResize)
+
+  // Re-clamp once the button is mounted and laid out. Rescues users whose
+  // persisted storeY was saved by an older buggy version where the button
+  // could end up clipped by `overflow: hidden` on an ancestor — without this
+  // they can't click it to trigger onMouseDown's re-clamp.
+  onMounted(() => { nextTick(() => onWindowResize()) })
+  watch(buttonRef, (el) => { if (el) nextTick(() => onWindowResize()) })
 
   onBeforeUnmount(() => {
     document.removeEventListener('mousemove', onMouseMove)
