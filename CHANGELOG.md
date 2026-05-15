@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.0.18](https://github.com/XiamiYoung/ClanKit/compare/v0.0.17...v0.0.18) (2026-05-15)
+
+
+### Features
+
+* **chat:** per-agent context bars + scroll-to-bottom alert pulse ([#30](https://github.com/XiamiYoung/ClanKit/issues/30)) ([bd140df](https://github.com/XiamiYoung/ClanKit/commit/bd140dfefb6c0e863d3b3d7c337f73392075df83))
+* context bars, focus polish, max_tokens banner, 1MB file-read cap ([#32](https://github.com/XiamiYoung/ClanKit/issues/32)) ([fcd0c74](https://github.com/XiamiYoung/ClanKit/commit/fcd0c743b53a4ee93944f124d5cbeef529037448))
+
 ## [0.0.17](https://github.com/XiamiYoung/ClanKit/compare/v0.0.16...v0.0.17) (2026-05-14)
 
 
