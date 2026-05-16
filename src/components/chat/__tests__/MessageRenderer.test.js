@@ -26,6 +26,13 @@ vi.mock('dompurify', () => ({
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
+// Shared mutable mock state so individual tests can flip flags
+// (e.g. aidoc-dir config + probeCache hit) without re-mocking the module.
+const mockState = vi.hoisted(() => ({
+  docPath: '',
+  probeCache: {},
+}))
+
 vi.mock('../../../stores/chats', () => ({
   useChatsStore: () => ({
     activeChatId: 'c1',
@@ -38,6 +45,7 @@ vi.mock('../../../stores/config', () => ({
   useConfigStore: () => ({
     language: 'en',
     DoCPath: '',
+    get config() { return { DoCPath: mockState.docPath, language: 'en' } },
   }),
 }))
 vi.mock('../../../stores/agents', () => ({
@@ -50,8 +58,16 @@ vi.mock('../../../stores/agents', () => ({
 vi.mock('../../../stores/obsidian', () => ({
   useObsidianStore: () => ({
     openFile: vi.fn(),
-    probeCache: {},
+    get probeCache() { return mockState.probeCache },
     probeFile: vi.fn(() => Promise.resolve(true)),
+  }),
+}))
+// Track focus-mode enterWith calls so the chip-click test can assert it.
+const focusEnterWithSpy = vi.fn()
+vi.mock('../../../stores/focusMode', () => ({
+  useFocusModeStore: () => ({
+    enterWith: focusEnterWithSpy,
+    enter: vi.fn(),
   }),
 }))
 vi.mock('../../../i18n/useI18n', () => ({
@@ -84,6 +100,9 @@ function mountMsg(message, extraProps = {}) {
 
 beforeEach(() => {
   setActivePinia(createPinia())
+  mockState.docPath = ''
+  mockState.probeCache = {}
+  focusEnterWithSpy.mockClear()
 })
 
 // ── Tests ──────────────────────────────────────────────────────────────────
@@ -195,6 +214,51 @@ describe('MessageRenderer', () => {
     })
     const images = wrapper.findAll('img')
     expect(images.length).toBeGreaterThan(0)
+  })
+
+  // 9. Focus-mode chip — rendered next to 📝 aidoc chip when path is under
+  // the aidoc dir AND obsidian probeCache confirms it's openable.
+  it('renders focus-mode chip for aidoc files and dispatches enterWith on click', async () => {
+    mockState.docPath = '/aidoc'
+    mockState.probeCache = { '/aidoc/notes/foo.md': true }
+
+    const wrapper = mountMsg({
+      role: 'assistant',
+      streaming: false,
+      content: 'Saved to /aidoc/notes/foo.md',
+      segments: [{ type: 'text', content: 'Saved to /aidoc/notes/foo.md' }],
+    })
+
+    // The 📑 chip's button should be in the DOM with data-action="open-in-focus".
+    const focusBtn = wrapper.find('[data-action="open-in-focus"]')
+    expect(focusBtn.exists()).toBe(true)
+    expect(focusBtn.classes()).toContain('file-path-focus')
+
+    // Clicking the chip should call focusMode.enterWith with the file path
+    // and the active chat id (mock returns 'c1'). Native .click() is used
+    // because vue-test-utils' trigger() hits a happy-dom incompatibility for
+    // these dynamically-injected button elements.
+    focusBtn.element.click()
+    expect(focusEnterWithSpy).toHaveBeenCalledTimes(1)
+    expect(focusEnterWithSpy).toHaveBeenCalledWith({
+      filePath: '/aidoc/notes/foo.md',
+      fileName: 'foo.md',
+      chatId: 'c1',
+    })
+  })
+
+  // 10. No focus-mode chip when path is NOT under aidoc dir
+  it('does NOT render focus-mode chip when file path is outside aidoc dir', () => {
+    mockState.docPath = '/aidoc'
+    mockState.probeCache = { '/other/foo.md': true }
+
+    const wrapper = mountMsg({
+      role: 'assistant',
+      streaming: false,
+      content: 'See /other/foo.md',
+      segments: [{ type: 'text', content: 'See /other/foo.md' }],
+    })
+    expect(wrapper.find('[data-action="open-in-focus"]').exists()).toBe(false)
   })
 
 })

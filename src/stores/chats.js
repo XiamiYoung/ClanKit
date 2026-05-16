@@ -182,6 +182,10 @@ export const useChatsStore = defineStore('chats', () => {
           // with agentId/agentName from a real agent run.
           chat.messages = full.messages.filter(m => {
             if (m.isWaitingIndicator) return false
+            // Pass through oversize placeholders from ChatStore._mapRowOrOversize.
+            // They legitimately have empty content/segments by design, so the
+            // empty-assistant-orphan check below would otherwise drop them.
+            if (m.oversize) return true
             if (m.role !== 'assistant') return true
             const noContent = !(m.content && String(m.content).trim()) && (!m.segments || m.segments.length === 0)
             const noError = !m.errorDetail && !m.isError
@@ -1049,6 +1053,14 @@ export const useChatsStore = defineStore('chats', () => {
     // role IN ('user','assistant') and would otherwise throw a CHECK constraint.
     raw.messages = _truncateToolOutputs(raw.messages.filter(m => {
       if (m.isWaitingIndicator) return false
+      // CRITICAL: never persist read-side oversize placeholders. They carry
+      // empty content/segments — if they round-trip through appendMessage's
+      // ON CONFLICT DO UPDATE they'd overwrite the original (oversized) row
+      // with empty values, destroying the user's data. The placeholder is a
+      // pure display artifact from ChatStore._mapRowOrOversize; the real row
+      // stays on disk and is only mutated via the dedicated store:delete-message
+      // IPC path (which calls ChatStore.removeMessage directly).
+      if (m.oversize) return false
       if (m.role && m.role !== 'user' && m.role !== 'assistant') return false
       // Drop phantom empty assistant placeholders. These can leak through
       // when chunks fall back to _applyChunk (e.g. ChatsView callback was

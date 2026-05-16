@@ -649,6 +649,38 @@ export function useChunkHandler({
         })
         scrollToBottom(false, cId)
       }
+    } else if (chunk.type === 'runaway_output_aborted') {
+      // Client-side cap fired inside agentLoop.js streaming loop because the
+      // provider streamed more bytes than STREAM_OUTPUT_CAP_BYTES (2 MB).
+      // See electron/agent/runawayCap.js — observed with deepseek-v4-flash on
+      // qwen, where provider ignores max_tokens entirely. Show a red banner
+      // distinct from max_tokens_reached: no Continue action (continuing
+      // would resume the runaway).
+      dbg(`runaway output aborted (bytes=${chunk.bytesEmitted}, limit=${chunk.limit}, model=${chunk.model}, provider=${chunk.provider})`, 'warn')
+      if (targetChat?.messages) {
+        const fmt = (b) => {
+          if (!b || b < 1024) return `${b || 0} B`
+          if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`
+          return `${(b / (1024 * 1024)).toFixed(2)} MB`
+        }
+        const hint = `Model output reached ${fmt(chunk.bytesEmitted)} (cap ${fmt(chunk.limit)}). Stream was aborted to prevent runaway. The model (${chunk.provider}/${chunk.model}) likely ignored max_tokens; try a different model or shorter prompt.`
+        targetChat.messages.push({
+          id: uuidv4(),
+          role: 'system',
+          timestamp: Date.now(),
+          createdAt: Date.now(),
+          runawayAborted: true,
+          bytesEmitted: chunk.bytesEmitted || 0,
+          runawayLimit: chunk.limit || 0,
+          agentId:   chunk.agentId   || null,
+          agentName: chunk.agentName || chunk.model || null,
+          content: hint,
+          segments: [{ type: 'text', content: hint }],
+          streaming: false,
+          isError: true,
+        })
+        scrollToBottom(false, cId)
+      }
     } else if (chunk.type === 'subagent_progress') {
       dbg(`subagent: ${chunk.agent || 'unknown'} — ${chunk.status || JSON.stringify(chunk).slice(0,60)}`, 'info')
 

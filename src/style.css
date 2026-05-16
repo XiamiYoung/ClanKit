@@ -340,6 +340,36 @@
   to { transform: rotate(360deg); }
 }
 
+/* ── Focus-mode entry icon — shared across titlebar, chat chips, doc header ──
+   The 📑 emoji is the visual signature for "enter focus mode". Three entry
+   points reuse this class so they feel like the same control:
+     - .focus-bulb-titlebar (Sidebar.vue, teleported into TitleBar)
+     - .file-path-btn.file-path-focus (MessageRenderer.vue, per-file chip)
+     - .docs-hdr-focus-bulb (DocsView.vue, file header button)
+   Consumers override font-size to match the surrounding control's scale.
+   The grayscale-on-default + colored-on-hover behavior is the shared part. */
+.focus-bulb-emoji {
+  font-size: 1rem;
+  line-height: 1;
+  filter: grayscale(1);
+  transition: filter 0.2s ease;
+  pointer-events: none;
+}
+.focus-bulb-emoji-active,
+.focus-bulb-active .focus-bulb-emoji,
+button:hover > .focus-bulb-emoji,
+button:hover .focus-bulb-emoji,
+.focus-bulb-emoji:hover {
+  filter: grayscale(0) brightness(1);
+}
+.focus-bulb-spin {
+  animation: focus-bulb-rotate 8s linear infinite;
+}
+@keyframes focus-bulb-rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 /* Force white text inside user chat bubbles */
 .user-content,
 .user-content *,

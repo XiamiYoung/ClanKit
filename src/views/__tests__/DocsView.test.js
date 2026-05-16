@@ -42,6 +42,26 @@ vi.mock('../../stores/skills', () => ({
 vi.mock('../../stores/mcp', () => ({
   useMcpStore: () => ({ servers: [] }),
 }))
+// Spy on focusModeStore.enterWith so we can assert the header button wires up
+// to the shared "enter focus mode with preselection" helper.
+const focusEnterWithSpy = vi.fn()
+vi.mock('../../stores/focusMode', () => ({
+  useFocusModeStore: () => ({
+    isFocusMode: false,
+    showDocs: true,
+    showChat: true,
+    docHamburgerY: null,
+    enterWith: focusEnterWithSpy,
+    enter: vi.fn(),
+    exit: vi.fn(),
+  }),
+}))
+vi.mock('../../stores/chats', () => ({
+  useChatsStore: () => ({
+    activeChatId: 'chat-xyz',
+    chats: [],
+  }),
+}))
 vi.mock('../../i18n/useI18n', () => ({
   useI18n: () => ({ t: (key) => key, locale: ref('en') }),
 }))
@@ -86,6 +106,8 @@ describe('DocsView', () => {
     setActivePinia(createPinia())
     mockObsidianStore.vaultPath = ''
     mockObsidianStore.fileTree = []
+    mockObsidianStore.activeFile = null
+    focusEnterWithSpy.mockClear()
   })
 
   it('mounts without error', () => {
@@ -110,5 +132,24 @@ describe('DocsView', () => {
     mockObsidianStore.fileTree = []
     const wrapper = shallowMount(DocsView)
     expect(wrapper.find('.doc-tree-panel').exists()).toBe(true)
+  })
+
+  it('renders focus-mode header button and dispatches enterWith on click', async () => {
+    mockObsidianStore.vaultPath = '/some/vault'
+    mockObsidianStore.activeFile = { path: '/some/vault/note.md', name: 'note.md' }
+    const wrapper = shallowMount(DocsView)
+
+    const focusBtn = wrapper.find('.docs-hdr-focus-bulb')
+    expect(focusBtn.exists()).toBe(true)
+    // Reuses the shared emoji class
+    expect(focusBtn.find('.focus-bulb-emoji').exists()).toBe(true)
+
+    focusBtn.element.click()
+    expect(focusEnterWithSpy).toHaveBeenCalledTimes(1)
+    expect(focusEnterWithSpy).toHaveBeenCalledWith({
+      filePath: '/some/vault/note.md',
+      fileName: 'note.md',
+      chatId: 'chat-xyz',
+    })
   })
 })

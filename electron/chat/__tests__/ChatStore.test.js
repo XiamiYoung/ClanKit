@@ -4,6 +4,9 @@ import {
   rowToMessage, messageToRow,
   serializeJsonField, deserializeJsonField,
   extractSearchText,
+  OVERSIZE_CONTENT_THRESHOLD_BYTES,
+  _buildOversizePlaceholder,
+  _mapRowOrOversize,
 } from '../ChatStore.js'
 
 describe('serializeJsonField / deserializeJsonField', () => {
@@ -210,5 +213,77 @@ describe('rowToMessage / messageToRow round-trip', () => {
     const row2 = messageToRow({ id: 'n', role: 'assistant', segments: [], timestamp: 0, isError: false }, 'c')
     expect(row2.is_error).toBe(0)
     expect(rowToMessage(row2).isError).toBe(false)
+  })
+})
+
+describe('oversize message detection', () => {
+  // Simulate what SQLite would return: row with the LENGTH() aggregates
+  // attached as _content_bytes / _total_bytes.
+  function _row({ role = 'assistant', contentBytes = 100, segmentsBytes = 50, ...over } = {}) {
+    return {
+      id: 'm1',
+      chat_id: 'c1',
+      role,
+      content: 'irrelevant — _mapRowOrOversize uses _content_bytes',
+      segments: '[]',
+      ts: 1700000000000,
+      created_at: 1700000000000,
+      agent_id: 'a1',
+      agent_name: 'Test Agent',
+      is_error: 0,
+      _content_bytes: contentBytes,
+      _total_bytes: contentBytes + segmentsBytes,
+      ...over,
+    }
+  }
+
+  it('returns normal message when content is under threshold', () => {
+    const r = _row({ contentBytes: 500 * 1024 })  // 500 KB
+    const out = _mapRowOrOversize(r)
+    expect(out.oversize).toBeUndefined()
+    expect(out.role).toBe('assistant')
+  })
+
+  it('returns oversize placeholder when assistant content exceeds threshold', () => {
+    const r = _row({ contentBytes: OVERSIZE_CONTENT_THRESHOLD_BYTES + 1, segmentsBytes: 11 * 1024 * 1024 })
+    const out = _mapRowOrOversize(r)
+    expect(out.oversize).toBe(true)
+    expect(out.contentBytes).toBe(OVERSIZE_CONTENT_THRESHOLD_BYTES + 1)
+    expect(out.totalBytes).toBe(OVERSIZE_CONTENT_THRESHOLD_BYTES + 1 + 11 * 1024 * 1024)
+    // payload drops the heavy fields so IPC stays small
+    expect(out.content).toBe('')
+    expect(out.segments).toEqual([])
+    // identifier + display fields preserved
+    expect(out.id).toBe('m1')
+    expect(out.agent_name).toBe('Test Agent')
+    expect(out.ts).toBe(1700000000000)
+  })
+
+  it('user role messages are NEVER flagged oversize even if huge', () => {
+    // User pastes (e.g. log dumps) are intentional and should display normally.
+    const r = _row({ role: 'user', contentBytes: 5 * 1024 * 1024 })
+    const out = _mapRowOrOversize(r)
+    expect(out.oversize).toBeUndefined()
+  })
+
+  it('segments size is NOT a trigger — only content matters', () => {
+    // A tool-heavy assistant turn with small text + many MB of tool segments
+    // should display normally. Tool outputs have per-tool caps already.
+    const r = _row({ contentBytes: 5 * 1024, segmentsBytes: 20 * 1024 * 1024 })
+    const out = _mapRowOrOversize(r)
+    expect(out.oversize).toBeUndefined()
+  })
+
+  it('_buildOversizePlaceholder preserves identifying fields, drops heavy fields', () => {
+    const r = _row({ contentBytes: 2 * 1024 * 1024 })
+    const p = _buildOversizePlaceholder(r)
+    expect(p.oversize).toBe(true)
+    expect(p.content).toBe('')
+    expect(p.segments).toEqual([])
+    expect(p.id).toBe('m1')
+    expect(p.chat_id).toBe('c1')
+    expect(p.role).toBe('assistant')
+    expect(p.agent_id).toBe('a1')
+    expect(p.agent_name).toBe('Test Agent')
   })
 })

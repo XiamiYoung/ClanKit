@@ -119,6 +119,22 @@ function register({ DEFAULT_CONFIG }) {
     return true
   })
 
+  // Single-message deletion. Used by the OversizeMessageCard's delete button
+  // to remove a runaway-output row that can't go through the normal
+  // persistChat path (the oversize placeholder is filtered out of
+  // _serializeChat for data-safety reasons). Direct SQL DELETE.
+  ipcMain.handle('store:delete-message', async (_, payload) => {
+    const chatId = payload?.chatId
+    const messageId = payload?.messageId
+    if (!chatId || !messageId) return { success: false, error: 'chatId and messageId required' }
+    try {
+      _chatStore().removeMessage(chatId, messageId)
+      return { success: true }
+    } catch (err) {
+      return { success: false, error: err?.message || String(err) }
+    }
+  })
+
   ipcMain.handle('store:get-chats', async () => {
     const store = _chatStore()
     const index = store.listChatIndex()

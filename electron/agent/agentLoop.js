@@ -31,6 +31,7 @@ const MAX_CONTEXT_TURNS = 20  // max user/assistant turn pairs sent to LLM
 const spb = require('./systemPromptBuilder')
 const mc  = require('./messageConverter')
 const te  = require('./toolExecutor')
+const { STREAM_OUTPUT_CAP_BYTES, RUNAWAY_TRUNCATE_TAIL_BYTES, shouldAbortRunaway, buildAbortedMessageText } = require('./runawayCap')
 
 // Module-level helpers (re-imported from extracted modules for use in run())
 const { serializeToolResult, uiResult, sliceToLastNTurns } = mc
@@ -1763,6 +1764,26 @@ class AgentLoop {
           let streamedReasoningContent = ''
           const responseImages = []
 
+          // Runaway output defense — see electron/agent/runawayCap.js
+          let streamedBytes = 0
+          let runawayAborted = false
+          const _checkRunaway = () => {
+            if (runawayAborted || !shouldAbortRunaway(streamedBytes, STREAM_OUTPUT_CAP_BYTES)) return false
+            runawayAborted = true
+            logger.warn('[AgentLoop] runaway output detected, aborting OpenAI stream', {
+              iteration, model, provider, bytes: streamedBytes, limit: STREAM_OUTPUT_CAP_BYTES
+            })
+            onChunk({
+              type: 'runaway_output_aborted',
+              limit: STREAM_OUTPUT_CAP_BYTES,
+              bytesEmitted: streamedBytes,
+              model,
+              provider,
+            })
+            this.stop()
+            return true
+          }
+
           let lastChunk = null
           for await (const chunk of stream) {
             if (this.stopped) break
@@ -1775,6 +1796,7 @@ class AgentLoop {
             // Capture DeepSeek reasoning_content (thinking mode)
             if (delta.reasoning_content) {
               streamedReasoningContent += delta.reasoning_content
+              streamedBytes += delta.reasoning_content.length
             }
 
             // Text content — handle both plain string and multimodal array (e.g. OpenRouter Gemini)
@@ -1783,6 +1805,7 @@ class AgentLoop {
                 if (part.type === 'text' && part.text) {
                   currentTextBlock += part.text
                   finalText += part.text
+                  streamedBytes += part.text.length
                   onChunk({ type: 'text', text: part.text })
                 } else if (part.type === 'image_url') {
                   const url = part.image_url?.url || ''
@@ -1800,6 +1823,7 @@ class AgentLoop {
             } else if (delta.content) {
               currentTextBlock += delta.content
               finalText += delta.content
+              streamedBytes += delta.content.length
               onChunk({ type: 'text', text: delta.content })
             }
 
@@ -1822,41 +1846,56 @@ class AgentLoop {
                 const acc = toolCallAccumulators.get(idx)
                 if (tc.id) acc.id = tc.id
                 if (tc.function?.name) acc.name = tc.function.name
-                if (tc.function?.arguments) acc.arguments += tc.function.arguments
+                if (tc.function?.arguments) {
+                  acc.arguments += tc.function.arguments
+                  streamedBytes += tc.function.arguments.length
+                }
               }
             }
 
             if (choice.finish_reason) {
               stopReason = choice.finish_reason
             }
+
+            if (_checkRunaway()) break
           }
 
-          // Flush remaining text
-          if (currentTextBlock) {
+          // Runaway abort: replace any accumulated content with truncated text
+          // + marker, skip tool execution for this iteration, exit cleanly.
+          if (runawayAborted) {
+            const truncatedText = buildAbortedMessageText(currentTextBlock || finalText)
+            assistantContent = [{ type: 'text', text: truncatedText }]
+            currentTextBlock = ''
+            stopReason = 'runaway_aborted'
+          } else if (currentTextBlock) {
+            // Flush remaining text (normal path)
             assistantContent.push({ type: 'text', text: currentTextBlock })
             currentTextBlock = ''
           }
 
-          // Finalize accumulated tool calls
+          // Finalize accumulated tool calls — skipped on runaway abort to avoid
+          // pushing malformed tool_use blocks over the truncated text marker.
           const openaiToolCalls = []
-          for (const [, acc] of toolCallAccumulators) {
-            let parsedArgs = {}
-            try {
-              parsedArgs = JSON.parse(acc.arguments || '{}')
-            } catch (e) {
-              logger.warn('[AgentLoop] tool_call arguments not valid JSON, defaulting to {}', { name: acc.name, raw: acc.arguments?.slice(0, 200) })
+          if (!runawayAborted) {
+            for (const [, acc] of toolCallAccumulators) {
+              let parsedArgs = {}
+              try {
+                parsedArgs = JSON.parse(acc.arguments || '{}')
+              } catch (e) {
+                logger.warn('[AgentLoop] tool_call arguments not valid JSON, defaulting to {}', { name: acc.name, raw: acc.arguments?.slice(0, 200) })
+              }
+              assistantContent.push({
+                type: 'tool_use',
+                id: acc.id,
+                name: acc.name,
+                input: parsedArgs
+              })
+              openaiToolCalls.push({
+                id: acc.id,
+                type: 'function',
+                function: { name: acc.name, arguments: JSON.stringify(parsedArgs) }
+              })
             }
-            assistantContent.push({
-              type: 'tool_use',
-              id: acc.id,
-              name: acc.name,
-              input: parsedArgs
-            })
-            openaiToolCalls.push({
-              id: acc.id,
-              type: 'function',
-              function: { name: acc.name, arguments: JSON.stringify(parsedArgs) }
-            })
           }
 
           // ── Inline JSON tool-call fallback for weak OpenAI-compat models ──
@@ -1864,7 +1903,7 @@ class AgentLoop {
           // instead of proper delta.tool_calls. Detect and extract them so
           // tool execution still fires. Only runs when NO native tool calls
           // were found and the text contains something that looks like a call.
-          if (openaiToolCalls.length === 0 && finalText.length > 0 && allToolsAnthropic.length > 0) {
+          if (!runawayAborted && openaiToolCalls.length === 0 && finalText.length > 0 && allToolsAnthropic.length > 0) {
             const validToolNames = new Set(allToolsAnthropic.map(t => t.name))
             const extracted = this._extractInlineToolCalls(finalText, validToolNames)
             if (extracted.length > 0) {
@@ -2105,7 +2144,10 @@ class AgentLoop {
               break
             }
           } else {
-            // 'length' is OpenAI's finish_reason when max_tokens is hit
+            // 'length' is OpenAI's finish_reason when max_tokens is hit.
+            // 'runaway_aborted' is our client-side cap (see runawayCap.js) —
+            // the banner chunk was already emitted inside the stream loop;
+            // we just need to exit cleanly without further LLM iterations.
             if (stopReason === 'length') {
               onChunk({ type: 'max_tokens_reached', limit: configuredMaxTokens })
             }
@@ -2319,6 +2361,26 @@ class AgentLoop {
               currentThinkingBlock = null
               stopReason = null
 
+              // Runaway output defense — see electron/agent/runawayCap.js
+              let streamedBytes = 0
+              let runawayAborted = false
+              const _checkRunawayAnthropic = () => {
+                if (runawayAborted || !shouldAbortRunaway(streamedBytes, STREAM_OUTPUT_CAP_BYTES)) return false
+                runawayAborted = true
+                logger.warn('[AgentLoop] runaway output detected, aborting Anthropic stream', {
+                  iteration, model, provider, bytes: streamedBytes, limit: STREAM_OUTPUT_CAP_BYTES
+                })
+                onChunk({
+                  type: 'runaway_output_aborted',
+                  limit: STREAM_OUTPUT_CAP_BYTES,
+                  bytesEmitted: streamedBytes,
+                  model,
+                  provider,
+                })
+                this.stop()
+                return true
+              }
+
               for await (const event of stream) {
             if (this.stopped) break
 
@@ -2368,9 +2430,11 @@ class AgentLoop {
               if (event.delta.type === 'text_delta') {
                 currentTextBlock += event.delta.text
                 finalText += event.delta.text
+                streamedBytes += event.delta.text.length
                 onChunk({ type: 'text', text: event.delta.text })
               } else if (event.delta.type === 'thinking_delta') {
                 if (currentThinkingBlock) currentThinkingBlock.thinking += event.delta.thinking
+                streamedBytes += event.delta.thinking.length
                 onChunk({ type: 'thinking', text: event.delta.thinking })
               } else if (event.delta.type === 'signature_delta') {
                 // Cryptographic signature stamped onto the thinking block by
@@ -2380,7 +2444,9 @@ class AgentLoop {
                 if (currentThinkingBlock) currentThinkingBlock.signature += (event.delta.signature || '')
               } else if (event.delta.type === 'input_json_delta' && currentToolUse) {
                 currentToolUse.input += event.delta.partial_json
+                streamedBytes += event.delta.partial_json.length
               }
+              if (_checkRunawayAnthropic()) break
 
             } else if (event.type === 'content_block_stop') {
               if (currentTextBlock) {
@@ -2410,44 +2476,55 @@ class AgentLoop {
             }
           }
 
-              // Flush any remaining text
-              if (currentTextBlock) {
-                assistantContent.push({ type: 'text', text: currentTextBlock })
-              }
-
-              // ── Get final message for usage stats ──
-              let finalMessage
-              try {
-                finalMessage = await stream.finalMessage()
-              } catch {
-                // stream may already be consumed
-              }
-
-              // Update context metrics from usage
-              if (finalMessage) {
-                this.contextManager.updateUsage(finalMessage)
-                onChunk({ type: 'context_update', metrics: this.contextManager.getMetrics() })
-
-                // Debug: log finalMessage content block types (no text content)
-                if (Array.isArray(finalMessage.content)) {
-                  logger.agent('finalMessage content blocks', finalMessage.content.map(b => ({
-                    type: b.type,
-                    hasData: b.type === 'image' ? !!b.source?.data : undefined,
-                    dataLen: b.type === 'image' ? b.source?.data?.length : undefined,
-                    textLen: b.type === 'text' ? b.text?.length : undefined,
-                  })))
+              // Runaway abort: replace any accumulated content with a single
+              // truncated text block + marker. Skip the stream.finalMessage()
+              // path — that call would block waiting for an already-aborted
+              // stream — and push the truncated assistant directly.
+              if (runawayAborted) {
+                const tail = currentTextBlock || finalText || ''
+                assistantContent = [{ type: 'text', text: buildAbortedMessageText(tail) }]
+                stopReason = 'runaway_aborted'
+                conversationMessages.push({ role: 'assistant', content: assistantContent })
+              } else {
+                // Flush any remaining text
+                if (currentTextBlock) {
+                  assistantContent.push({ type: 'text', text: currentTextBlock })
                 }
 
-                // Adaptive thinking models (Opus 4.6+, Sonnet 4.6+) emit
-                // server-side compaction blocks inside finalMessage.content
-                // that must be preserved across turns to keep compaction state.
-                if (thinkingCfg?.thinking?.type === 'adaptive' && finalMessage.content) {
-                  this.contextManager.appendAssistantContent(conversationMessages, finalMessage.content)
+                // ── Get final message for usage stats ──
+                let finalMessage
+                try {
+                  finalMessage = await stream.finalMessage()
+                } catch {
+                  // stream may already be consumed
+                }
+
+                // Update context metrics from usage
+                if (finalMessage) {
+                  this.contextManager.updateUsage(finalMessage)
+                  onChunk({ type: 'context_update', metrics: this.contextManager.getMetrics() })
+
+                  // Debug: log finalMessage content block types (no text content)
+                  if (Array.isArray(finalMessage.content)) {
+                    logger.agent('finalMessage content blocks', finalMessage.content.map(b => ({
+                      type: b.type,
+                      hasData: b.type === 'image' ? !!b.source?.data : undefined,
+                      dataLen: b.type === 'image' ? b.source?.data?.length : undefined,
+                      textLen: b.type === 'text' ? b.text?.length : undefined,
+                    })))
+                  }
+
+                  // Adaptive thinking models (Opus 4.6+, Sonnet 4.6+) emit
+                  // server-side compaction blocks inside finalMessage.content
+                  // that must be preserved across turns to keep compaction state.
+                  if (thinkingCfg?.thinking?.type === 'adaptive' && finalMessage.content) {
+                    this.contextManager.appendAssistantContent(conversationMessages, finalMessage.content)
+                  } else {
+                    conversationMessages.push({ role: 'assistant', content: assistantContent })
+                  }
                 } else {
                   conversationMessages.push({ role: 'assistant', content: assistantContent })
                 }
-              } else {
-                conversationMessages.push({ role: 'assistant', content: assistantContent })
               }
 
               logger.agent('stream end', { iteration, model: model || this.config.customModel || 'unknown', stopReason, tokens: this.contextManager.getMetrics() })

@@ -30,6 +30,16 @@ export const useFocusModeStore = defineStore('focusMode', () => {
     window.electronAPI?.window?.setFullScreen(true)
   }
 
+  // Enter focus mode with explicit doc + chat preselection. Used by the
+  // chat-side per-file chip and the AI Doc header button so they can hand
+  // a specific file/chat pair to FocusModeView's restore-from-store path.
+  function enterWith({ filePath = null, fileName = null, chatId = null } = {}) {
+    if (filePath !== null) lastDocPath.value = filePath
+    if (fileName !== null) lastDocName.value = fileName
+    if (chatId !== null) lastChatId.value = chatId
+    enter()
+  }
+
   function exit() {
     isFocusMode.value = false
     window.electronAPI?.window?.setFullScreen(false)
@@ -49,5 +59,5 @@ export const useFocusModeStore = defineStore('focusMode', () => {
     showDocs.value = !showDocs.value
   }
 
-  return { isFocusMode, showChat, showDocs, justExited, lastDocPath, lastDocName, lastChatId, pendingChatMessage, chatHamburgerY, docHamburgerY, enter, exit, toggleChat, toggleDocs, isMinibarMode, enterMinibar, exitMinibar }
+  return { isFocusMode, showChat, showDocs, justExited, lastDocPath, lastDocName, lastChatId, pendingChatMessage, chatHamburgerY, docHamburgerY, enter, enterWith, exit, toggleChat, toggleDocs, isMinibarMode, enterMinibar, exitMinibar }
 })

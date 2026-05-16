@@ -262,6 +262,32 @@ describe('chatsStore', () => {
       expect(msgs.find(m => m.id === 'err-detail')).toBeDefined()
       expect(msgs.find(m => m.id === 'err-flag')).toBeDefined()
     })
+
+    // Read-side oversize defense: ChatStore returns empty content/segments
+    // for placeholder rows. The empty-orphan filter would otherwise drop them
+    // before ChatWindow gets a chance to render the red maintenance card.
+    it('KEEPS oversize placeholder rows (content empty by design)', async () => {
+      storage.getChat.mockResolvedValue({
+        id: 'c1',
+        messages: [
+          { id: 'normal', role: 'user', content: 'Hi' },
+          {
+            id: 'huge', role: 'assistant', agent_id: 'a1', agent_name: 'Clank',
+            content: '', segments: [],
+            oversize: true, totalBytes: 22_000_000, contentBytes: 10_500_000,
+          },
+        ],
+      })
+      storage.getChatIndex.mockResolvedValue([{ type: 'chat', id: 'c1', title: 'Test' }])
+      const store = useChatsStore()
+      await store.loadChats()
+      await store.ensureMessages('c1')
+      const msgs = store.chats[0].messages
+      const placeholder = msgs.find(m => m.id === 'huge')
+      expect(placeholder).toBeDefined()
+      expect(placeholder.oversize).toBe(true)
+      expect(placeholder.totalBytes).toBe(22_000_000)
+    })
   })
 
   // ── _serializeChat (regression: write-side guard against agent-stamped orphans) ──
@@ -307,6 +333,28 @@ describe('chatsStore', () => {
       await store.persist()
       const saved = storage.saveChat.mock.calls.find(c => c[0].id === 'c1')[0]
       expect(saved.messages.find(m => m.id === 'plan')).toBeDefined()
+    })
+
+    // Data-loss regression guard for the oversize-message defense.
+    // Read-side placeholders carry empty content/segments by design — if they
+    // round-tripped through the normal persist path they'd UPSERT over the
+    // original (oversized) DB row and wipe it. _serializeChat must filter
+    // them out so the heavy DB row survives untouched.
+    it('NEVER persists oversize placeholder messages (data-loss guard)', async () => {
+      const store = await setupChatWithMessages([
+        {
+          id: 'huge', role: 'assistant', agentId: 'a1',
+          content: '', segments: [],
+          oversize: true, totalBytes: 22_000_000, contentBytes: 10_500_000,
+        },
+        { id: 'real', role: 'assistant', agentId: 'a1', content: 'hi', segments: [{ type: 'text', content: 'hi' }] },
+      ])
+      storage.saveChat.mockClear()
+      await store.persist()
+      const saved = storage.saveChat.mock.calls.find(c => c[0].id === 'c1')[0]
+      expect(saved.messages.find(m => m.id === 'huge')).toBeUndefined()
+      // The real message still persists alongside
+      expect(saved.messages.find(m => m.id === 'real')).toBeDefined()
     })
   })
 

@@ -5,7 +5,9 @@ import {
   validateCategoryInput,
   normalizeCategoryInput,
   formatAgentSummary,
+  formatAgentDetail,
   autoFillProviderModel,
+  stripHeavyFields,
 } from '../manage-agents-tool.js'
 
 describe('validateAgentInput', () => {
@@ -143,5 +145,68 @@ describe('formatAgentSummary', () => {
     expect(s).toContain('abc')
     expect(s).toContain('Clank')
     expect(s).toContain('system')
+  })
+  it('does not truncate description (200-char schema cap is enough)', () => {
+    const desc = '3 岁奶牛猫，会人话但只跟你说，嘴硬心软，开口必先哼，用屁股表达爱。'
+    const s = formatAgentSummary({ id: 'abc', type: 'system', name: 'x', description: desc })
+    expect(s).toContain(desc)
+    expect(s.endsWith('用屁股表达爱。')).toBe(true)
+  })
+})
+
+describe('formatAgentDetail', () => {
+  it('includes the full prompt body so LLMs can read it before tuning', () => {
+    const a = {
+      id: 'abc', type: 'system', name: 'Clank', description: 'd',
+      prompt: 'You are Clank.\nYou speak in short sentences.',
+      providerId: 'p', modelId: 'm',
+      requiredToolIds: ['t1'],
+    }
+    const s = formatAgentDetail(a)
+    expect(s).toContain('--- prompt ---')
+    expect(s).toContain('You are Clank.')
+    expect(s).toContain('You speak in short sentences.')
+    expect(s).toContain('providerId: p')
+    expect(s).toContain('requiredToolIds: ["t1"]')
+  })
+  it('handles empty prompt cleanly', () => {
+    const s = formatAgentDetail({ id: 'x', type: 'user', name: 'u' })
+    expect(s).toContain('--- prompt ---')
+    expect(s).toContain('(empty)')
+  })
+  it('handles null safely', () => {
+    expect(formatAgentDetail(null)).toBe('(none)')
+  })
+})
+
+describe('stripHeavyFields', () => {
+  it('removes avatar and prompt while preserving other fields', () => {
+    const agent = {
+      id: 'abc',
+      type: 'system',
+      name: 'Clank',
+      description: 'd',
+      avatar: 'data:image/png;base64,' + 'A'.repeat(50000),
+      prompt: 'p'.repeat(5000),
+      providerId: 'q',
+      modelId: 'm',
+    }
+    const out = stripHeavyFields(agent)
+    expect(out.avatar).toBeUndefined()
+    expect(out.prompt).toBeUndefined()
+    expect(out.id).toBe('abc')
+    expect(out.name).toBe('Clank')
+    expect(out.providerId).toBe('q')
+    expect(out.modelId).toBe('m')
+  })
+  it('handles null/undefined safely', () => {
+    expect(stripHeavyFields(null)).toBeNull()
+    expect(stripHeavyFields(undefined)).toBeUndefined()
+  })
+  it('does not mutate input', () => {
+    const agent = { id: 'x', avatar: 'a', prompt: 'p' }
+    stripHeavyFields(agent)
+    expect(agent.avatar).toBe('a')
+    expect(agent.prompt).toBe('p')
   })
 })

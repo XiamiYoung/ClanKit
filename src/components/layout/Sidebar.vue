@@ -873,23 +873,8 @@ nav {
 .focus-bulb-active {
   background: transparent;
 }
-.focus-bulb-emoji {
-  font-size: 1rem;
-  line-height: 1;
-  filter: grayscale(1);
-  transition: filter 0.2s ease;
-  pointer-events: none;
-}
-.focus-bulb-active .focus-bulb-emoji {
-  filter: grayscale(0) brightness(1);
-}
-.focus-bulb-spin {
-  animation: focus-bulb-rotate 8s linear infinite;
-}
-@keyframes focus-bulb-rotate {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
-}
+/* .focus-bulb-emoji + .focus-bulb-spin + keyframe are now in global
+   src/style.css so MessageRenderer and DocsView can reuse them. */
 
 /* ── Minibar button ── */
 .minibar-bulb {

@@ -128,7 +128,53 @@ function normalizeCategoryInput(input) {
 
 function formatAgentSummary(a) {
   if (!a) return '(none)'
-  return `id=${a.id} | name=${a.name || '(unnamed)'} | type=${a.type} | desc=${(a.description || '').slice(0, 60)}`
+  // description is capped at 200 chars at the schema level — show it in full
+  // so the LLM doesn't mistake a slice cutoff for a tool-side truncation.
+  return `id=${a.id} | name=${a.name || '(unnamed)'} | type=${a.type} | desc=${a.description || ''}`
+}
+
+/**
+ * Verbose text rendering for a single agent. Used by get_agent when the caller
+ * wants to read the full prompt body (e.g. to tune tone / phrasing) — the
+ * summary line alone is not enough since `prompt` was never exposed to the
+ * LLM via formatAgentSummary or via details (stripHeavyFields removes it).
+ */
+function formatAgentDetail(a) {
+  if (!a) return '(none)'
+  const lines = [
+    `id: ${a.id}`,
+    `name: ${a.name || '(unnamed)'}`,
+    `type: ${a.type}`,
+    `description: ${a.description || ''}`,
+    `providerId: ${a.providerId || '(none)'}`,
+    `modelId: ${a.modelId || '(none)'}`,
+    `voiceId: ${a.voiceId || '(none)'}`,
+    `isDefault: ${!!a.isDefault}`,
+    `isBuiltin: ${!!a.isBuiltin}`,
+    `categoryIds: ${JSON.stringify(a.categoryIds || [])}`,
+    `requiredToolIds: ${JSON.stringify(a.requiredToolIds || [])}`,
+    `requiredSkillIds: ${JSON.stringify(a.requiredSkillIds || [])}`,
+    `requiredMcpServerIds: ${JSON.stringify(a.requiredMcpServerIds || [])}`,
+    `requiredKnowledgeBaseIds: ${JSON.stringify(a.requiredKnowledgeBaseIds || [])}`,
+    '',
+    '--- prompt ---',
+    a.prompt || '(empty)',
+  ]
+  return lines.join('\n')
+}
+
+/**
+ * Strip heavy fields (`avatar` base64 PNG, `prompt` body) before stuffing an
+ * agent into a tool-result `details` payload. The text part of the result
+ * (formatAgentSummary) already carries id/name/type/desc — the structured
+ * details are for UI inspection, not LLM context, and dragging the full
+ * base64 avatar through IPC + into tool_result segments bloats persisted
+ * chats and renderer memory.
+ */
+function stripHeavyFields(a) {
+  if (!a) return a
+  const { avatar, prompt, ...rest } = a
+  return rest
 }
 
 /**
@@ -156,7 +202,7 @@ class ManageAgentsTool extends BaseTool {
       'manage_agents',
       // Tool description for the LLM. Keep concise but cover all actions -
       // the LLM picks an action enum based on intent.
-      'Create/update/delete/list ClanKit "数字人" (digital personas) and "用户画像" (user personas), plus their categories. TERMINOLOGY: in ClanKit, type="system" means a "数字人 / 系统数字人 / 系统智能体" — an AI persona the user chats with or @-mentions (translator, code reviewer, travel guide, any specialist). type="user" means a "用户画像 / 用户智能体 / user persona" — an entity representing the human user themselves. When the user just says "智能体 / agent / assistant" without qualifier, they mean 数字人 — use type="system". Only use type="user" when the user explicitly says "用户画像 / 用户智能体 / user persona / a persona for me / represent me". Default to system. type is immutable after creation. Action enum: create_agent, update_agent, delete_agent, list_agents, get_agent, create_category, update_category, delete_category, list_categories. Persisted to SQLite — never call file_operation, execute_shell, or sqlite3 for agent data.',
+      'Create/update/delete/list ClanKit "数字人" (digital personas) and "用户画像" (user personas), plus their categories. TERMINOLOGY: in ClanKit, type="system" means a "数字人 / 系统数字人 / 系统智能体" — an AI persona the user chats with or @-mentions (translator, code reviewer, travel guide, any specialist). type="user" means a "用户画像 / 用户智能体 / user persona" — an entity representing the human user themselves. When the user just says "智能体 / agent / assistant" without qualifier, they mean 数字人 — use type="system". Only use type="user" when the user explicitly says "用户画像 / 用户智能体 / user persona / a persona for me / represent me". Default to system. type is immutable after creation. Action enum: create_agent, update_agent, delete_agent, list_agents, get_agent, create_category, update_category, delete_category, list_categories. Persisted to SQLite — never call file_operation, execute_shell, or sqlite3 for agent data. When you need to READ or TUNE an existing agent\'s prompt (e.g. user asks to adjust tone, phrasing, behavior), call get_agent with includeFullBody:true — the default summary does NOT contain the prompt body, so editing without includeFullBody risks overwriting work blindly.',
       'Manage Agents'
     )
     this._context = context || {}
@@ -216,6 +262,10 @@ class ManageAgentsTool extends BaseTool {
         id: { type: 'string' },
         // Filter for list_agents / list_categories
         kind: { type: 'string', enum: ['system', 'user'], description: 'Optional filter; default returns both' },
+        // get_agent only: when true, returns the full prompt body and all
+        // configuration fields. Default is a short summary line. Use this
+        // when you need to read or tune the agent's existing prompt.
+        includeFullBody: { type: 'boolean', description: 'get_agent only: include full prompt body and all fields. Default false (summary line only).' },
       },
       required: ['action'],
     }
@@ -232,7 +282,7 @@ class ManageAgentsTool extends BaseTool {
         case 'update_agent':    return await this._updateAgent(input.agent)
         case 'delete_agent':    return this._deleteAgent(input.id)
         case 'list_agents':     return this._listAgents(input.kind)
-        case 'get_agent':       return this._getAgent(input.id)
+        case 'get_agent':       return this._getAgent(input.id, input.includeFullBody === true)
         case 'create_category': return this._createCategory(input.category)
         case 'update_category': return this._updateCategory(input.category)
         case 'delete_category': return this._deleteCategory(input.id)
@@ -274,7 +324,7 @@ class ManageAgentsTool extends BaseTool {
     if (agent.type === 'user' && this._regenerateIdentityCard) {
       try { await this._regenerateIdentityCard(agent.id) } catch (_) {}
     }
-    return this._ok(`Created agent: ${formatAgentSummary(agent)}`, { id: agent.id, agent })
+    return this._ok(`Created agent: ${formatAgentSummary(agent)}`, { id: agent.id, agent: stripHeavyFields(agent) })
   }
 
   async _updateAgent(agentInput) {
@@ -301,7 +351,7 @@ class ManageAgentsTool extends BaseTool {
     if (promptChanged && this._regenerateIdentityCard) {
       try { await this._regenerateIdentityCard(merged.id) } catch (_) {}
     }
-    return this._ok(`Updated agent: ${formatAgentSummary(merged)}`, { id: merged.id, agent: merged })
+    return this._ok(`Updated agent: ${formatAgentSummary(merged)}`, { id: merged.id, agent: stripHeavyFields(merged) })
   }
 
   _deleteAgent(id) {
@@ -329,11 +379,12 @@ class ManageAgentsTool extends BaseTool {
     )
   }
 
-  _getAgent(id) {
+  _getAgent(id, includeFullBody) {
     if (!id) return this._err('id required for get_agent')
     const a = this._agentStore.getById(id)
     if (!a) return this._err(`Agent not found: ${id}`)
-    return this._ok(formatAgentSummary(a), { agent: a })
+    const text = includeFullBody ? formatAgentDetail(a) : formatAgentSummary(a)
+    return this._ok(text, { agent: stripHeavyFields(a) })
   }
 
   // Category actions
@@ -384,5 +435,7 @@ module.exports = {
   validateCategoryInput,
   normalizeCategoryInput,
   formatAgentSummary,
+  formatAgentDetail,
   autoFillProviderModel,
+  stripHeavyFields,
 }

@@ -198,10 +198,13 @@ Built-in agents cannot be deleted — the tool returns an error.
 
 ```json
 { "action": "list_agents", "kind": "system" }   // kind optional: system|user; omit for both
-{ "action": "get_agent", "id": "<agent-id>" }
+{ "action": "get_agent", "id": "<agent-id>" }                            // summary line only (id/name/type/desc)
+{ "action": "get_agent", "id": "<agent-id>", "includeFullBody": true }   // full prompt body + all fields
 ```
 
 To find an id by name, call `list_agents` first then match.
+
+**Before tuning an agent's prompt, call `get_agent` with `includeFullBody: true`** — the default summary does NOT contain the prompt body, so editing without it risks overwriting the user's existing setup. Read first → make minimal edits to the current prompt → `update_agent` to write back.
 
 ### Categories — `create_category` / `update_category` / `delete_category` / `list_categories`
 
