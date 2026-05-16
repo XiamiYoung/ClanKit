@@ -8,6 +8,7 @@ import {
   normalizeSchedule,
   validateCategoryInput,
   normalizeCategoryInput,
+  _summarizeTask,
 } from '../manage-tasks-tool.js'
 
 describe('validateTaskInput', () => {
@@ -126,5 +127,17 @@ describe('normalizeCategoryInput', () => {
     const c = normalizeCategoryInput({ name: 'X' })
     expect(c.emoji).toBe('📁')
     expect(c.sortOrder).toBe(0)
+  })
+})
+
+describe('_summarizeTask', () => {
+  it('does not truncate description (200-char schema cap is enough)', () => {
+    const desc = '每天晚上 22:00 检查未完成事项，分类整理后提醒我，需要明确写清楚每一项当时遗留的上下文。'
+    const s = _summarizeTask({ id: 't1', name: 'evening-recap', description: desc })
+    expect(s).toContain(desc)
+  })
+  it('handles missing fields', () => {
+    expect(_summarizeTask(null)).toBe('(none)')
+    expect(_summarizeTask({ id: 't1' })).toContain('(unnamed)')
   })
 })

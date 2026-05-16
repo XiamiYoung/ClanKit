@@ -487,6 +487,7 @@
           @quote="quoteMessage"
           @quote-image="handleQuoteImage"
           @delete-message="requestDeleteMessage"
+          @delete-oversize-message="handleDeleteOversizeMessage"
           @speak-message="handleSpeakMessage"
           :speakingMsgId="speakingMsgId"
           :ttsPlayingMsgId="ttsPlayingMsgId"
@@ -1421,6 +1422,7 @@ const {
   handleContinueAfterTruncation,
   handleRetryWaitingIndicator,
   handleResendMessage,
+  deleteOversizeMessage,
 } = useMessageOps({
   copiedId,
   quotedMessage,
@@ -1431,6 +1433,12 @@ const {
   sendMessage: (...args) => sendMessage(...args),
   setPendingLongBlobs: (blobs) => setPendingLongBlobs?.(blobs),
 })
+
+async function handleDeleteOversizeMessage(msgId) {
+  const chatId = chatsStore.activeChatId
+  if (!chatId || !msgId) return
+  await deleteOversizeMessage(chatId, msgId)
+}
 
 // Wrapper so useChunkHandler can call _fireGroupAgentsDirect before it's bound
 // (useAgentCollaboration is initialized after useChunkHandler)

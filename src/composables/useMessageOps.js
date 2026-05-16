@@ -3,6 +3,7 @@ import { useChatsStore } from '../stores/chats'
 import { useAgentsStore } from '../stores/agents'
 import { useI18n } from '../i18n/useI18n'
 import { v4 as uuidv4 } from 'uuid'
+import { storage } from '../services/storage'
 
 /**
  * Message-level operations: copy, delete, quote, resend, retry, format helpers.
@@ -211,6 +212,28 @@ export function useMessageOps({
     sendMessage()
   }
 
+  /**
+   * Delete an oversize message (the read-side placeholder produced by
+   * ChatStore._mapRowOrOversize when a row's `content` exceeds the threshold).
+   * Bypasses the normal persistChat path because _serializeChat filters
+   * oversize placeholders out, so a `chat.messages.splice` + persistChat
+   * would never actually issue a DELETE. We call the dedicated IPC
+   * (`store:delete-message` → `ChatStore.removeMessage`) directly, then
+   * splice in-memory so the UI updates without a reload.
+   */
+  async function deleteOversizeMessage(chatId, msgId) {
+    if (!chatId || !msgId) return { success: false }
+    const result = await storage.deleteMessage(chatId, msgId)
+    if (result?.success) {
+      const chat = chatsStore.chats.find(c => c.id === chatId)
+      if (chat?.messages) {
+        const idx = chat.messages.findIndex(m => m.id === msgId)
+        if (idx >= 0) chat.messages.splice(idx, 1)
+      }
+    }
+    return result
+  }
+
   return {
     copyMessage,
     requestDeleteMessage,
@@ -224,5 +247,6 @@ export function useMessageOps({
     handleContinueAfterTruncation,
     handleRetryWaitingIndicator,
     handleResendMessage,
+    deleteOversizeMessage,
   }
 }

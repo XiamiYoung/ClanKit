@@ -193,10 +193,13 @@ ClanKit 的术语：
 
 ```json
 { "action": "list_agents", "kind": "system" }   // kind 可选: system/user，省略返回全部
-{ "action": "get_agent", "id": "<agent-id>" }
+{ "action": "get_agent", "id": "<agent-id>" }                            // 仅返回摘要行 (id/name/type/desc)
+{ "action": "get_agent", "id": "<agent-id>", "includeFullBody": true }   // 返回完整 prompt body + 所有字段
 ```
 
 需要按名字找 id 时，先 `list_agents` 拿到结果再匹配。
+
+**调整 agent 的 prompt 前必须先用 `includeFullBody: true` 读全文** —— 默认摘要不含 prompt body，盲改会覆盖掉用户已有的设定。读完 → 拿当前 prompt 做最小化修改 → `update_agent` 写回，避免重写整段。
 
 ### 分类 — `create_category` / `update_category` / `delete_category` / `list_categories`
 

@@ -127,6 +127,9 @@
                 </button>
               </template>
             </template>
+            <template v-else-if="item.data.runawayAborted">
+              <span class="cw-system-banner-text cw-banner-runaway">{{ item.data.content }}</span>
+            </template>
             <span v-else class="cw-system-banner-text">{{ item.data.content }}</span>
           </div>
 
@@ -282,7 +285,13 @@
                 </div>
               </div>
               <div :class="item.data.role === 'user' ? 'user-content' : 'prose-clankit'">
+                <OversizeMessageCard
+                  v-if="item.data.oversize"
+                  :message="item.data"
+                  @delete="onOversizeDelete"
+                />
                 <MessageRenderer
+                  v-else
                   :message="item.data"
                   :plan-data="item.data.planData || null"
                   :plan-state="item.data.planState || 'pending'"
@@ -516,6 +525,7 @@ import { useConfigStore } from '../../stores/config'
 import { useI18n } from '../../i18n/useI18n'
 import { getAvatarDataUri } from '../agents/agentAvatars'
 import MessageRenderer from './MessageRenderer.vue'
+import OversizeMessageCard from './OversizeMessageCard.vue'
 import ChatMentionInput from './ChatMentionInput.vue'
 
 const props = defineProps({
@@ -532,7 +542,11 @@ const props = defineProps({
   pulseRgb: { type: String, default: '37, 99, 235' },
 })
 
-const emit = defineEmits(['send', 'stop', 'escape-retrieve', 'quote', 'delete-message', 'send-with-attachments', 'resend-message', 'quote-image', 'retry-waiting-indicator', 'speak-message', 'continue-after-truncation'])
+const emit = defineEmits(['send', 'stop', 'escape-retrieve', 'quote', 'delete-message', 'delete-oversize-message', 'send-with-attachments', 'resend-message', 'quote-image', 'retry-waiting-indicator', 'speak-message', 'continue-after-truncation'])
+
+function onOversizeDelete(msgId) {
+  emit('delete-oversize-message', msgId)
+}
 
 const router = useRouter()
 const chatsStore = useChatsStore()
@@ -1377,6 +1391,10 @@ defineExpose({ scrollToBottom, userScrolled, hasNewContentBelow })
 .cw-system-banner-text {
   line-height: 1.4;
   display: block;
+}
+.cw-banner-runaway {
+  color: #B91C1C;
+  font-weight: 500;
 }
 .cw-banner-action {
   font-size: 0.7rem;

@@ -157,7 +157,9 @@ function normalizeCategoryInput(input) {
 
 function _summarizeTask(t) {
   if (!t) return '(none)'
-  return `id=${t.id} | name=${t.name || '(unnamed)'} | desc=${(t.description || '').slice(0, 60)}`
+  // description is capped at 200 chars at the schema level — show in full so
+  // the LLM doesn't mistake a slice cutoff for a tool-side truncation.
+  return `id=${t.id} | name=${t.name || '(unnamed)'} | desc=${t.description || ''}`
 }
 function _summarizePlan(p) {
   if (!p) return '(none)'
@@ -432,4 +434,5 @@ module.exports = {
   normalizeSchedule,
   validateCategoryInput,
   normalizeCategoryInput,
+  _summarizeTask,
 }

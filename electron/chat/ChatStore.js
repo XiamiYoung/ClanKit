@@ -29,6 +29,40 @@ function _getDb() {
 
 const SCHEMA_VERSION = 1
 
+// Read-side oversize-message defense — see fix/runaway-output-cap-and-oversize-defense.
+// When an assistant message's `content` exceeds this threshold, getMessages and
+// getMessagesPage return a small placeholder row instead of the bytes. The UI
+// (OversizeMessageCard / ChatWindow banner branch) renders a red maintenance
+// card with a delete button. Threshold applies to `content` only — tool segments
+// have their own per-tool caps and a legitimate tool-heavy turn can total many
+// MB legitimately. User pastes (role='user') are exempt; only assistant rows
+// are checked, because oversize user messages are usually intentional log dumps.
+const OVERSIZE_CONTENT_THRESHOLD_BYTES = 1024 * 1024  // 1 MB
+
+function _buildOversizePlaceholder(row) {
+  return {
+    id: row.id,
+    chat_id: row.chat_id,
+    role: row.role,
+    content: '',
+    segments: [],
+    ts: row.ts,
+    created_at: row.created_at,
+    agent_id: row.agent_id,
+    agent_name: row.agent_name,
+    oversize: true,
+    contentBytes: row._content_bytes,
+    totalBytes: row._total_bytes,
+  }
+}
+
+function _mapRowOrOversize(row) {
+  if (row.role === 'assistant' && row._content_bytes > OVERSIZE_CONTENT_THRESHOLD_BYTES) {
+    return _buildOversizePlaceholder(row)
+  }
+  return rowToMessage(row)
+}
+
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS chats (
   id                              TEXT PRIMARY KEY,
@@ -510,10 +544,17 @@ class ChatStore {
   getMessages(chatId) {
     if (!chatId) return []
     const db = this._open()
+    // Compute byte sizes in SQL so the placeholder branch doesn't need to
+    // deserialize the heavy `content` / `segments` strings into JS for rows
+    // we're about to throw away. Aliases prefixed `_` to avoid colliding with
+    // any future schema column.
     const rows = db.prepare(`
-      SELECT * FROM messages WHERE chat_id = ? ORDER BY ts ASC, rowid ASC
+      SELECT *,
+        LENGTH(content) AS _content_bytes,
+        LENGTH(content) + LENGTH(segments) AS _total_bytes
+      FROM messages WHERE chat_id = ? ORDER BY ts ASC, rowid ASC
     `).all(chatId)
-    return rows.map(rowToMessage)
+    return rows.map(_mapRowOrOversize)
   }
 
   /**
@@ -524,11 +565,13 @@ class ChatStore {
     if (!chatId) return []
     const db = this._open()
     const sql = before
-      ? 'SELECT * FROM messages WHERE chat_id = ? AND ts < ? ORDER BY ts DESC LIMIT ?'
-      : 'SELECT * FROM messages WHERE chat_id = ? ORDER BY ts DESC LIMIT ?'
+      ? `SELECT *, LENGTH(content) AS _content_bytes, LENGTH(content) + LENGTH(segments) AS _total_bytes
+         FROM messages WHERE chat_id = ? AND ts < ? ORDER BY ts DESC LIMIT ?`
+      : `SELECT *, LENGTH(content) AS _content_bytes, LENGTH(content) + LENGTH(segments) AS _total_bytes
+         FROM messages WHERE chat_id = ? ORDER BY ts DESC LIMIT ?`
     const args = before ? [chatId, before, limit] : [chatId, limit]
     const rows = db.prepare(sql).all(...args)
-    return rows.reverse().map(rowToMessage)
+    return rows.reverse().map(_mapRowOrOversize)
   }
 
   /**
@@ -661,4 +704,7 @@ module.exports = {
   serializeJsonField, deserializeJsonField,
   extractSearchText,
   SCHEMA_VERSION,
+  OVERSIZE_CONTENT_THRESHOLD_BYTES,
+  _buildOversizePlaceholder,
+  _mapRowOrOversize,
 }

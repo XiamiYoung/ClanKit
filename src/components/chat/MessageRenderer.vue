@@ -451,6 +451,7 @@ import { useConfigStore } from '../../stores/config'
 import { useAgentsStore } from '../../stores/agents'
 import { useObsidianStore } from '../../stores/obsidian'
 import { useToolsStore } from '../../stores/tools'
+import { useFocusModeStore } from '../../stores/focusMode'
 import { useI18n } from '../../i18n/useI18n'
 
 const router = useRouter()
@@ -459,6 +460,7 @@ const configStore = useConfigStore()
 const agentsStore = useAgentsStore()
 const obsidianStore = useObsidianStore()
 const toolsStore = useToolsStore()
+const focusModeStore = useFocusModeStore()
 const { t } = useI18n()
 
 const props = defineProps({
@@ -724,10 +726,14 @@ function injectFilePathChips(html) {
     // Replace file paths with chips containing open buttons (use data-* for event delegation)
     parts[i] = p.replace(FILE_PATH_RE, (path) => {
       const escaped = path.replace(/"/g, '&quot;')
-      const aidocBtn = _shouldShowAidocButton(path)
+      const showAidoc = _shouldShowAidocButton(path)
+      const aidocBtn = showAidoc
         ? `<button class="file-path-btn file-path-aidoc" data-action="open-in-aidoc" data-path="${escaped}" data-app-tooltip title="${t('common.openInAiDoc')}">📝</button>`
         : ''
-      return `${path}${aidocBtn}<button class="file-path-btn file-path-open" data-action="open-file" data-path="${escaped}" data-app-tooltip title="${t('common.openFile')}">📄</button><button class="file-path-btn file-path-folder" data-action="open-folder" data-path="${escaped}" data-app-tooltip title="${t('common.openFolder')}">📁</button>`
+      const focusBtn = showAidoc
+        ? `<button class="file-path-btn file-path-focus" data-action="open-in-focus" data-path="${escaped}" data-app-tooltip title="${t('common.openInFocusMode')}"><span class="focus-bulb-emoji">📑</span></button>`
+        : ''
+      return `${path}${aidocBtn}${focusBtn}<button class="file-path-btn file-path-open" data-action="open-file" data-path="${escaped}" data-app-tooltip title="${t('common.openFile')}">📄</button><button class="file-path-btn file-path-folder" data-action="open-folder" data-path="${escaped}" data-app-tooltip title="${t('common.openFolder')}">📁</button>`
     })
   }
   return parts.join('')
@@ -865,6 +871,13 @@ async function handleContentClick(e) {
       const fileName = filePath.split(/[/\\]/).pop()
       obsidianStore.openFile(filePath, fileName)
       router.push('/notes')
+    } else if (action === 'open-in-focus') {
+      const fileName = filePath.split(/[/\\]/).pop()
+      focusModeStore.enterWith({
+        filePath,
+        fileName,
+        chatId: chatsStore.activeChatId
+      })
     } else if (action === 'open-file' && window.electronAPI?.openFile) {
       window.electronAPI.openFile(filePath)
     } else if (action === 'open-folder' && window.electronAPI?.showInFolder) {
@@ -1567,6 +1580,13 @@ function diffMarker(type) {
 
 :deep(.file-path-btn:hover) {
   opacity: 1;
+}
+
+/* Focus-mode chip emoji inherits the chip's font-size (0.75rem) so it matches
+   the other 📝/📄/📁 chips. The grayscale-on-default + colored-on-hover
+   behavior comes from the global .focus-bulb-emoji rule in style.css. */
+:deep(.file-path-focus .focus-bulb-emoji) {
+  font-size: inherit;
 }
 
 /* Recommend-agent button (Clank's cross-agent recommendation).

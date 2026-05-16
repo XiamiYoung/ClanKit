@@ -285,6 +285,20 @@
                   <svg v-else style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                 </button>
 
+                <!-- Open in Focus Mode (side-by-side chat + this doc). Hidden
+                     when already in focus mode and when this is the embedded
+                     DocsView instance inside FocusModeView. Same 📑 emoji /
+                     grayscale-on-hover treatment as the titlebar lightbulb and
+                     the per-file chip in chat. -->
+                <button
+                  v-if="!focusModeStore.isFocusMode && !props.isEmbedded && store.activeFile?.path"
+                  class="docs-hdr-btn docs-hdr-focus-bulb"
+                  @click="openInFocusMode"
+                  v-tooltip="t('common.openInFocusMode')"
+                >
+                  <span class="focus-bulb-emoji">📑</span>
+                </button>
+
                 <!-- Save button -->
                 <button
                   v-if="!isDrawio && !isImage"
@@ -894,6 +908,7 @@ import { useAiMagic } from '../composables/useAiMagic'
 import { useDraggableHamburger } from '../composables/useDraggableHamburger'
 import { getAvatarDataUri } from '../components/agents/agentAvatars'
 import { useFocusModeStore } from '../stores/focusMode'
+import { useChatsStore } from '../stores/chats'
 import { useVoiceStore } from '../stores/voice'
 import { useI18n } from '../i18n/useI18n'
 import PreviewLimitModal from '../components/common/PreviewLimitModal.vue'
@@ -911,7 +926,20 @@ const store = useObsidianStore()
 const agentsStore = useAgentsStore()
 const configStore = useConfigStore()
 const focusModeStore = useFocusModeStore()
+const chatsStore = useChatsStore()
 const voiceStore = useVoiceStore()
+
+// Enter focus mode with the currently-open doc preselected. Skipped while
+// already in focus mode and while this DocsView instance is the embedded
+// copy living inside FocusModeView (button would be redundant there).
+function openInFocusMode() {
+  if (!store.activeFile) return
+  focusModeStore.enterWith({
+    filePath: store.activeFile.path,
+    fileName: store.activeFile.name,
+    chatId: chatsStore.activeChatId
+  })
+}
 
 // Tree visibility filter. A file node is hidden ONLY when the session probe has
 // confirmed it's not openable (binary content / too large / IO failure). Dirs
@@ -4328,6 +4356,12 @@ defineExpose({ docTreeCollapsed })
   background: #1A1A1A;
   border-color: #1A1A1A;
   color: #FFFFFF;
+}
+/* Focus-mode entry button: shrink the shared .focus-bulb-emoji (default 1rem)
+   down to match the 13px SVG icons used by sibling docs-hdr-btn instances.
+   Grayscale + colored-on-hover behavior comes from global style.css. */
+.docs-hdr-focus-bulb .focus-bulb-emoji {
+  font-size: 0.8125rem;
 }
 .docs-hdr-btn--ok {
   background: #10B981;

@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getChatSegments: (params) => ipcRenderer.invoke('store:get-chat-segments', params),
   saveChat: (chat) => ipcRenderer.invoke('store:save-chat', chat),
   deleteChat: (id) => ipcRenderer.invoke('store:delete-chat', id),
+  deleteMessage: (payload) => ipcRenderer.invoke('store:delete-message', payload),
 
   getConfig: () => ipcRenderer.invoke('store:get-config'),
   saveConfig: (config) => ipcRenderer.invoke('store:save-config', config),

@@ -96,6 +96,17 @@ export const storage = {
     const chats = lsGet('clankit:chats', [])
     lsSet('clankit:chats', chats.filter(c => c.id !== id))
   },
+  async deleteMessage(chatId, messageId) {
+    if (isElectron()) return window.electronAPI.deleteMessage({ chatId, messageId })
+    // localStorage fallback: splice from the chat's messages array
+    const chats = lsGet('clankit:chats', [])
+    const idx = chats.findIndex(c => c.id === chatId)
+    if (idx >= 0 && Array.isArray(chats[idx].messages)) {
+      chats[idx].messages = chats[idx].messages.filter(m => m.id !== messageId)
+      lsSet('clankit:chats', chats)
+    }
+    return { success: true }
+  },
 
   // ── Config ─────────────────────────────────────────────────────────────────
   async getConfig() {

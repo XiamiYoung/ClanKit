@@ -10,6 +10,12 @@ vi.mock('../../stores/agents', () => ({ useAgentsStore: () => mockAgentsStore })
 vi.mock('../../i18n/useI18n', () => ({
   useI18n: () => ({ t: (key) => key, locale: ref('en') }),
 }))
+const mockStorageDeleteMessage = vi.fn().mockResolvedValue({ success: true })
+vi.mock('../../services/storage', () => ({
+  storage: {
+    deleteMessage: (...args) => mockStorageDeleteMessage(...args),
+  },
+}))
 
 // Stub clipboard
 const mockClipboard = { writeText: vi.fn().mockResolvedValue(undefined) }
@@ -156,5 +162,46 @@ describe('useMessageOps', () => {
     expect(sendMessage).toHaveBeenCalled()
     // Waiting indicator should be removed
     expect(chat.messages.find(m => m.isWaitingIndicator)).toBeUndefined()
+  })
+
+  describe('deleteOversizeMessage', () => {
+    beforeEach(() => {
+      mockStorageDeleteMessage.mockClear()
+      mockStorageDeleteMessage.mockResolvedValue({ success: true })
+    })
+
+    it('calls storage.deleteMessage IPC + splices in-memory on success', async () => {
+      const chat = mockChatsStore.chats[0]
+      chat.messages = [
+        { id: 'a', role: 'user', content: 'hi' },
+        { id: 'huge', role: 'assistant', oversize: true, content: '', segments: [] },
+        { id: 'c', role: 'assistant', content: 'reply' },
+      ]
+      const ops = createOps()
+      const r = await ops.deleteOversizeMessage('c1', 'huge')
+      expect(r.success).toBe(true)
+      expect(mockStorageDeleteMessage).toHaveBeenCalledWith('c1', 'huge')
+      expect(chat.messages.find(m => m.id === 'huge')).toBeUndefined()
+      expect(chat.messages).toHaveLength(2)
+    })
+
+    it('does NOT splice when IPC reports failure', async () => {
+      mockStorageDeleteMessage.mockResolvedValue({ success: false, error: 'db locked' })
+      const chat = mockChatsStore.chats[0]
+      chat.messages = [{ id: 'huge', role: 'assistant', oversize: true }]
+      const ops = createOps()
+      const r = await ops.deleteOversizeMessage('c1', 'huge')
+      expect(r.success).toBe(false)
+      expect(chat.messages.find(m => m.id === 'huge')).toBeDefined()
+    })
+
+    it('no-ops on missing chatId or messageId', async () => {
+      const ops = createOps()
+      const r1 = await ops.deleteOversizeMessage(null, 'm1')
+      const r2 = await ops.deleteOversizeMessage('c1', null)
+      expect(r1.success).toBe(false)
+      expect(r2.success).toBe(false)
+      expect(mockStorageDeleteMessage).not.toHaveBeenCalled()
+    })
   })
 })
