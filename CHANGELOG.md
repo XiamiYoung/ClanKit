@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.19](https://github.com/XiamiYoung/ClanKit/compare/v0.0.18...v0.0.19) (2026-05-16)
+
+
+### Bug Fixes
+
+* **chat:** runaway cap + oversize defense + focus bulbs + skill tool ergonomics ([#33](https://github.com/XiamiYoung/ClanKit/issues/33)) ([2766653](https://github.com/XiamiYoung/ClanKit/commit/2766653cf684e56ec71350b87509140a2abeaedc))
+
 ## [0.0.18](https://github.com/XiamiYoung/ClanKit/compare/v0.0.17...v0.0.18) (2026-05-15)
 
 
