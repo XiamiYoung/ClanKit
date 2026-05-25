@@ -25,8 +25,6 @@ const { TaskManager }      = require('./managers/TaskManager')
 const { mcpManager }       = require('./mcp/McpManager')
 const { PermissionGate }   = require('./tools/PermissionGate')
 
-const MAX_CONTEXT_TURNS = 20  // max user/assistant turn pairs sent to LLM
-
 // Extracted modules
 const spb = require('./systemPromptBuilder')
 const mc  = require('./messageConverter')
@@ -34,7 +32,7 @@ const te  = require('./toolExecutor')
 const { STREAM_OUTPUT_CAP_BYTES, RUNAWAY_TRUNCATE_TAIL_BYTES, shouldAbortRunaway, buildAbortedMessageText } = require('./runawayCap')
 
 // Module-level helpers (re-imported from extracted modules for use in run())
-const { serializeToolResult, uiResult, sliceToLastNTurns } = mc
+const { serializeToolResult, uiResult } = mc
 const { readMemoryFile, readFileIfExists } = spb
 
 // Context-assembly pipeline (token-aware window + summary + FTS retrieval).
