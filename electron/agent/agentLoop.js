@@ -37,6 +37,16 @@ const { STREAM_OUTPUT_CAP_BYTES, RUNAWAY_TRUNCATE_TAIL_BYTES, shouldAbortRunaway
 const { serializeToolResult, uiResult, sliceToLastNTurns } = mc
 const { readMemoryFile, readFileIfExists } = spb
 
+// Context-assembly pipeline (token-aware window + summary + FTS retrieval).
+const { assemble: assembleContext } = require('./core/ContextAssembler')
+const { estimateMessageTokens } = require('./core/tokenEstimate')
+const { learnFromOverflow } = require('./core/BudgetResolver')
+// Safe fallbacks for narrow-scope entry points that don't supply a chat store /
+// utility caller: summary + retrieval become no-ops and evicted turns are simply
+// dropped (matching the pre-pipeline behavior).
+const _NOOP_CHAT_STORE = { getRunningSummary: () => null, saveRunningSummary: () => {}, searchFulltext: () => [] }
+const _noopUtilityCaller = async () => ''
+
 // Strip lone Unicode surrogates that break JSON.stringify / Anthropic API.
 // Replaces unpaired high/low surrogates with U+FFFD (replacement character).
 function stripLoneSurrogates(str) {
@@ -809,8 +819,20 @@ class AgentLoop {
       }
     }
 
-    const slicedMessages = sliceToLastNTurns(effectiveMessages, MAX_CONTEXT_TURNS)
-    const conversationMessages = this._buildConversationMessages(slicedMessages, currentAttachments)
+    const _providerType = this.config.provider?.type
+      || (this.isOpenAI ? 'openai' : (this.isGoogle ? 'google' : 'anthropic'))
+    const _assembled = await assembleContext({
+      messages: effectiveMessages,
+      chatId: this.config.chatId,
+      agentKey: agentPrompts?.systemAgentId || '__shared__',
+      modelId: this.config.customModel,
+      providerType: _providerType,
+      modelContextWindow: this.config.modelContextWindow || null,
+      chatStore: this.config.chatStore || _NOOP_CHAT_STORE,
+      utilityModelCaller: this.config.utilityModelCaller || _noopUtilityCaller,
+      estimateTokens: estimateMessageTokens,
+    })
+    const conversationMessages = this._buildConversationMessages(_assembled.messages, currentAttachments)
     let finalText = ''
 
     // Gather all tool definitions: registry + subagent + background tasks
@@ -1573,6 +1595,15 @@ class AgentLoop {
 
               if (limitMatch) {
                 const ctxLimit  = Number(limitMatch[1])
+                // Self-correction: the parsed limit IS the model's real context
+                // window. Record it so BudgetResolver stops over-assuming. Only
+                // persist to config.json when the window was previously unknown,
+                // so a user-configured modelSettings value is never overwritten.
+                if (this.config.customModel && ctxLimit > 0) {
+                  const persistFn = this.config.modelContextWindow == null
+                    ? this.config.persistLearnedWindow : undefined
+                  learnFromOverflow(this.config.customModel, ctxLimit, persistFn)
+                }
                 // When no breakdown is given, use total as msgTokens (conservative estimate)
                 const totalTokens = totalMatch ? Number(totalMatch[1]) : 0
                 const msgTokens = msgMatch  ? Number(msgMatch[1])  : totalTokens
