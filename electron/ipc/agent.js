@@ -470,6 +470,23 @@ function _buildAgentKnowledgeConfig(agent, knowledgeCfg) {
   return { knowledgeBases: enabledKbs }
 }
 
+function _inferAnthropicModel(cfg) {
+  const a = cfg.anthropic || {}
+  if (a.activeModel === 'opus')  return a.opusModel  || 'claude-opus-4-6'
+  if (a.activeModel === 'haiku') return a.haikuModel || 'claude-haiku-4-5'
+  return a.sonnetModel || 'claude-sonnet-4-5'
+}
+
+function _fallbackContextWindow(modelId, providerType) {
+  if (!modelId) return null
+  const m = modelId.toLowerCase()
+  if (m.includes('claude') || providerType === 'anthropic') {
+    if (m.includes('haiku')) return 200000
+    return 1000000
+  }
+  return null
+}
+
 function _buildUserAgentPrompt(usrAgent) {
   if (!usrAgent) return null
   const parts = []
@@ -520,10 +537,15 @@ function _buildAgentRuns(respondingIds, groupIds, baseCfg, rawMessages, targetCh
       const providerEntry = (baseCfg.providers || []).find(p => p.type === effectiveProvider || p.id === effectiveProvider)
       if (providerEntry?.model) agentCfg.customModel = providerEntry.model
     }
-    // Pass model context window from Vue metadata (if known)
+    // Pass model context window from Vue metadata (if known).
+    // Use the actually-resolved model (which may come from provider defaults
+    // or Anthropic's activeModel fallback) rather than agent.modelId alone.
+    const finalModel = agentCfg.customModel || resolvedModel || _inferAnthropicModel(agentCfg)
     const ctxWindows = targetChatMeta.modelContextWindows
-    if (resolvedModel && ctxWindows?.[resolvedModel]) {
-      agentCfg.modelContextWindow = ctxWindows[resolvedModel]
+    if (finalModel && ctxWindows?.[finalModel]) {
+      agentCfg.modelContextWindow = ctxWindows[finalModel]
+    } else if (finalModel && !agentCfg.modelContextWindow) {
+      agentCfg.modelContextWindow = _fallbackContextWindow(finalModel, effectiveProvider)
     }
 
     const otherParticipants = (groupIds || [])

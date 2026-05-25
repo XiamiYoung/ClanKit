@@ -68,6 +68,22 @@ class FileTool extends BaseTool {
     return path.resolve(filePath.startsWith('~') ? filePath.replace('~', os.homedir()) : filePath)
   }
 
+  /**
+   * Coerce a loose boolean. OpenAI-compat models (Qwen etc.) sometimes emit
+   * booleans as the strings "true"/"false"; "false" is truthy in JS, which
+   * would silently flip `recursive`/`multiline`. Map those strings to real
+   * booleans; leave real booleans and undefined untouched so schema defaults
+   * still apply.
+   */
+  _looseBool(v) {
+    if (typeof v === 'string') {
+      const s = v.trim().toLowerCase()
+      if (s === 'true') return true
+      if (s === 'false') return false
+    }
+    return v
+  }
+
   /** Override to expose convenience fields used by tests and callers */
   _ok(text, details = {}) {
     const result = super._ok(text, details)
@@ -86,6 +102,11 @@ class FileTool extends BaseTool {
 
   async execute(toolCallId, params, signal, onUpdate) {
     const { operation, path: filePath, content, oldText, newText, pattern, recursive, offset, limit } = params
+    // OpenAI-compat models (Qwen etc.) sometimes send these booleans as the
+    // strings "true"/"false"; "false" is truthy in JS, so normalize before they
+    // reach the flag checks below.
+    const recursiveOpt = this._looseBool(recursive)
+    const multilineOpt = this._looseBool(params.multiline)
     const safePath = this._resolve(filePath)
 
     try {
@@ -242,7 +263,7 @@ class FileTool extends BaseTool {
         case 'search': {
           if (!fs.existsSync(safePath)) return this._err('Directory not found')
           const matches = []
-          this._search(safePath, pattern || '', recursive !== false, matches, 0)
+          this._search(safePath, pattern || '', recursiveOpt !== false, matches, 0)
           const lines = matches.slice(0, 200).map(m => `${m.type === 'dir' ? 'd' : 'f'} ${m.path}`)
           const text = lines.join('\n') + (matches.length > 200 ? `\n[${matches.length - 200} more matches omitted]` : '')
           return this._ok(text, { count: matches.length })
@@ -264,7 +285,7 @@ class FileTool extends BaseTool {
           if (!fs.existsSync(safePath)) return this._err('Path not found')
           let regex
           try {
-            const flags = params.multiline ? 'gms' : 'g'
+            const flags = multilineOpt ? 'gms' : 'g'
             regex = new RegExp(pattern, flags)
           } catch (e) {
             return this._err(`Invalid regex: ${e.message}`)
@@ -272,9 +293,9 @@ class FileTool extends BaseTool {
           const stat = fs.statSync(safePath)
           const hits = []
           if (stat.isFile()) {
-            this._grepFile(safePath, safePath, regex, !!params.multiline, hits)
+            this._grepFile(safePath, safePath, regex, !!multilineOpt, hits)
           } else {
-            this._grepDir(safePath, safePath, regex, !!params.multiline, hits, 0)
+            this._grepDir(safePath, safePath, regex, !!multilineOpt, hits, 0)
           }
           if (hits.length === 0) return this._ok('(no matches)', { count: 0 })
           const limited = hits.slice(0, 200)
