@@ -621,7 +621,10 @@ const userScrolled = ref(false)
 const hasNewContentBelow = ref(false)
 const showScrollToTop = ref(false)
 const isLoadingHistory = ref(false)
-let programmaticScrollCount = 0
+// Last observed scrollTop — used to tell a user's upward scroll (scrollTop
+// decreases) apart from a programmatic scroll-to-bottom (scrollTop only ever
+// increases). Frequency-independent, unlike the old programmatic-count guard.
+let lastScrollTop = 0
 const visibleLimit = ref(25)
 const quotedMessage = ref(null)
 
@@ -945,29 +948,36 @@ function formatErrorLabel(msg) {
 // ── Scroll management ──
 function scrollToBottom(force = false) {
   if (!force && userScrolled.value) return
-  programmaticScrollCount++
   nextTick(() => {
     nextTick(() => {
       if (messagesEl.value) {
         messagesEl.value.scrollTop = messagesEl.value.scrollHeight
+        // Keep the direction baseline in sync so the scroll event our own
+        // assignment triggers is never misread as a user upward move.
+        lastScrollTop = messagesEl.value.scrollTop
       }
-      // Use requestAnimationFrame twice to ensure the scroll has been applied
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          programmaticScrollCount = Math.max(0, programmaticScrollCount - 1)
-        })
-      })
     })
   })
 }
 
 function onScroll() {
-  if (programmaticScrollCount > 0) return
   const el = messagesEl.value
   if (!el) return
-  const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
-  userScrolled.value = distFromBottom > 60
+  const prevTop = lastScrollTop
+  lastScrollTop = el.scrollTop
   showScrollToTop.value = el.scrollTop > 200
+  const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+  if (distFromBottom <= 60) {
+    // At (or snapped back to) the bottom — resume follow mode, regardless of
+    // whether the move was programmatic or manual.
+    userScrolled.value = false
+  } else if (el.scrollTop < prevTop - 2) {
+    // scrollTop decreased => genuine user scroll-up. Programmatic scrollToBottom
+    // only ever increases scrollTop, and content growth keeps it constant, so a
+    // decrease is the unambiguous "user scrolled away" signal. The 2px slack
+    // absorbs sub-pixel jitter.
+    userScrolled.value = true
+  }
 }
 
 function forceScrollToBottom() {

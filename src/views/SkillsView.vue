@@ -710,7 +710,7 @@
                 <div v-if="remoteDetailSkill.description">
                   <p class="rsd-desc">{{ remoteDetailSkill.description }}</p>
                   <div v-if="remoteDetailSkill.homepage" style="margin-top:10px;">
-                    <span class="rsd-source-hint">详情查看：<button class="rsd-link-btn" @click="openExternal(remoteDetailSkill.homepage)">{{ remoteDetailSkill.homepage }}<span style="display:inline-block;margin-left:2px;font-size:10px;">↗</span></button></span>
+                    <span class="rsd-source-hint">详情查看：<button class="rsd-link-btn" @click="openExternal(remoteDetailSkill.homepage, remoteDetailSkill.sourceId, remoteDetailSkill.id)">{{ displayHomepage(remoteDetailSkill) }}<span style="display:inline-block;margin-left:2px;font-size:10px;">↗</span></button></span>
                   </div>
                 </div>
 
@@ -1156,20 +1156,34 @@ function installFromModal() {
   skillsStore.installRemoteSkill(sourceId, skill.id, skill.downloadUrl, configStore.config.skillsPath)
 }
 
+// Tencent skillhub API returns homepage as an API endpoint
+// (https://api.skillhub.cn/{owner}/{slug}); the user-facing page is
+// https://skillhub.cn/skills/{slug}. Normalize for display and click.
+function normalizeTencentHomepage(url, skillId) {
+  if (!url) return url
+  const m = /^https?:\/\/api\.skillhub\.cn\/[^/]+\/([^/?#]+)\/?/i.exec(url)
+  if (m) return `https://skillhub.cn/skills/${m[1]}`
+  if (skillId) return `https://skillhub.cn/skills/${skillId}`
+  return url
+}
+
+function displayHomepage(skill) {
+  if (!skill) return ''
+  if (skill.sourceId === 'tencent' || skill.sourceId === 'tencent-top') {
+    return normalizeTencentHomepage(skill.homepage, skill.id)
+  }
+  return skill.homepage || ''
+}
+
 function openExternal(url, sourceId, skillId) {
   let finalUrl = url
-  
-  // If no URL but we have sourceId and skillId, construct the appropriate hub URL
-  if (!url && sourceId && skillId) {
-    if (sourceId === 'tencent' || sourceId === 'tencent-top') {
-      // Tencent hub URL format
-      finalUrl = `https://lightmake.site/skill/${skillId}`
-    } else if (sourceId === 'clawhub') {
-      // ClawHub URL format - needs owner info, fallback to main site
-      finalUrl = `https://clawhub.ai/skills/${skillId}`
-    }
+
+  if (sourceId === 'tencent' || sourceId === 'tencent-top') {
+    finalUrl = normalizeTencentHomepage(url, skillId)
+  } else if (!url && sourceId === 'clawhub' && skillId) {
+    finalUrl = `https://clawhub.ai/skills/${skillId}`
   }
-  
+
   if (finalUrl) window.electronAPI?.openExternal(finalUrl)
 }
 
