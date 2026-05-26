@@ -44,6 +44,29 @@ function _getEmbedding() {
   return _localEmbedding
 }
 
+/**
+ * Serial async queue. vectra's LocalIndex is NOT concurrency-safe — each
+ * endUpdate() rewrites the whole index.json, so two overlapping update cycles
+ * corrupt the file ("valid JSON + trailing garbage"). Routing every mutation
+ * through one queue guarantees they run one at a time. A rejected task does not
+ * break the chain (the next task still runs).
+ */
+function _createSerialQueue() {
+  let chain = Promise.resolve()
+  return (fn) => {
+    const run = chain.then(fn, fn)
+    chain = run.then(() => {}, () => {})
+    return run
+  }
+}
+
+/** True when an error indicates the vectra index.json is corrupt (unparseable). */
+function _isVecCorruptionError(err) {
+  const msg = err && err.message ? err.message : err
+  if (!msg || typeof msg !== 'string') return false
+  return /unexpected .*json|json at position|not valid json|unexpected end of json/i.test(msg)
+}
+
 // ── Schema ──────────────────────────────────────────────────────────────────
 
 const SCHEMA = `
@@ -122,6 +145,8 @@ class MemoryStore {
     this._db = null
     this._vecIndex = null
     this._vecAvailable = null  // tri-state: null=unprobed, true=ok, false=disabled
+    // Serializes all vectra index mutations — see _createSerialQueue.
+    this._vecEnqueue = _createSerialQueue()
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────
@@ -518,6 +543,7 @@ class MemoryStore {
       hits = await idx.queryItems(Array.from(queryVec), topK * 3)
     } catch (err) {
       logger.warn('[MemoryStore] vec query failed', err.message)
+      this._maybeRecoverVec(err)
       return []
     }
 
@@ -589,24 +615,54 @@ class MemoryStore {
       return
     }
     try {
-      await idx.beginUpdate()
-      try {
-        await idx.upsertItem({
-          id,
-          vector: Array.from(vec),
-          metadata: {
-            agentId: row.agentId,
-            agentType: row.agentType,
-            section: row.section,
-          },
-        })
-      } finally {
-        await idx.endUpdate()
-      }
+      await this._vecEnqueue(async () => {
+        await idx.beginUpdate()
+        try {
+          await idx.upsertItem({
+            id,
+            vector: Array.from(vec),
+            metadata: {
+              agentId: row.agentId,
+              agentType: row.agentType,
+              section: row.section,
+            },
+          })
+        } finally {
+          await idx.endUpdate()
+        }
+      })
       const db = this._ensureDb()
       db.prepare('UPDATE memory_entries SET vec_indexed = 1 WHERE id = ?').run(id)
     } catch (err) {
       logger.debug('[MemoryStore] vec upsert failed', err.message)
+      this._maybeRecoverVec(err)
+    }
+  }
+
+  /**
+   * Self-heal a corrupted vectra index. When a vec op throws a JSON-parse error
+   * the on-disk index.json is unrecoverable; wipe it, mark every row for
+   * re-embedding, recreate an empty index, and repopulate in the background
+   * from SQLite (the source of truth). Guarded against re-entrancy and only
+   * fires for genuine corruption errors.
+   */
+  async _maybeRecoverVec(err) {
+    if (!_isVecCorruptionError(err)) return
+    if (this._vecRecovering) return
+    this._vecRecovering = true
+    try {
+      logger.warn('[MemoryStore] vec index corrupted — resetting and rebuilding from SQLite')
+      await this._vecEnqueue(async () => {
+        this._vecIndex = null
+        try { fs.rmSync(this.vecDir, { recursive: true, force: true }) } catch {}
+        try { this._ensureDb().prepare('UPDATE memory_entries SET vec_indexed = 0').run() } catch {}
+      })
+      await this._ensureVecIndex()        // recreate empty index
+      this.reEmbedMissing().catch(() => {}) // repopulate in background (serialized)
+    } catch (e) {
+      logger.warn('[MemoryStore] vec recovery failed', e.message)
+    } finally {
+      this._vecRecovering = false
     }
   }
 
@@ -614,13 +670,15 @@ class MemoryStore {
     const idx = await this._ensureVecIndex()
     if (!idx) return
     try {
-      await idx.beginUpdate()
-      try {
-        await idx.deleteItem(id)
-      } finally {
-        await idx.endUpdate()
-      }
-    } catch {}
+      await this._vecEnqueue(async () => {
+        await idx.beginUpdate()
+        try {
+          await idx.deleteItem(id)
+        } finally {
+          await idx.endUpdate()
+        }
+      })
+    } catch (err) { this._maybeRecoverVec(err) }
   }
 
   /**
@@ -672,4 +730,6 @@ module.exports = {
   MemoryStore,
   getInstance,
   _reset,
+  _createSerialQueue,
+  _isVecCorruptionError,
 }

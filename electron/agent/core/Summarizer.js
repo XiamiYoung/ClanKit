@@ -12,10 +12,6 @@ function _isNativeProvider(providerType) {
   return providerType === 'anthropic' || providerType === 'openrouter'
 }
 
-function _maxTs(msgs) {
-  return msgs.reduce((mx, m) => Math.max(mx, m.timestamp || m.createdAt || 0), 0)
-}
-
 function _renderForSummary(msgs) {
   return msgs.map(m => {
     const who = m.role === 'user' ? (m.agentName ? m.agentName : 'User') : (m.agentName || 'Assistant')
@@ -31,11 +27,16 @@ const SUMMARY_SYSTEM =
 async function ensureSummary({ chatId, agentKey, providerType, evicted, chatStore, utilityModelCaller }) {
   if (_isNativeProvider(providerType)) return { strategy: 'native' }
 
-  const prior = chatStore.getRunningSummary(chatId, agentKey) // { text, uptoTs } | null
+  // Messages reaching the assembler are stripped to { role, content } — no
+  // timestamps/ids. Track progress by COUNT instead: evicted is a growing
+  // prefix of the conversation, so evicted.slice(priorCount) is exactly the
+  // turns evicted since the last summary.
+  const prior = chatStore.getRunningSummary(chatId, agentKey) // { text, uptoCount } | null
   const priorText = prior?.text || ''
-  const priorTs = prior?.uptoTs || 0
+  const priorCount = prior?.uptoCount || 0
 
-  const fresh = (evicted || []).filter(m => (m.timestamp || m.createdAt || 0) > priorTs)
+  const all = evicted || []
+  const fresh = all.slice(priorCount)
   if (fresh.length === 0) {
     return { strategy: 'text', summaryBlock: priorText }
   }
@@ -48,12 +49,11 @@ async function ensureSummary({ chatId, agentKey, providerType, evicted, chatStor
   try {
     merged = await utilityModelCaller({ system: SUMMARY_SYSTEM, prompt })
   } catch {
-    // Keep the prior summary; do not advance uptoTs — retried next round.
+    // Keep the prior summary; do not advance uptoCount — retried next round.
     return { strategy: 'text', summaryBlock: priorText }
   }
 
-  const newUptoTs = Math.max(priorTs, _maxTs(fresh))
-  chatStore.saveRunningSummary(chatId, agentKey, { text: merged, uptoTs: newUptoTs })
+  chatStore.saveRunningSummary(chatId, agentKey, { text: merged, uptoCount: all.length })
   return { strategy: 'text', summaryBlock: merged }
 }
 
