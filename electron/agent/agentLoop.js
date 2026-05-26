@@ -37,7 +37,26 @@ const { readMemoryFile, readFileIfExists } = spb
 
 // Context-assembly pipeline (token-aware window + summary + FTS retrieval).
 const { assemble: assembleContext } = require('./core/ContextAssembler')
-const { estimateMessageTokens } = require('./core/tokenEstimate')
+const { estimateMessageTokens, estimateTokens } = require('./core/tokenEstimate')
+
+// Manual-compaction summary prompt for non-Anthropic providers (OpenAI-compat,
+// Google). Anthropic uses its native beta compaction instead. Structured to
+// preserve resume-critical state — see Claude Code / Codex compaction.
+const COMPACT_SUMMARY_SYSTEM =
+  'You are compacting a long conversation so a model can resume without losing state. ' +
+  'Produce a dense, structured summary in concise bullet points. Preserve: key decisions, ' +
+  'facts, names, numbers, file paths, identifiers, open questions, and pending work / next ' +
+  'steps. Omit pleasantries. Output ONLY the summary, no preamble.'
+
+function _renderConversationForCompact(messages) {
+  return (messages || []).map(m => {
+    const role = m.role === 'user' ? 'User' : (m.role === 'assistant' ? 'Assistant' : (m.role || 'System'))
+    const content = typeof m.content === 'string'
+      ? m.content
+      : (Array.isArray(m.content) ? m.content.filter(b => b?.type === 'text').map(b => b.text).join(' ') : '')
+    return `${role}: ${content}`
+  }).join('\n')
+}
 const { learnFromOverflow } = require('./core/BudgetResolver')
 // Safe fallbacks for narrow-scope entry points that don't supply a chat store /
 // utility caller: summary + retrieval become no-ops and evicted turns are simply
@@ -475,14 +494,35 @@ class AgentLoop {
     const client = this.anthropicClient.getClient()
     const model  = this.anthropicClient.resolveModel()
 
-    // OpenAI-compat provider: local trim only (beta compaction is Anthropic-only)
-    if (this.isOpenAI) {
-      const estimatedTokens = JSON.stringify(conversationMessages).length / 4
-      const trimmed = this.contextManager.localTrim(conversationMessages, estimatedTokens)
+    // Non-Anthropic providers (OpenAI-compat, Google): no native compaction API.
+    // Produce a real summary via the utility model. The renderer stores it as a
+    // compaction checkpoint; future sends slice from it (sliceFromLastCompaction),
+    // so the conversation genuinely shrinks — Claude Code / Codex semantics.
+    if (this.isOpenAI || this.isGoogle) {
+      let summary = ''
+      if (typeof this.config.utilityModelCaller === 'function') {
+        try {
+          summary = await this.config.utilityModelCaller({
+            system: COMPACT_SUMMARY_SYSTEM,
+            prompt: _renderConversationForCompact(messages),
+          })
+        } catch (err) {
+          logger.warn('AgentLoop: compaction summary failed', err.message)
+        }
+      } else {
+        logger.warn('AgentLoop: compaction has no utilityModelCaller — cannot summarize')
+      }
+      const assistantContent = (summary && summary.trim()) ? summary.trim() : '[Context compacted]'
       this.contextManager.compactionCount++
+      // No real API call here, so reflect the compacted size manually: after
+      // compaction the conversation collapses to ~the summary. This makes the
+      // bar/banner show the reduction.
+      this.contextManager.inputTokens = estimateTokens(assistantContent)
+      this.contextManager.cacheCreationInputTokens = 0
+      this.contextManager.cacheReadInputTokens = 0
       const metrics = this.contextManager.getMetrics()
       onChunk({ type: 'context_update', metrics })
-      return { assistantContent: '[Older messages trimmed to fit context window]', metrics }
+      return { assistantContent, metrics }
     }
 
     // Anthropic: API compaction (all models)

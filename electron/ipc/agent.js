@@ -1408,7 +1408,10 @@ ipcMain.handle('agent:compact', (event, chatId) => {
 
 ipcMain.handle('agent:compact-standalone', async (event, { chatId, messages, config, enabledAgents, enabledSkills }) => {
   logger.agent('Standalone compaction requested', { chatId, msgCount: messages?.length })
-  const loop = new AgentLoop({ ...config, agentArtifactsDir: ds.paths().AGENT_ARTIFACTS_DIR, dataPath: ds.paths().DATA_DIR })
+  const loopConfig = { ...config, agentArtifactsDir: ds.paths().AGENT_ARTIFACTS_DIR, dataPath: ds.paths().DATA_DIR }
+  // Non-Anthropic compaction summarizes via the utility model — attach it.
+  _attachContextDeps(loopConfig, config)
+  const loop = new AgentLoop(loopConfig)
   try {
     const result = await loop.compactStandalone(
       messages,
