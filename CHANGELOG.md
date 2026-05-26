@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.20](https://github.com/XiamiYoung/ClanKit/compare/v0.0.19...v0.0.20) (2026-05-26)
+
+
+### Features
+
+* **context:** token-aware history assembly (recent verbatim + summary + FTS retrieval) ([#36](https://github.com/XiamiYoung/ClanKit/issues/36)) ([b23684d](https://github.com/XiamiYoung/ClanKit/commit/b23684dc86e0fab9dd5fcfc3e4901d00b9e0e20b))
+
+
+### Bug Fixes
+
+* **context+memory:** context-assembly runtime fixes + vectra index self-heal ([#38](https://github.com/XiamiYoung/ClanKit/issues/38)) ([7459533](https://github.com/XiamiYoung/ClanKit/commit/7459533ed1fb192c96432261841cc37c8c502377))
+
 ## [0.0.19](https://github.com/XiamiYoung/ClanKit/compare/v0.0.18...v0.0.19) (2026-05-16)
 
 
