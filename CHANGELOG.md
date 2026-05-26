@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0](https://github.com/XiamiYoung/ClanKit/compare/v0.0.20...v0.1.0) (2026-05-26)
+
+
+### Features
+
+* **compact:** manual compaction for OpenAI + Google, Claude Code / Codex style ([#39](https://github.com/XiamiYoung/ClanKit/issues/39)) ([2d42cc6](https://github.com/XiamiYoung/ClanKit/commit/2d42cc6f7f83c8530b47896860db161bd1bdb1ea))
+
 ## [0.0.20](https://github.com/XiamiYoung/ClanKit/compare/v0.0.19...v0.0.20) (2026-05-26)
 
 
