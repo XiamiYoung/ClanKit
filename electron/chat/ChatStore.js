@@ -27,7 +27,7 @@ function _getDb() {
   return _Database
 }
 
-const SCHEMA_VERSION = 2
+const SCHEMA_VERSION = 3
 
 // Read-side oversize-message defense — see fix/runaway-output-cap-and-oversize-defense.
 // When an assistant message's `content` exceeds this threshold, getMessages and
@@ -126,7 +126,10 @@ CREATE TABLE IF NOT EXISTS messages (
   plan_state      TEXT,
   token_usage     TEXT,
   long_blobs      TEXT,
-  text_for_search TEXT NOT NULL DEFAULT ''
+  text_for_search TEXT NOT NULL DEFAULT '',
+  compaction          INTEGER NOT NULL DEFAULT 0,
+  compaction_agent_id TEXT,
+  hidden              INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_messages_chat_ts ON messages(chat_id, ts);
 
@@ -301,6 +304,9 @@ function rowToMessage(row) {
     planState: row.plan_state || null,
     tokenUsage: deserializeJsonField(row.token_usage, null),
     longBlobs: deserializeJsonField(row.long_blobs, null),
+    compaction: _01bool(row.compaction),
+    _compactionAgentId: row.compaction_agent_id || null,
+    hidden: _01bool(row.hidden),
   }
 }
 
@@ -329,6 +335,9 @@ function messageToRow(msg, chatId) {
       ? serializeJsonField(msg.longBlobs)
       : null,
     text_for_search: extractSearchText(msg.segments),
+    compaction: _bool01(msg.compaction),
+    compaction_agent_id: msg._compactionAgentId || null,
+    hidden: _bool01(msg.hidden),
   }
 }
 
@@ -354,6 +363,18 @@ class ChatStore {
     const cols = db.prepare("PRAGMA table_info(messages)").all().map(c => c.name)
     if (!cols.includes('long_blobs')) {
       db.exec('ALTER TABLE messages ADD COLUMN long_blobs TEXT')
+    }
+    // Manual-compaction checkpoint metadata — added so checkpoints survive an
+    // app restart (otherwise reloaded markers lose `compaction` and the slice
+    // can't truncate). See sliceFromLastCompaction.
+    if (!cols.includes('compaction')) {
+      db.exec('ALTER TABLE messages ADD COLUMN compaction INTEGER NOT NULL DEFAULT 0')
+    }
+    if (!cols.includes('compaction_agent_id')) {
+      db.exec('ALTER TABLE messages ADD COLUMN compaction_agent_id TEXT')
+    }
+    if (!cols.includes('hidden')) {
+      db.exec('ALTER TABLE messages ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0')
     }
     // Self-healing migration for chats table: add running-summary columns for
     // DBs created before context-management summarization was introduced.
@@ -627,11 +648,13 @@ class ChatStore {
       INSERT INTO messages (
         id, chat_id, role, content, segments, ts, created_at, duration_ms,
         user_agent_id, agent_id, agent_name, is_error, error_detail, error_code,
-        plan_data, plan_state, token_usage, long_blobs, text_for_search
+        plan_data, plan_state, token_usage, long_blobs, text_for_search,
+        compaction, compaction_agent_id, hidden
       ) VALUES (
         @id, @chat_id, @role, @content, @segments, @ts, @created_at, @duration_ms,
         @user_agent_id, @agent_id, @agent_name, @is_error, @error_detail, @error_code,
-        @plan_data, @plan_state, @token_usage, @long_blobs, @text_for_search
+        @plan_data, @plan_state, @token_usage, @long_blobs, @text_for_search,
+        @compaction, @compaction_agent_id, @hidden
       )
       ON CONFLICT(id) DO UPDATE SET
         role=excluded.role, content=excluded.content, segments=excluded.segments,
@@ -642,7 +665,10 @@ class ChatStore {
         plan_data=excluded.plan_data, plan_state=excluded.plan_state,
         token_usage=excluded.token_usage,
         long_blobs=excluded.long_blobs,
-        text_for_search=excluded.text_for_search
+        text_for_search=excluded.text_for_search,
+        compaction=excluded.compaction,
+        compaction_agent_id=excluded.compaction_agent_id,
+        hidden=excluded.hidden
     `).run(r)
     db.prepare('UPDATE chats SET last_message_at = ?, updated_at = ? WHERE id = ?')
       .run(r.ts, Date.now(), chatId)
@@ -659,11 +685,13 @@ class ChatStore {
       INSERT INTO messages (
         id, chat_id, role, content, segments, ts, created_at, duration_ms,
         user_agent_id, agent_id, agent_name, is_error, error_detail, error_code,
-        plan_data, plan_state, token_usage, long_blobs, text_for_search
+        plan_data, plan_state, token_usage, long_blobs, text_for_search,
+        compaction, compaction_agent_id, hidden
       ) VALUES (
         @id, @chat_id, @role, @content, @segments, @ts, @created_at, @duration_ms,
         @user_agent_id, @agent_id, @agent_name, @is_error, @error_detail, @error_code,
-        @plan_data, @plan_state, @token_usage, @long_blobs, @text_for_search
+        @plan_data, @plan_state, @token_usage, @long_blobs, @text_for_search,
+        @compaction, @compaction_agent_id, @hidden
       )
       ON CONFLICT(id) DO UPDATE SET
         role=excluded.role, content=excluded.content, segments=excluded.segments,
@@ -674,7 +702,10 @@ class ChatStore {
         plan_data=excluded.plan_data, plan_state=excluded.plan_state,
         token_usage=excluded.token_usage,
         long_blobs=excluded.long_blobs,
-        text_for_search=excluded.text_for_search
+        text_for_search=excluded.text_for_search,
+        compaction=excluded.compaction,
+        compaction_agent_id=excluded.compaction_agent_id,
+        hidden=excluded.hidden
     `)
     let maxTs = 0
     const tx = db.transaction(() => {

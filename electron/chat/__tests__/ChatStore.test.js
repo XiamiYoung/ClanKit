@@ -10,6 +10,33 @@ import {
   mergeRunningSummary,
 } from '../ChatStore.js'
 
+describe('compaction field persistence', () => {
+  it('messageToRow maps compaction / _compactionAgentId / hidden', () => {
+    const r = messageToRow({ id: 'm1', role: 'assistant', content: 'SUMMARY', compaction: true, _compactionAgentId: 'agent-1', hidden: true }, 'c1')
+    expect(r.compaction).toBe(1)
+    expect(r.compaction_agent_id).toBe('agent-1')
+    expect(r.hidden).toBe(1)
+  })
+  it('messageToRow defaults compaction fields for normal messages', () => {
+    const r = messageToRow({ id: 'm2', role: 'user', content: 'hi' }, 'c1')
+    expect(r.compaction).toBe(0)
+    expect(r.compaction_agent_id).toBeNull()
+    expect(r.hidden).toBe(0)
+  })
+  it('rowToMessage restores compaction / _compactionAgentId / hidden', () => {
+    const m = rowToMessage({ id: 'm1', role: 'assistant', content: 'SUMMARY', compaction: 1, compaction_agent_id: 'agent-1', hidden: 1 })
+    expect(m.compaction).toBe(true)
+    expect(m._compactionAgentId).toBe('agent-1')
+    expect(m.hidden).toBe(true)
+  })
+  it('rowToMessage leaves normal rows non-compaction', () => {
+    const m = rowToMessage({ id: 'm2', role: 'user', content: 'hi', compaction: 0, hidden: 0 })
+    expect(m.compaction).toBe(false)
+    expect(m._compactionAgentId).toBeNull()
+    expect(m.hidden).toBe(false)
+  })
+})
+
 describe('mergeRunningSummary', () => {
   it('sets a per-agentKey entry on an empty map', () => {
     const out = mergeRunningSummary(null, '__shared__', { text: 'hi', uptoCount: 5 })
