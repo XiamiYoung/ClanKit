@@ -9,7 +9,7 @@
 const { resolveBudget } = require('./BudgetResolver')
 const { windowHistory } = require('./HistoryWindower')
 const { ensureSummary } = require('./Summarizer')
-const { retrieve } = require('./RetrievalInjector')
+const { retrieve, normalizeContent } = require('./RetrievalInjector')
 
 function _lastUserText(messages) {
   for (let i = messages.length - 1; i >= 0; i--) {
@@ -38,12 +38,14 @@ async function assemble({
     return { messages: kept, budget, summaryStrategy: null }
   }
 
-  const keptIds = new Set(kept.map(m => m.id).filter(Boolean))
+  // Messages at this layer have no stable ids, so dedup retrieval against the
+  // verbatim window by normalized content instead.
+  const keptContents = new Set(kept.map(m => normalizeContent(m.content)))
   const query = _lastUserText(messages)
 
   const [summary, retrieval] = await Promise.all([
     ensureSummary({ chatId, agentKey, providerType, evicted, chatStore, utilityModelCaller }),
-    retrieve({ chatId, query, excludeIds: keptIds, budget: budget.retrievalReserve, chatStore }),
+    retrieve({ chatId, query, excludeContents: keptContents, budget: budget.retrievalReserve, chatStore }),
   ])
 
   const prefix = []

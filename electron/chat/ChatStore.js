@@ -186,10 +186,12 @@ function extractSearchText(segments) {
   return parts.join(' ')
 }
 
-/** Merge a per-agentKey running-summary entry into the map (immutably). */
+/** Merge a per-agentKey running-summary entry into the map (immutably).
+ *  uptoCount = number of evicted messages already folded into the summary
+ *  (count-based watermark; messages at the assembler lack stable ids/timestamps). */
 function mergeRunningSummary(prevMap, agentKey, entry) {
   const map = prevMap && typeof prevMap === 'object' ? { ...prevMap } : {}
-  map[agentKey] = { text: entry.text || '', uptoTs: entry.uptoTs || 0 }
+  map[agentKey] = { text: entry.text || '', uptoCount: entry.uptoCount || 0 }
   return map
 }
 
