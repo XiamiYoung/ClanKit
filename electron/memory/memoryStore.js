@@ -44,6 +44,22 @@ function _getEmbedding() {
   return _localEmbedding
 }
 
+/**
+ * Serial async queue. vectra's LocalIndex is NOT concurrency-safe — each
+ * endUpdate() rewrites the whole index.json, so two overlapping update cycles
+ * corrupt the file ("valid JSON + trailing garbage"). Routing every mutation
+ * through one queue guarantees they run one at a time. A rejected task does not
+ * break the chain (the next task still runs).
+ */
+function _createSerialQueue() {
+  let chain = Promise.resolve()
+  return (fn) => {
+    const run = chain.then(fn, fn)
+    chain = run.then(() => {}, () => {})
+    return run
+  }
+}
+
 // ── Schema ──────────────────────────────────────────────────────────────────
 
 const SCHEMA = `
@@ -122,6 +138,8 @@ class MemoryStore {
     this._db = null
     this._vecIndex = null
     this._vecAvailable = null  // tri-state: null=unprobed, true=ok, false=disabled
+    // Serializes all vectra index mutations — see _createSerialQueue.
+    this._vecEnqueue = _createSerialQueue()
   }
 
   // ── Lifecycle ──────────────────────────────────────────────────────────
@@ -589,20 +607,22 @@ class MemoryStore {
       return
     }
     try {
-      await idx.beginUpdate()
-      try {
-        await idx.upsertItem({
-          id,
-          vector: Array.from(vec),
-          metadata: {
-            agentId: row.agentId,
-            agentType: row.agentType,
-            section: row.section,
-          },
-        })
-      } finally {
-        await idx.endUpdate()
-      }
+      await this._vecEnqueue(async () => {
+        await idx.beginUpdate()
+        try {
+          await idx.upsertItem({
+            id,
+            vector: Array.from(vec),
+            metadata: {
+              agentId: row.agentId,
+              agentType: row.agentType,
+              section: row.section,
+            },
+          })
+        } finally {
+          await idx.endUpdate()
+        }
+      })
       const db = this._ensureDb()
       db.prepare('UPDATE memory_entries SET vec_indexed = 1 WHERE id = ?').run(id)
     } catch (err) {
@@ -614,12 +634,14 @@ class MemoryStore {
     const idx = await this._ensureVecIndex()
     if (!idx) return
     try {
-      await idx.beginUpdate()
-      try {
-        await idx.deleteItem(id)
-      } finally {
-        await idx.endUpdate()
-      }
+      await this._vecEnqueue(async () => {
+        await idx.beginUpdate()
+        try {
+          await idx.deleteItem(id)
+        } finally {
+          await idx.endUpdate()
+        }
+      })
     } catch {}
   }
 
@@ -672,4 +694,5 @@ module.exports = {
   MemoryStore,
   getInstance,
   _reset,
+  _createSerialQueue,
 }
