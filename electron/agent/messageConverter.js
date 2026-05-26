@@ -255,4 +255,29 @@ function toGeminiContents(systemPrompt, messages) {
   return contents
 }
 
-module.exports = { serializeToolResult, uiResult, sliceToLastNTurns, buildConversationMessages, toOpenAIMessages, toGeminiContents }
+/**
+ * Slice messages from the last manual-compaction checkpoint for an agent.
+ *
+ * A checkpoint is a contiguous run of `compaction:true` messages (a user marker
+ * + assistant summary, optionally a system banner) tagged for this agent — or
+ * shared (`_compactionAgentId == null`). Returns `[checkpoint block, ...everything
+ * after]` so the model sees `[summary + recent turns]` instead of the full
+ * pre-checkpoint history. Returns the input unchanged when there is no relevant
+ * checkpoint. This is what makes manual compaction actually reduce context
+ * (Claude Code / Codex semantics).
+ */
+function sliceFromLastCompaction(messages, agentId) {
+  if (!Array.isArray(messages) || messages.length === 0) return messages
+  const relevant = (m) => !!(m && m.compaction && (m._compactionAgentId == null || m._compactionAgentId === agentId))
+  let end = -1
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (relevant(messages[i])) { end = i; break }
+  }
+  if (end === -1) return messages
+  // Walk back to the first message of this contiguous checkpoint block.
+  let start = end
+  while (start > 0 && relevant(messages[start - 1])) start--
+  return messages.slice(start)
+}
+
+module.exports = { serializeToolResult, uiResult, sliceToLastNTurns, sliceFromLastCompaction, buildConversationMessages, toOpenAIMessages, toGeminiContents }
