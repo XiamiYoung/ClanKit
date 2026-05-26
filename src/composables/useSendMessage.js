@@ -417,7 +417,14 @@ export function useSendMessage({
         if (toolSegs.length > 0) {
           content += buildToolLog(toolSegs)
         }
-        return { role: m.role, content, _agentId: m.agentId || null, _userAgentId: m.userAgentId || null }
+        return {
+          role: m.role, content,
+          _agentId: m.agentId || null, _userAgentId: m.userAgentId || null,
+          // Preserve manual-compaction checkpoint metadata so the backend can
+          // slice from it (sliceFromLastCompaction). Without this the markers
+          // arrive as plain {role,content} and compaction never reduces context.
+          ...(m.compaction ? { compaction: true, _compactionAgentId: m._compactionAgentId ?? null } : {}),
+        }
       })
       .filter(m => !!m.content)
 
@@ -719,7 +726,14 @@ export function useSendMessage({
         let content = m.content || ''
         const toolSegs = (m.segments || []).filter(s => s.type === 'tool' && !s._fromLog)
         if (toolSegs.length > 0) content += buildToolLog(toolSegs)
-        return { role: m.role, content, _agentId: m.agentId || null, _userAgentId: m.userAgentId || null }
+        return {
+          role: m.role, content,
+          _agentId: m.agentId || null, _userAgentId: m.userAgentId || null,
+          // Preserve manual-compaction checkpoint metadata so the backend can
+          // slice from it (sliceFromLastCompaction). Without this the markers
+          // arrive as plain {role,content} and compaction never reduces context.
+          ...(m.compaction ? { compaction: true, _compactionAgentId: m._compactionAgentId ?? null } : {}),
+        }
       })
       .filter(m => !!m.content)
 
