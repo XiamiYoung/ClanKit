@@ -21,6 +21,7 @@ const ds = require('../lib/dataStore')
 const winRef = require('../lib/windowRef')
 const memHelpers = require('../lib/memoryHelpers')
 const { AgentLoop } = require('../agent/agentLoop')
+const { sliceFromLastCompaction } = require('../agent/messageConverter')
 const { mcpManager } = require('../agent/mcp/McpManager')
 const { MemoryExtractor } = require('../agent/core/MemoryExtractor')
 
@@ -691,7 +692,9 @@ function _buildAgentRuns(respondingIds, groupIds, baseCfg, rawMessages, targetCh
     // Per-agent conversation view: other agents' messages prefixed with [Name]:
     const otherNamesList = otherParticipants.map(p => p.name).join(', ')
     const currentUsrId   = usrAgent?.id || null
-    const agentMessages  = rawMessages
+    // Manual-compaction checkpoint: if this agent compacted, drop pre-checkpoint
+    // history and keep only [summary + recent turns] (Claude Code / Codex style).
+    const agentMessages  = sliceFromLastCompaction(rawMessages, pid)
       .filter(m => (m.role === 'user' && m.content) || (m.role === 'assistant' && !m.streaming && m.content))
       // Per-agent standalone compaction inserts hidden summary pairs tagged with
       // `_compactionAgentId`. Each agent must only see its own summary — drop pairs
