@@ -60,6 +60,13 @@ function _createSerialQueue() {
   }
 }
 
+/** True when an error indicates the vectra index.json is corrupt (unparseable). */
+function _isVecCorruptionError(err) {
+  const msg = err && err.message ? err.message : err
+  if (!msg || typeof msg !== 'string') return false
+  return /unexpected .*json|json at position|not valid json|unexpected end of json/i.test(msg)
+}
+
 // ── Schema ──────────────────────────────────────────────────────────────────
 
 const SCHEMA = `
@@ -536,6 +543,7 @@ class MemoryStore {
       hits = await idx.queryItems(Array.from(queryVec), topK * 3)
     } catch (err) {
       logger.warn('[MemoryStore] vec query failed', err.message)
+      this._maybeRecoverVec(err)
       return []
     }
 
@@ -627,6 +635,34 @@ class MemoryStore {
       db.prepare('UPDATE memory_entries SET vec_indexed = 1 WHERE id = ?').run(id)
     } catch (err) {
       logger.debug('[MemoryStore] vec upsert failed', err.message)
+      this._maybeRecoverVec(err)
+    }
+  }
+
+  /**
+   * Self-heal a corrupted vectra index. When a vec op throws a JSON-parse error
+   * the on-disk index.json is unrecoverable; wipe it, mark every row for
+   * re-embedding, recreate an empty index, and repopulate in the background
+   * from SQLite (the source of truth). Guarded against re-entrancy and only
+   * fires for genuine corruption errors.
+   */
+  async _maybeRecoverVec(err) {
+    if (!_isVecCorruptionError(err)) return
+    if (this._vecRecovering) return
+    this._vecRecovering = true
+    try {
+      logger.warn('[MemoryStore] vec index corrupted — resetting and rebuilding from SQLite')
+      await this._vecEnqueue(async () => {
+        this._vecIndex = null
+        try { fs.rmSync(this.vecDir, { recursive: true, force: true }) } catch {}
+        try { this._ensureDb().prepare('UPDATE memory_entries SET vec_indexed = 0').run() } catch {}
+      })
+      await this._ensureVecIndex()        // recreate empty index
+      this.reEmbedMissing().catch(() => {}) // repopulate in background (serialized)
+    } catch (e) {
+      logger.warn('[MemoryStore] vec recovery failed', e.message)
+    } finally {
+      this._vecRecovering = false
     }
   }
 
@@ -642,7 +678,7 @@ class MemoryStore {
           await idx.endUpdate()
         }
       })
-    } catch {}
+    } catch (err) { this._maybeRecoverVec(err) }
   }
 
   /**
@@ -695,4 +731,5 @@ module.exports = {
   getInstance,
   _reset,
   _createSerialQueue,
+  _isVecCorruptionError,
 }
