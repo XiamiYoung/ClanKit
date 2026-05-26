@@ -487,6 +487,86 @@ function _fallbackContextWindow(modelId, providerType) {
   return null
 }
 
+// ── Context-assembly runtime deps (attached to loopConfig, NOT agentCfg) ──
+// agentCfg is JSON-cloned in _buildAgentRuns, which strips functions and
+// method-bearing objects. These must be attached to the live loopConfig at
+// each dispatch site instead.
+
+// One-shot utility-model text caller for self-built summarization. Mirrors the
+// agent:enhance-prompt resolution. Returns async ({ system, prompt }) => string.
+function _buildUtilityModelCaller(config) {
+  return async ({ system, prompt }) => {
+    let um = (config.utilityModel?.provider && config.utilityModel?.model) ? config.utilityModel : null
+    if (!um) {
+      const active = (config.providers || []).filter(p => p.apiKey)
+      const fb = active.find(p => p.type === 'google' || p.baseURL) || active[0]
+      if (!fb) throw new Error('no utility model available')
+      const map = { anthropic: 'claude-haiku-4-5-20251001', openrouter: 'openai/gpt-4o-mini', openai_official: 'gpt-4o-mini', deepseek: 'deepseek-chat', google: 'gemini-2.0-flash' }
+      um = { provider: fb.type, model: fb.selectedModel || map[fb.type] || fb.type, _fallbackProviderCfg: fb }
+    }
+    const pc = um._fallbackProviderCfg || (config.providers || []).find(p => p.type === um.provider && p.apiKey)
+    if (!pc?.apiKey) throw new Error(`utility provider ${um.provider} missing apiKey`)
+    const maxTokens = Math.min(config.maxOutputTokens || 2048, 2048)
+
+    if (um.provider === 'google') {
+      const { GoogleGenAI } = require('@google/genai')
+      const gc = new GoogleGenAI({ apiKey: pc.apiKey })
+      const resp = await gc.models.generateContent({ model: um.model, contents: `${system}\n\n${prompt}` })
+      return resp.candidates?.[0]?.content?.parts?.[0]?.text || ''
+    }
+    const isOpenAI = um.provider !== 'anthropic' && um.provider !== 'openrouter'
+    if (isOpenAI) {
+      const { OpenAIClient } = require('../agent/core/OpenAIClient')
+      const oai = new OpenAIClient({
+        openaiApiKey: pc.apiKey, openaiBaseURL: pc.baseURL.replace(/\/+$/, ''), customModel: um.model,
+        _resolvedProvider: 'openai', defaultProvider: 'openai', _scenario: 'context-summary',
+        ...(um.provider !== 'openai' ? { _directAuth: true } : {}), provider: { type: um.provider },
+      })
+      const r = await oai.getClient().chat.completions.create({
+        model: um.model, ...oai.tokenLimit(maxTokens),
+        messages: [{ role: 'system', content: system }, { role: 'user', content: prompt }],
+      })
+      return r.choices?.[0]?.message?.content || ''
+    }
+    const { AnthropicClient } = require('../agent/core/AnthropicClient')
+    const client = new AnthropicClient({ apiKey: pc.apiKey, baseURL: pc.baseURL.replace(/\/+$/, ''), customModel: um.model, _scenario: 'context-summary' }).getClient()
+    const r = await client.messages.create({ model: um.model, max_tokens: maxTokens, system, messages: [{ role: 'user', content: prompt }] })
+    return r.content.filter(b => b.type === 'text').map(b => b.text).join('')
+  }
+}
+
+// Persist a learned context window into config.providers[].modelSettings[modelId].
+// Fresh read-modify-write to minimize the race window; dataStore handles
+// credential encryption transparently. Best-effort — failures are logged only.
+function _buildPersistLearnedWindow(providerType) {
+  return (modelId, ceiling) => {
+    try {
+      const cfg = ds.readJSON(ds.paths().CONFIG_FILE)
+      const entry = (cfg.providers || []).find(p => p.type === providerType)
+      if (!entry) return
+      entry.modelSettings = entry.modelSettings || {}
+      entry.modelSettings[modelId] = { ...(entry.modelSettings[modelId] || {}), contextWindow: ceiling }
+      ds.writeJSON(ds.paths().CONFIG_FILE, cfg)
+      logger.info('[context] learned window persisted', JSON.stringify({ providerType, modelId, ceiling }))
+    } catch (err) {
+      logger.warn('[context] failed to persist learned window:', err.message)
+    }
+  }
+}
+
+// Attach context-assembly deps to a finalized loopConfig (post JSON-clone).
+function _attachContextDeps(loopConfig, fullConfig) {
+  try {
+    loopConfig.chatStore = getChatStore(ds.paths().DATA_DIR)
+    loopConfig.utilityModelCaller = _buildUtilityModelCaller(fullConfig)
+    const pType = loopConfig.provider?.type || loopConfig._resolvedProvider
+      || loopConfig.defaultProvider || fullConfig.defaultProvider
+    loopConfig.persistLearnedWindow = _buildPersistLearnedWindow(pType)
+  } catch (err) {
+    logger.warn('[context] failed to attach context deps:', err.message)
+  }
+}
+
 function _buildUserAgentPrompt(usrAgent) {
   if (!usrAgent) return null
   const parts = []
@@ -801,6 +881,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
       loopConfig.DoCPath      = groupCfg.DoCPath      || ''
       loopConfig.memoryDir    = ds.paths().MEMORY_DIR
       loopConfig.chatId       = chatId
+      _attachContextDeps(loopConfig, groupCfg)
       _injectCachedModelMaxOutputTokens(loopConfig)
       const loopConfigError = _validateLoopConfig(loopConfig)
       if (loopConfigError) {
@@ -940,6 +1021,7 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
   loopConfig.DoCPath      = fullCfg.DoCPath      || ''
   loopConfig.memoryDir    = ds.paths().MEMORY_DIR
   loopConfig.chatId       = chatId
+  _attachContextDeps(loopConfig, fullCfg)
   _injectCachedModelMaxOutputTokens(loopConfig)
   const loopConfigError = _validateLoopConfig(loopConfig)
   if (loopConfigError) {
@@ -1090,6 +1172,7 @@ ipcMain.handle('agent:run-additional', async (event, {
     loopConfig.DoCPath             = groupCfg.DoCPath || ''
     loopConfig.memoryDir           = ds.paths().MEMORY_DIR
     loopConfig.chatId              = chatId
+    _attachContextDeps(loopConfig, groupCfg)
     loopConfig.mode                = meta.mode || 'chat'
     loopConfig.chatWorkingPath     = meta.chatWorkingPath || null
     loopConfig.modeTransitionPending = meta.modeTransitionPending || null
@@ -2718,6 +2801,7 @@ ipcMain.handle('agent:send-message', async (event, {
       loopConfig.DoCPath      = fullCfg.DoCPath      || ''
       loopConfig.memoryDir    = ds.paths().MEMORY_DIR
       loopConfig.chatId       = chatId
+      _attachContextDeps(loopConfig, fullCfg)
       _injectCachedModelMaxOutputTokens(loopConfig)
       const loopConfigError = _validateLoopConfig(loopConfig)
       if (loopConfigError) {

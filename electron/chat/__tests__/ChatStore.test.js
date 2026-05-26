@@ -7,7 +7,21 @@ import {
   OVERSIZE_CONTENT_THRESHOLD_BYTES,
   _buildOversizePlaceholder,
   _mapRowOrOversize,
+  mergeRunningSummary,
 } from '../ChatStore.js'
+
+describe('mergeRunningSummary', () => {
+  it('sets a per-agentKey entry on an empty map', () => {
+    const out = mergeRunningSummary(null, '__shared__', { text: 'hi', uptoTs: 5 })
+    expect(out).toEqual({ __shared__: { text: 'hi', uptoTs: 5 } })
+  })
+  it('overwrites only the given agentKey, preserving others', () => {
+    const prev = { a1: { text: 'x', uptoTs: 1 }, a2: { text: 'y', uptoTs: 2 } }
+    const out = mergeRunningSummary(prev, 'a1', { text: 'z', uptoTs: 9 })
+    expect(out.a1).toEqual({ text: 'z', uptoTs: 9 })
+    expect(out.a2).toEqual({ text: 'y', uptoTs: 2 })
+  })
+})
 
 describe('serializeJsonField / deserializeJsonField', () => {
   it('round-trips objects', () => {

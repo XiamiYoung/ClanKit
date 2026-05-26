@@ -27,7 +27,7 @@ function _getDb() {
   return _Database
 }
 
-const SCHEMA_VERSION = 1
+const SCHEMA_VERSION = 2
 
 // Read-side oversize-message defense — see fix/runaway-output-cap-and-oversize-defense.
 // When an assistant message's `content` exceeds this threshold, getMessages and
@@ -100,7 +100,9 @@ CREATE TABLE IF NOT EXISTS chats (
   productivity_mode_notice_shown  INTEGER NOT NULL DEFAULT 0,
   created_at                      INTEGER NOT NULL,
   updated_at                      INTEGER NOT NULL,
-  last_message_at                 INTEGER
+  last_message_at                 INTEGER,
+  running_summary                 TEXT,
+  running_summary_at              INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_chats_last_message_at ON chats(last_message_at DESC);
 CREATE INDEX IF NOT EXISTS idx_chats_pinned          ON chats(is_pinned, last_message_at DESC);
@@ -182,6 +184,13 @@ function extractSearchText(segments) {
     }
   }
   return parts.join(' ')
+}
+
+/** Merge a per-agentKey running-summary entry into the map (immutably). */
+function mergeRunningSummary(prevMap, agentKey, entry) {
+  const map = prevMap && typeof prevMap === 'object' ? { ...prevMap } : {}
+  map[agentKey] = { text: entry.text || '', uptoTs: entry.uptoTs || 0 }
+  return map
 }
 
 function _bool01(v) { return v ? 1 : 0 }
@@ -344,6 +353,15 @@ class ChatStore {
     if (!cols.includes('long_blobs')) {
       db.exec('ALTER TABLE messages ADD COLUMN long_blobs TEXT')
     }
+    // Self-healing migration for chats table: add running-summary columns for
+    // DBs created before context-management summarization was introduced.
+    const chatCols = db.prepare("PRAGMA table_info(chats)").all().map(c => c.name)
+    if (!chatCols.includes('running_summary')) {
+      db.exec('ALTER TABLE chats ADD COLUMN running_summary TEXT')
+    }
+    if (!chatCols.includes('running_summary_at')) {
+      db.exec('ALTER TABLE chats ADD COLUMN running_summary_at INTEGER')
+    }
     db.pragma(`user_version = ${SCHEMA_VERSION}`)
     this._db = db
     return db
@@ -410,6 +428,26 @@ class ChatStore {
     const db = this._open()
     const row = db.prepare('SELECT * FROM chats WHERE id = ?').get(chatId)
     return rowToChat(row)
+  }
+
+  /** Read the running-summary entry for an agentKey. Returns { text, uptoTs } or null. */
+  getRunningSummary(chatId, agentKey) {
+    if (!chatId || !agentKey) return null
+    const db = this._open()
+    const row = db.prepare('SELECT running_summary FROM chats WHERE id = ?').get(chatId)
+    const map = deserializeJsonField(row?.running_summary, {})
+    return map[agentKey] || null
+  }
+
+  /** Upsert the running-summary entry for an agentKey. */
+  saveRunningSummary(chatId, agentKey, entry) {
+    if (!chatId || !agentKey) return
+    const db = this._open()
+    const row = db.prepare('SELECT running_summary FROM chats WHERE id = ?').get(chatId)
+    const prev = deserializeJsonField(row?.running_summary, {})
+    const next = mergeRunningSummary(prev, agentKey, entry)
+    db.prepare('UPDATE chats SET running_summary = ?, running_summary_at = ? WHERE id = ?')
+      .run(serializeJsonField(next), Date.now(), chatId)
   }
 
   /**
@@ -707,4 +745,5 @@ module.exports = {
   OVERSIZE_CONTENT_THRESHOLD_BYTES,
   _buildOversizePlaceholder,
   _mapRowOrOversize,
+  mergeRunningSummary,
 }
