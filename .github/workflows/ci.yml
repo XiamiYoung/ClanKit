@@ -37,6 +37,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Force electron's postinstall to actually download the binary. When
+      # `actions/setup-node@v4` restores the npm cache, electron's postinstall
+      # script can be skipped (cache hit on the tarball), leaving
+      # node_modules/electron/dist/ empty. The next `require('electron')` from
+      # Node-side test files then throws "Electron failed to install
+      # correctly" — see master CI failure on 2026-05-28 affecting tests
+      # that transitively import electron/lib/dataStore.js (which does
+      # `require('electron')` at module load). `npm rebuild` with
+      # foreground-scripts re-runs the postinstall verbosely so any future
+      # breakage is loud at install time rather than mysterious at test time.
+      - name: Ensure electron binary is installed
+        run: npm rebuild electron --foreground-scripts
+
       - name: Run test suite
         run: npm test
 
