@@ -252,8 +252,13 @@ class AgentLoop {
     }
     this.contextManager  = new ContextManager(this.anthropicClient, config.modelContextWindow || null)
     this.toolRegistry    = new ToolRegistry()
-    this.subAgentManager = new SubAgentManager(this.anthropicClient, this.toolRegistry, this.isOpenAI)
+    // SubAgentManager owns no provider/model state — each dispatch builds a
+    // fresh AgentLoop from parentContext (chatId, parentLoopConfig, parentAgentPrompts).
+    this.subAgentManager = new SubAgentManager()
     this.taskManager     = new TaskManager()
+    // Stashed at the top of run() so the dispatch_subagent tool-execution
+    // sites below can build parentContext without re-deriving it.
+    this._lastAgentPrompts = null
     this.contextSnapshot = null
     this._pendingPermissions = new Map() // blockId → resolve function
 
@@ -475,7 +480,7 @@ class AgentLoop {
    * For OpenAI-compat providers: falls back to local message trimming.
    */
   async compactStandalone(messages, enabledAgents, enabledSkills, onChunk, agentPrompts) {
-    this.toolRegistry.loadForAgents(enabledAgents || [])
+    this.toolRegistry.loadForAgents(enabledAgents || [], this.config.excludedToolNames || [])
 
     this.skillPrompts = new Map()
     this.loadedSkills = new Map()  // tracks skills actually loaded by LLM via load_skill tool
@@ -574,6 +579,21 @@ class AgentLoop {
   buildSystemPrompt(enabledAgents, enabledSkills, agentContext = {}, userMemoryContent, systemMemoryContent, participantMemories, memoryContext = {}, ragContext = null) {
     return spb.buildSystemPrompt(this.config, this.mcpServers, this.httpTools, enabledAgents, enabledSkills, agentContext, userMemoryContent, systemMemoryContent, participantMemories, memoryContext, ragContext)
   }
+
+  /**
+   * Build the parentContext object passed to SubAgentManager.dispatch* on
+   * every dispatch_subagent tool execution. Centralized so the 3 call sites
+   * stay in sync (one for each loop variant: regular tool loop, etc.).
+   */
+  _buildSubagentParentContext() {
+    return {
+      chatId:             this.config.chatId || null,
+      parentAgentId:      this.config.systemAgentId || this._lastAgentPrompts?.systemAgentId || null,
+      parentLoopConfig:   this.config,
+      parentAgentPrompts: this._lastAgentPrompts || {},
+      depth:              this.config._subagentDepth ?? 0,
+    }
+  }
   /**
    * Build conversation messages, transforming the last user message's
    * attachments into Anthropic multimodal content blocks.
@@ -598,13 +618,16 @@ class AgentLoop {
    * @returns {string} Final text output
    */
   async run(messages, enabledAgents, enabledSkills, onChunk, currentAttachments, agentPrompts, mcpServers, httpTools, ragContext) {
+    // Stash agentPrompts for the dispatch_subagent tool sites — sub-agent
+    // inherits parent's persona/memory/language via parentAgentPrompts.
+    this._lastAgentPrompts = agentPrompts || null
     // Store MCP servers for system prompt access
     this.mcpServers = mcpServers || []
     // Store HTTP tools for injection
     this.httpTools = httpTools || []
 
     // Load tools for enabled agents
-    this.toolRegistry.loadForAgents(enabledAgents || [])
+    this.toolRegistry.loadForAgents(enabledAgents || [], this.config.excludedToolNames || [])
 
     // Register agent-specific tools
     if (this.config.memoryDir && agentPrompts?.systemAgentId) {
@@ -1445,9 +1468,9 @@ class AgentLoop {
                     result = { success: false, error: `Skill '${skillId}' not found. Available: ${[...this.skillPrompts.keys()].join(', ')}` }
                   }
                 } else if (toolName === 'dispatch_subagent') {
-                  result = await this.subAgentManager.dispatch(toolInput, onChunk)
+                  result = await this.subAgentManager.dispatch(toolInput, onChunk, this._buildSubagentParentContext())
                 } else if (toolName === 'dispatch_subagents') {
-                  result = await this.subAgentManager.dispatchBatch(toolInput, onChunk, this.toolRegistry)
+                  result = await this.subAgentManager.dispatchBatch(toolInput, onChunk, this.toolRegistry, this._buildSubagentParentContext())
                 } else if (toolName === 'background_task') {
                   result = await this.taskManager.execute(toolInput)
                 } else if (toolName === 'search_mcp_tools') {
@@ -2086,9 +2109,7 @@ class AgentLoop {
                       result = { success: false, error: `Skill '${skillId}' not found. Available: ${[...this.skillPrompts.keys()].join(', ')}` }
                     }
                   } else if (toolName === 'dispatch_subagent') {
-                    result = await this.subAgentManager.dispatch(toolInput, (progress) => {
-                      onChunk({ type: 'subagent_progress', ...progress })
-                    })
+                    result = await this.subAgentManager.dispatch(toolInput, onChunk, this._buildSubagentParentContext())
                     if (toolInput.todo_id != null) {
                       try {
                         const todoStatus = result.success ? 'completed' : 'blocked'
@@ -2103,7 +2124,7 @@ class AgentLoop {
                       } catch (e) { logger.error('todo auto-update failed', e.message) }
                     }
                   } else if (toolName === 'dispatch_subagents') {
-                    result = await this.subAgentManager.dispatchBatch(toolInput, onChunk, this.toolRegistry)
+                    result = await this.subAgentManager.dispatchBatch(toolInput, onChunk, this.toolRegistry, this._buildSubagentParentContext())
                   } else if (toolName === 'background_task') {
                     result = await this.taskManager.execute(toolInput)
                   } else if (toolName === 'search_mcp_tools') {
@@ -2722,9 +2743,7 @@ class AgentLoop {
                       result = { success: false, error: `Skill '${skillId}' not found. Available: ${[...this.skillPrompts.keys()].join(', ')}` }
                     }
                   } else if (toolName === 'dispatch_subagent') {
-                    result = await this.subAgentManager.dispatch(toolInput, (progress) => {
-                      onChunk({ type: 'subagent_progress', ...progress })
-                    })
+                    result = await this.subAgentManager.dispatch(toolInput, onChunk, this._buildSubagentParentContext())
                     if (toolInput.todo_id != null) {
                       try {
                         const todoStatus = result.success ? 'completed' : 'blocked'
@@ -2739,7 +2758,7 @@ class AgentLoop {
                       } catch (e) { logger.error('todo auto-update failed', e.message) }
                     }
                   } else if (toolName === 'dispatch_subagents') {
-                    result = await this.subAgentManager.dispatchBatch(toolInput, onChunk, this.toolRegistry)
+                    result = await this.subAgentManager.dispatchBatch(toolInput, onChunk, this.toolRegistry, this._buildSubagentParentContext())
                   } else if (toolName === 'background_task') {
                     result = await this.taskManager.execute(toolInput)
                   } else if (toolName === 'search_mcp_tools') {

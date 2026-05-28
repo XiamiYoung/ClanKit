@@ -128,6 +128,22 @@ export function useChunkHandler({
   }
 
   async function handleChunk(cId, chunk) {
+    // Sub-agent chunks are tagged with `subagentId` by SubAgentManager so the
+    // renderer can keep them OUT of the parent agent's msg.content. Dropping
+    // them here serves two purposes:
+    //   1. In group chat, text emitted by a sub-agent must NOT be appended to
+    //      the parent's msg.content — otherwise the collaboration loop would
+    //      scan that text for @mentions and misroute the next round.
+    //   2. Sub-agent progress is summarized by the parent's own
+    //      dispatch_subagent tool_call / tool_result pair (emitted at the
+    //      AgentLoop tool-dispatch site, NOT tagged), which is enough for v1.
+    // A future iteration can render sub-agent activity in a nested folded
+    // panel; for now, drop them silently. The full subagent text is still
+    // returned to the parent agent's tool_result for downstream reasoning.
+    if (chunk && chunk.subagentId) {
+      return
+    }
+
     if (chunk.type === 'plan_submitted') {
       const chat = chatsStore.chats.find(c => c.id === cId)
       if (chat?.messages) {

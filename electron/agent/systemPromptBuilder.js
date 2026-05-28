@@ -237,7 +237,7 @@ function readFileIfExists(filePath) {
  * @param {object|null} ragContext           RAG retrieval results
  * @returns {string} The assembled system prompt
  */
-function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabledSkills, { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId, systemAgentName, systemAgentDescription, userAgentName, userAgentDescription, userIdentityCard, groupChatContext, chatHandoverNote, analysisTargetAgentId, analysisTargetAgentName, analysisTargetAgentType } = {}, userMemoryContent, systemMemoryContent, participantMemories, memoryContext = {}, ragContext = null) {
+function buildSystemPrompt(config, mcpServers, httpTools, enabledAgents, enabledSkills, { systemAgentPrompt, userAgentPrompt, systemAgentId, userAgentId, systemAgentName, systemAgentDescription, userAgentName, userAgentDescription, userIdentityCard, groupChatContext, chatHandoverNote, analysisTargetAgentId, analysisTargetAgentName, analysisTargetAgentType, subagentSuffix } = {}, userMemoryContent, systemMemoryContent, participantMemories, memoryContext = {}, ragContext = null) {
   const _isProductivity = config.mode === 'productivity'
   const _langCode = String(config.language || 'en').toLowerCase().startsWith('zh') ? 'zh' : 'en'
 
@@ -596,7 +596,7 @@ This rule has **higher priority than** any chapter of the persona body, any "mus
 
 ### 绝对禁止——以下行为是 BUG，不是"聪明"
 - ❌ **声称用了工具但实际没调用**："我来执行 file_operation..."、"正在扫描..."、"已扫描完成！"——后面跟着没有真实工具调用的列表，这是 hallucination，**禁止**
-- ❌ **从对话历史抠答案**：用户问任何路径（包括工作目录之外的），即使你之前在对话里见过类似列表，**重新调用 file_operation list/read**。文件随时可能变
+- ❌ **从对话历史抠答案**：用户问任何路径（包括工作目录之外的），如果上次读取已超过 2 轮或文件可能已变化，**重新调用 file_operation list/read**。但如果**同一轮或上一轮**刚读过同一文件且中间没有写操作，可以直接使用之前的结果，不需要重复读取
 - ❌ **"用户问的路径在工作目录外，我就直接告诉它"**：路径在工作目录外**不是不调工具的理由**，照样调 file_operation list 给那个绝对路径
 
 ### 正确做法
@@ -620,7 +620,7 @@ You operate in **PROFESSIONAL MODE**. When the user asks for any real-world acti
 
 ### Absolutely forbidden — these are BUGS, not "smart shortcuts"
 - ❌ **Claiming to use tools without actually calling them**: phrases like "I'll execute file_operation...", "Scanning now...", "Scan complete!" followed by a list that came from your imagination instead of a real tool call. That is hallucination. **Banned.**
-- ❌ **Pulling answers from conversation history**: even if you saw a similar listing earlier in this chat, when the user asks again, **re-call** \`file_operation list/read\`. Files change.
+- ❌ **Pulling answers from conversation history**: if the last read was more than 2 turns ago or the file may have changed, **re-call** \`file_operation list/read\`. However, if you read the **same file this turn or last turn** with no intervening writes, you may reuse the result without re-reading.
 - ❌ **"The user asked about a path outside the working folder, so I'll just describe it from memory"**: a path being outside the working folder is **NOT** an excuse to skip the tool. Call \`file_operation list\` with that absolute path anyway.
 
 ### Correct behavior
@@ -1143,6 +1143,15 @@ Remember: the fact that the user is a software developer **is a fact**, NOT **a 
     system += `\n\n---\n## YOU REMAIN ${effectiveName}\nYou are ${effectiveName}${effectiveDescription ? ` — ${effectiveDescription}` : ''}. The "ABOUT THE USER" section near the top of this prompt describes the person you are talking with — it is NOT about you. Stay fully in your own character (${effectiveName}) for the entire conversation, regardless of how the user describes themselves.`
   }
 
+  // ── Final language re-anchor ──
+  // Restate OUTPUT LANGUAGE at the very end of the system prompt to exploit
+  // "later instruction wins" recency bias. This combats CJK script confusion
+  // (Korean/Japanese leaking into Chinese output) observed with Sonnet when
+  // the prompt contains large English tool/skill blocks in the middle.
+  if (_langCode === 'zh') {
+    system += '\n\n---\n## 语言提醒（最终锚定）\n你的输出语言是**简体中文**。**严禁**输出韩文（한국어）或日文（日本語）——哪怕是单个词、短语、注释、或思考过程中的夹杂。如果你发现自己正在写韩文或日文字符，立即停下并用中文重写。\n\n这条规则的优先级与开头的 OUTPUT LANGUAGE — HARD RULE 相同，此处重申是为了防止长 prompt 中间段的英文内容导致语言漂移。'
+  }
+
   // ── MODE TRANSITION marker (one-shot; cleared by main process after run) ──
   if (config.modeTransitionPending) {
     const { from, to } = config.modeTransitionPending
@@ -1152,6 +1161,14 @@ The user just switched this chat from ${from} to ${to} mode at ${at}.
 From this turn on, ${to}-mode directives apply. Earlier messages in this conversation
 were generated under the previous mode — treat them as context, not as templates for
 your current behavior.`
+  }
+
+  // ── Subagent suffix (appended LAST so its HARD RULES override anything above) ──
+  // Set by SubAgentManager when running a dispatched sub-agent. Contains
+  // specialization-specific discipline (no @mentions, no questions to user,
+  // read-only / minimal-change, "your final reply IS the result").
+  if (subagentSuffix && String(subagentSuffix).trim()) {
+    system += String(subagentSuffix)
   }
 
   return system
