@@ -47,11 +47,25 @@ jobs:
       # download.
       - name: Ensure electron binary is installed
         shell: pwsh
+        # Some GitHub runner images set ELECTRON_SKIP_BINARY_DOWNLOAD=1 in the
+        # default env (or the npm cache poisons it). Force the variable off,
+        # turn on debug so any future silent exit is loud, then verify path.txt
+        # was actually created.
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: ''
+          npm_config_electron_skip_binary_download: ''
+          DEBUG: electron*
         run: |
           $electronDir = "node_modules/electron"
+          Write-Host "--- env vars that affect install.js ---"
+          Get-ChildItem env: | Where-Object Name -match 'ELECTRON|npm_config' | ForEach-Object { Write-Host "  $($_.Name)=$($_.Value)" }
           if (Test-Path "$electronDir/dist")     { Remove-Item -Recurse -Force "$electronDir/dist" }
           if (Test-Path "$electronDir/path.txt") { Remove-Item -Force         "$electronDir/path.txt" }
+          Write-Host "--- running install.js ---"
           node "$electronDir/install.js"
+          Write-Host "--- post-install state ---"
+          Write-Host "dist/ exists: $(Test-Path "$electronDir/dist")"
+          if (Test-Path "$electronDir/dist") { Get-ChildItem "$electronDir/dist" | Select-Object -First 5 | ForEach-Object { Write-Host "  $($_.Name)" } }
           if (-not (Test-Path "$electronDir/path.txt")) {
             Write-Error "electron install.js completed but path.txt was not created"
             exit 1
