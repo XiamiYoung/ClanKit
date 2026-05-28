@@ -2,6 +2,7 @@
 'use strict'
 const { v4: uuidv4 } = require('uuid')
 const { AgentLoop } = require('../agent/agentLoop')
+const { withIsolatedAgentLoop } = require('../agent/runIsolatedAgentLoop')
 
 const ds = require('../lib/dataStore')
 const { normalizeLoopConfig } = require('../ipc/agentRuntimeUtils')
@@ -209,17 +210,10 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
       break
     }
 
-    const loop = new AgentLoop(loopConfig)
-    // Register so agent:stop IPC can find and stop us. Iron-law three-piece
-    // (#C in LESSONS.md): every AgentLoop entry point must register here +
-    // unregister in finally, otherwise stopAgent is a no-op for this path.
+    // Iron-law three-piece (#C in LESSONS.md): every AgentLoop entry point
+    // must register + unregister + honor pendingStop. `withIsolatedAgentLoop`
+    // owns the register/unregister pair so the contract can't drift.
     const loopKey = `${chatId}:${agent.id}`
-    ipcAgent.registerLoop(loopKey, loop, {
-      chatId,
-      agentId: agent.id,
-      agentName: agent.name,
-      isGroup: isGroupChat,
-    })
 
     let fullText = ''
     let flushedLen = 0
@@ -234,23 +228,32 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
       }
     }
 
+    let activeLoop = null
     try {
-      await loop.run(
-        messages,
-        [],
-        [],
-        (chunk) => {
-          if (chunk.type === 'text') fullText += chunk.text || ''
-          // Before a tool runs, send accumulated text to Teams so user sees it immediately
-          if (chunk.type === 'tool_call') flushPartial()
-          notifyRenderer('im:agent-chunk', { chatId, messageId: msgId, chunk })
-        },
-        imageAttachment ? [imageAttachment] : [],
-        agentPrompts,
-        [],
-        [],
-        null
-      )
+      await withIsolatedAgentLoop({
+        loopConfig,
+        registrationKey:  loopKey,
+        registrationMeta: { chatId, agentId: agent.id, agentName: agent.name, isGroup: isGroupChat },
+        systemAgentId:    agent.id,
+      }, async (loop) => {
+        activeLoop = loop
+        await loop.run(
+          messages,
+          [],
+          [],
+          (chunk) => {
+            if (chunk.type === 'text') fullText += chunk.text || ''
+            // Before a tool runs, send accumulated text to Teams so user sees it immediately
+            if (chunk.type === 'tool_call') flushPartial()
+            notifyRenderer('im:agent-chunk', { chatId, messageId: msgId, chunk })
+          },
+          imageAttachment ? [imageAttachment] : [],
+          agentPrompts,
+          [],
+          [],
+          null
+        )
+      })
     } catch (err) {
       const errorCode = ipcAgent.classifyError(err)
       console.error(`[im-bridge] agentLoop error (agent ${agent.name}) [${errorCode}]:`, err.message)
@@ -281,8 +284,9 @@ async function routeMessage({ chatId, userText, displayName, imageAttachment, se
       })
       continue
     } finally {
-      loop.stop?.()
-      ipcAgent.unregisterLoop(loopKey)
+      // Defensive: flush any hanging permission promises and abort the
+      // controller. Helper already unregistered the loop in activeLoops.
+      activeLoop?.stop?.()
     }
 
     // Finalize: replace streaming placeholder with final content
@@ -358,15 +362,10 @@ async function runWithBaseConfig(config, chatId, imageAttachment, sendToIM, noti
     return
   }
 
-  const loop = new AgentLoop(loopConfig)
-  // Iron-law three-piece (#C): register so agent:stop IPC can find us.
+  // Iron-law three-piece (#C in LESSONS.md): register/unregister + pendingStop.
+  // `withIsolatedAgentLoop` owns the register/unregister pair.
   const loopKey = chatId
-  ipcAgent.registerLoop(loopKey, loop, {
-    chatId,
-    agentId: null,
-    agentName: null,
-    isGroup: false,
-  })
+
   let fullText = ''
   let flushedLen = 0
 
@@ -378,12 +377,21 @@ async function runWithBaseConfig(config, chatId, imageAttachment, sendToIM, noti
     }
   }
 
+  let activeLoop = null
   try {
-    await loop.run(messages, [], [], (chunk) => {
-      if (chunk.type === 'text') fullText += chunk.text || ''
-      if (chunk.type === 'tool_call') flushPartial()
-      notifyRenderer('im:agent-chunk', { chatId, messageId: msgId, chunk })
-    }, imageAttachment ? [imageAttachment] : [], undefined, [], [], null)
+    await withIsolatedAgentLoop({
+      loopConfig,
+      registrationKey:  loopKey,
+      registrationMeta: { chatId, agentId: null, agentName: null, isGroup: false },
+      systemAgentId:    null,
+    }, async (loop) => {
+      activeLoop = loop
+      await loop.run(messages, [], [], (chunk) => {
+        if (chunk.type === 'text') fullText += chunk.text || ''
+        if (chunk.type === 'tool_call') flushPartial()
+        notifyRenderer('im:agent-chunk', { chatId, messageId: msgId, chunk })
+      }, imageAttachment ? [imageAttachment] : [], undefined, [], [], null)
+    })
   } catch (err) {
     const errorCode = ipcAgent.classifyError(err)
     console.error(`[im-bridge] agentLoop error [${errorCode}]:`, err.message)
@@ -407,8 +415,8 @@ async function runWithBaseConfig(config, chatId, imageAttachment, sendToIM, noti
     })
     return
   } finally {
-    loop.stop?.()
-    ipcAgent.unregisterLoop(loopKey)
+    // Defensive: flush hanging permission promises + abort controller.
+    activeLoop?.stop?.()
   }
 
   if (fullText) {

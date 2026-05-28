@@ -65,6 +65,7 @@ const {
   validateLoopConfig: _validateLoopConfig,
   buildHeuristicSequentialDispatch: _buildHeuristicSequentialDispatch,
 } = require('./agentRuntimeUtils')
+const { withIsolatedAgentLoop } = require('../agent/runIsolatedAgentLoop')
 
 
 // Inject API-cached max_output_tokens from provider-models.json into loopConfig
@@ -901,11 +902,8 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
         return async () => ({ agentId: run.agentId, agentName: run.agentName, success: false, error: 'Cancelled before start', text: '' })
       }
 
-      const loop = new AgentLoop(loopConfig)
-      activeLoops.set(loopKey, loop)
-      activeLoopMeta.set(loopKey, { chatId, agentId: run.agentId, agentName: run.agentName, isGroup: true })
-
       return (async () => {
+        let activeLoop = null
         try {
           // Query RAG per-agent using agent's own knowledgeConfig
           const runRagContext = await queryRagContext(run.knowledgeConfig ? { ...run.knowledgeConfig } : null, baseMessages)
@@ -930,24 +928,32 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
           // Use per-agent messages if provided (includes speaker tags for other agents).
           // Falls back to global baseMessages for backward compatibility.
           const runMessages = run.messages || baseMessages
-          const result = await loop.run(
-            runMessages,
-            run.enabledAgents ?? enabledAgents,
-            run.enabledSkills ?? enabledSkills,
-            (chunk) => {
-              if (!event.sender.isDestroyed()) {
-                event.sender.send('agent:chunk', {
-                  chatId,
-                  chunk: { ...chunk, agentId: run.agentId, agentName: run.agentName }
-                })
-              }
-            },
-            currentAttachments,
-            runAgentPrompts,
-            run.mcpServers ?? mcpServers,
-            run.httpTools ?? httpTools,
-            runRagContext
-          )
+          const result = await withIsolatedAgentLoop({
+            loopConfig,
+            registrationKey:  loopKey,
+            registrationMeta: { chatId, agentId: run.agentId, agentName: run.agentName, isGroup: true },
+            systemAgentId:    run.agentId,
+          }, async (loop) => {
+            activeLoop = loop
+            return await loop.run(
+              runMessages,
+              run.enabledAgents ?? enabledAgents,
+              run.enabledSkills ?? enabledSkills,
+              (chunk) => {
+                if (!event.sender.isDestroyed()) {
+                  event.sender.send('agent:chunk', {
+                    chatId,
+                    chunk: { ...chunk, agentId: run.agentId, agentName: run.agentName }
+                  })
+                }
+              },
+              currentAttachments,
+              runAgentPrompts,
+              run.mcpServers ?? mcpServers,
+              run.httpTools ?? httpTools,
+              runRagContext
+            )
+          })
           return { agentId: run.agentId, agentName: run.agentName, success: true, result }
         } catch (err) {
           logger.error('agent:run agent error', { chatId, agentId: run.agentId, error: err.message })
@@ -960,21 +966,22 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
               chunk: { type: 'agent_end', agentId: run.agentId, agentName: run.agentName }
             })
           }
-          if (activeLoops.has(loopKey)) {
-            lastContextSnapshots.set(loopKey, activeLoops.get(loopKey).getContextSnapshot())
+          // Snapshot capture before helper-cleared registration is gone.
+          // Helper already removed loopKey from activeLoops, so read from
+          // our local reference.
+          if (activeLoop) {
+            try { lastContextSnapshots.set(loopKey, activeLoop.getContextSnapshot()) } catch {}
+            // Persist cumulative usage
+            const _pMetrics  = activeLoop.contextManager.getMetrics()
+            const _pProvider = (run.config || config).defaultProvider || 'anthropic'
+            const _pModel    = activeLoop.anthropicClient.resolveModel()
+            accumulateUsage(chatId, {
+              inputTokens:         _pMetrics.inputTokens         || 0,
+              outputTokens:        _pMetrics.outputTokens        || 0,
+              cacheCreationTokens: _pMetrics.cacheCreationInputTokens || 0,
+              cacheReadTokens:     _pMetrics.cacheReadInputTokens     || 0,
+            }, _pProvider, _pModel).catch(() => {})
           }
-          activeLoops.delete(loopKey)
-          activeLoopMeta.delete(loopKey)
-          // Persist cumulative usage
-          const _pMetrics  = loop.contextManager.getMetrics()
-          const _pProvider = (run.config || config).defaultProvider || 'anthropic'
-          const _pModel    = loop.anthropicClient.resolveModel()
-          accumulateUsage(chatId, {
-            inputTokens:         _pMetrics.inputTokens         || 0,
-            outputTokens:        _pMetrics.outputTokens        || 0,
-            cacheCreationTokens: _pMetrics.cacheCreationInputTokens || 0,
-            cacheReadTokens:     _pMetrics.cacheReadInputTokens     || 0,
-          }, _pProvider, _pModel).catch(() => {})
         }
       })()
     })
@@ -1026,14 +1033,14 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
   loopConfig.chatId       = chatId
   _attachContextDeps(loopConfig, fullCfg)
   _injectCachedModelMaxOutputTokens(loopConfig)
+  // Note: withIsolatedAgentLoop below will normalize + validate again, but we
+  // keep this early check so caller gets a fast {success:false} return rather
+  // than a thrown error.
   const loopConfigError = _validateLoopConfig(loopConfig)
   if (loopConfigError) {
     logger.error('agent:run invalid loop config', { chatId, error: loopConfigError })
     return { success: false, error: loopConfigError }
   }
-  const loop = new AgentLoop(loopConfig)
-  activeLoops.set(chatId, loop)
-  activeLoopMeta.set(chatId, { chatId, agentId: agentPrompts?.systemAgentId || null, agentName: null, isGroup: false })
 
   logger.agent('run start', { chatId, model: loopConfig.customModel || loopConfig.anthropic?.activeModel || loopConfig.activeModel, msgCount: messages.length, agents: enabledAgents?.length || 0, skills: (enabledSkills || []).map(s => s.id) })
 
@@ -1059,27 +1066,36 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
   // groupchat wrapper at runGroupRound's onChunk for consistency.
   const _soloAgentId   = agentPrompts?.systemAgentId || null
   const _soloAgentName = null
+  let activeLoop = null
   try {
-    const result = await loop.run(
-      messages,
-      enabledAgents,
-      enabledSkills,
-      (chunk) => {
-        if (!event.sender.isDestroyed()) {
-          event.sender.send('agent:chunk', { chatId, chunk: { ...chunk, agentId: chunk.agentId || _soloAgentId, agentName: chunk.agentName || _soloAgentName } })
-        }
-      },
-      currentAttachments,
-      agentPrompts,
-      mcpServers,
-      httpTools,
-      singleAgentRagContext
-    )
+    const result = await withIsolatedAgentLoop({
+      loopConfig,
+      registrationKey:  chatId,
+      registrationMeta: { chatId, agentId: _soloAgentId, agentName: null, isGroup: false },
+      systemAgentId:    _soloAgentId,
+    }, async (loop) => {
+      activeLoop = loop
+      return await loop.run(
+        messages,
+        enabledAgents,
+        enabledSkills,
+        (chunk) => {
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('agent:chunk', { chatId, chunk: { ...chunk, agentId: chunk.agentId || _soloAgentId, agentName: chunk.agentName || _soloAgentName } })
+          }
+        },
+        currentAttachments,
+        agentPrompts,
+        mcpServers,
+        httpTools,
+        singleAgentRagContext
+      )
+    })
     logger.agent('run done', { chatId, success: result !== undefined, resultLen: typeof result === 'string' ? result.length : 0 })
     // Persist cumulative usage to chat JSON
-    const _usageMetrics = loop.contextManager.getMetrics()
+    const _usageMetrics = activeLoop.contextManager.getMetrics()
     const _provider = loopConfig.defaultProvider || loopConfig._resolvedProvider || _detectModelProviderType(loopConfig.customModel) || 'anthropic'
-    const _model    = loop.anthropicClient.resolveModel()
+    const _model    = activeLoop.anthropicClient.resolveModel()
     accumulateUsage(chatId, {
       inputTokens:         _usageMetrics.inputTokens         || 0,
       outputTokens:        _usageMetrics.outputTokens        || 0,
@@ -1100,12 +1116,11 @@ ipcMain.handle('agent:run', async (event, { chatId, messages, config, enabledAge
     logger.error('agent:run error', { chatId, error: err.message })
     return { success: false, error: err.message }
   } finally {
-    // Save snapshot before cleanup
-    if (activeLoops.has(chatId)) {
-      lastContextSnapshots.set(chatId, activeLoops.get(chatId).getContextSnapshot())
+    // Snapshot capture before activeLoops cleanup. Helper has already
+    // unregistered by this point, so read snapshot from our local reference.
+    if (activeLoop) {
+      try { lastContextSnapshots.set(chatId, activeLoop.getContextSnapshot()) } catch {}
     }
-    activeLoops.delete(chatId)
-    activeLoopMeta.delete(chatId)
   }
 })
 
@@ -1190,11 +1205,8 @@ ipcMain.handle('agent:run-additional', async (event, {
       return async () => ({ agentId: run.agentId, agentName: run.agentName, success: false, error: 'Cancelled before start', text: '' })
     }
 
-    const loop = new AgentLoop(loopConfig)
-    activeLoops.set(loopKey, loop)
-    activeLoopMeta.set(loopKey, { chatId, agentId: run.agentId, agentName: run.agentName, isGroup: true })
-
     return (async () => {
+      let activeLoop = null
       try {
         // RAG
         const runRagContext = await (async () => {
@@ -1223,12 +1235,20 @@ ipcMain.handle('agent:run-additional', async (event, {
 
         const runAgentPrompts = run.agentPrompts || {}
         const runMessages     = run.messages || baseMessages
-        const result = await loop.run(
-          runMessages, run.enabledAgents ?? [], run.enabledSkills ?? [],
-          (chunk) => { if (!event.sender.isDestroyed()) event.sender.send('agent:chunk', { chatId, chunk: { ...chunk, agentId: run.agentId, agentName: run.agentName } }) },
-          currentAttachments || [], runAgentPrompts,
-          run.mcpServers ?? [], run.httpTools ?? [], runRagContext
-        )
+        const result = await withIsolatedAgentLoop({
+          loopConfig,
+          registrationKey:  loopKey,
+          registrationMeta: { chatId, agentId: run.agentId, agentName: run.agentName, isGroup: true },
+          systemAgentId:    run.agentId,
+        }, async (loop) => {
+          activeLoop = loop
+          return await loop.run(
+            runMessages, run.enabledAgents ?? [], run.enabledSkills ?? [],
+            (chunk) => { if (!event.sender.isDestroyed()) event.sender.send('agent:chunk', { chatId, chunk: { ...chunk, agentId: run.agentId, agentName: run.agentName } }) },
+            currentAttachments || [], runAgentPrompts,
+            run.mcpServers ?? [], run.httpTools ?? [], runRagContext
+          )
+        })
         return { agentId: run.agentId, agentName: run.agentName, success: true, result }
       } catch (err) {
         logger.error('agent:run-additional agent error', { chatId, agentId: run.agentId, error: err.message })
@@ -1237,18 +1257,19 @@ ipcMain.handle('agent:run-additional', async (event, {
         if (!event.sender.isDestroyed()) {
           event.sender.send('agent:chunk', { chatId, chunk: { type: 'agent_end', agentId: run.agentId, agentName: run.agentName } })
         }
-        if (activeLoops.has(loopKey)) lastContextSnapshots.set(loopKey, activeLoops.get(loopKey).getContextSnapshot())
-        activeLoops.delete(loopKey)
-        activeLoopMeta.delete(loopKey)
-        const _pMetrics  = loop.contextManager.getMetrics()
-        const _pProvider = (run.config || groupCfg).defaultProvider || 'anthropic'
-        const _pModel    = loop.anthropicClient.resolveModel()
-        accumulateUsage(chatId, {
-          inputTokens:         _pMetrics.inputTokens || 0,
-          outputTokens:        _pMetrics.outputTokens || 0,
-          cacheCreationTokens: _pMetrics.cacheCreationInputTokens || 0,
-          cacheReadTokens:     _pMetrics.cacheReadInputTokens || 0,
-        }, _pProvider, _pModel).catch(() => {})
+        // Helper already unregistered; snapshot + usage from local reference.
+        if (activeLoop) {
+          try { lastContextSnapshots.set(loopKey, activeLoop.getContextSnapshot()) } catch {}
+          const _pMetrics  = activeLoop.contextManager.getMetrics()
+          const _pProvider = (run.config || groupCfg).defaultProvider || 'anthropic'
+          const _pModel    = activeLoop.anthropicClient.resolveModel()
+          accumulateUsage(chatId, {
+            inputTokens:         _pMetrics.inputTokens || 0,
+            outputTokens:        _pMetrics.outputTokens || 0,
+            cacheCreationTokens: _pMetrics.cacheCreationInputTokens || 0,
+            cacheReadTokens:     _pMetrics.cacheReadInputTokens || 0,
+          }, _pProvider, _pModel).catch(() => {})
+        }
       }
     })()
   })
@@ -1411,19 +1432,29 @@ ipcMain.handle('agent:compact-standalone', async (event, { chatId, messages, con
   const loopConfig = { ...config, agentArtifactsDir: ds.paths().AGENT_ARTIFACTS_DIR, dataPath: ds.paths().DATA_DIR }
   // Non-Anthropic compaction summarizes via the utility model — attach it.
   _attachContextDeps(loopConfig, config)
-  const loop = new AgentLoop(loopConfig)
+  // Registration key: synthetic prefix so this standalone-compaction loop
+  // is visible to agent:stop. Previously unregistered — Esc could not stop it.
+  const compactKey = `${chatId}:compact-standalone`
   try {
-    const result = await loop.compactStandalone(
-      messages,
-      enabledAgents,
-      enabledSkills,
-      (chunk) => {
-        if (!event.sender.isDestroyed()) {
-          event.sender.send('agent:chunk', { chatId, chunk })
+    const result = await withIsolatedAgentLoop({
+      loopConfig,
+      registrationKey:  compactKey,
+      registrationMeta: { chatId, agentId: null, agentName: null, isGroup: false, type: 'compact-standalone' },
+      systemAgentId:    null,
+    }, async (loop) => {
+      const compactResult = await loop.compactStandalone(
+        messages,
+        enabledAgents,
+        enabledSkills,
+        (chunk) => {
+          if (!event.sender.isDestroyed()) {
+            event.sender.send('agent:chunk', { chatId, chunk })
+          }
         }
-      }
-    )
-    lastContextSnapshots.set(chatId, loop.getContextSnapshot())
+      )
+      lastContextSnapshots.set(chatId, loop.getContextSnapshot())
+      return compactResult
+    })
     return { success: true, ...result }
   } catch (err) {
     logger.error('agent:compact-standalone error', err.message)
@@ -1760,8 +1791,10 @@ ipcMain.handle('agent:doc-run', async (event, {
 }) => {
   try {
     // Resolve provider/model from the selected agent's providerId/modelId,
-    // falling back to config.defaultProvider. This is the same path used by
-    // the main chat flow (see _normalizeLoopConfig in agentRuntimeUtils.js).
+    // falling back to config.defaultProvider. Note: withIsolatedAgentLoop will
+    // re-normalize and re-validate inside, but we keep this early validation
+    // so the user gets a clean error chunk before we start building the
+    // 100-line system prompt below.
     const fullCfg = ds.readJSON(ds.paths().CONFIG_FILE, {})
     const loopConfig = _normalizeLoopConfig({ ...config, agentArtifactsDir: ds.paths().AGENT_ARTIFACTS_DIR }, agentId || null)
 
@@ -1794,8 +1827,15 @@ ipcMain.handle('agent:doc-run', async (event, {
     // content). Force productivity mode so tool_choice='required' fires on the first
     // iteration and the agent never fabricates listings/file contents.
     loopConfig.mode = 'productivity'
-    const loop = new AgentLoop(loopConfig)
-    _activeDocLoops.set(requestId, loop)
+
+    // Registration key: doc-edit isn't chat-scoped (each request stands alone),
+    // so synthesize a chatId from requestId. AI Doc keeps its own separate map
+    // _activeDocLoops for the dedicated `agent:doc-stop` IPC (stop button in the
+    // edit panel) — that's set inside the helper's block. Going through the
+    // helper additionally registers globally so the universal `agent:stop`
+    // sees this loop too (it previously did not).
+    const docChatId = `doc-edit:${requestId}`
+    const docRegKey = docChatId
 
     // Build doc editing system prompt — include file path so agent/tools know what file to operate on
     const fPath = fileContext?.filePath || ''
@@ -1933,32 +1973,45 @@ If you use tools to read other files, use absolute paths. The current file's pat
       systemAgentPrompt: docSystemPrompt,
     }
 
-    // Run the full agent loop
-    await loop.run(
-      chatMessages,
-      [],  // enabledAgents (none for doc editing)
-      enabledSkills || [],
-      (chunk) => {
-        if (event.sender.isDestroyed()) return
-        // Map agent chunks to edit-chunk format
-        if (chunk.type === 'text' || chunk.type === 'text_delta') {
-          event.sender.send('agent:edit-chunk', { requestId, type: 'delta', text: chunk.text || chunk.content || '' })
-        } else if (chunk.type === 'tool_call') {
-          event.sender.send('agent:edit-chunk', { requestId, type: 'tool_call', name: chunk.name, input: chunk.input, id: chunk.id })
-        } else if (chunk.type === 'tool_result') {
-          event.sender.send('agent:edit-chunk', { requestId, type: 'tool_result', name: chunk.name, id: chunk.id, result: chunk.result })
-        } else if (chunk.type === 'permission_request') {
-          event.sender.send('agent:edit-chunk', { requestId, type: 'permission_request', blockId: chunk.blockId, toolName: chunk.toolName, command: chunk.command, toolInput: chunk.toolInput })
-        }
-      },
-      [],  // currentAttachments
-      agentPrompts,
-      mcpServers || [],
-      httpTools || [],
-      ragContext
-    )
-
-    _activeDocLoops.delete(requestId)
+    // Run the full agent loop through the Iron Law helper.
+    await withIsolatedAgentLoop({
+      loopConfig,
+      registrationKey:  docRegKey,
+      registrationMeta: { chatId: docChatId, agentId: agentId || null, agentName: null, isGroup: false, type: 'doc-edit' },
+      systemAgentId:    agentId || null,
+    }, async (loop) => {
+      // Track in the doc-edit-specific stop map. agent:doc-stop reads this map
+      // to stop the loop from the AI Doc panel button (separate UX from
+      // chat-level agent:stop, which reads activeLoops).
+      _activeDocLoops.set(requestId, loop)
+      try {
+        await loop.run(
+          chatMessages,
+          [],  // enabledAgents (none for doc editing)
+          enabledSkills || [],
+          (chunk) => {
+            if (event.sender.isDestroyed()) return
+            // Map agent chunks to edit-chunk format
+            if (chunk.type === 'text' || chunk.type === 'text_delta') {
+              event.sender.send('agent:edit-chunk', { requestId, type: 'delta', text: chunk.text || chunk.content || '' })
+            } else if (chunk.type === 'tool_call') {
+              event.sender.send('agent:edit-chunk', { requestId, type: 'tool_call', name: chunk.name, input: chunk.input, id: chunk.id })
+            } else if (chunk.type === 'tool_result') {
+              event.sender.send('agent:edit-chunk', { requestId, type: 'tool_result', name: chunk.name, id: chunk.id, result: chunk.result })
+            } else if (chunk.type === 'permission_request') {
+              event.sender.send('agent:edit-chunk', { requestId, type: 'permission_request', blockId: chunk.blockId, toolName: chunk.toolName, command: chunk.command, toolInput: chunk.toolInput })
+            }
+          },
+          [],  // currentAttachments
+          agentPrompts,
+          mcpServers || [],
+          httpTools || [],
+          ragContext
+        )
+      } finally {
+        _activeDocLoops.delete(requestId)
+      }
+    })
     if (!event.sender.isDestroyed()) {
       event.sender.send('agent:edit-chunk', { requestId, type: 'done' })
     }
@@ -2825,13 +2878,10 @@ ipcMain.handle('agent:send-message', async (event, {
         return async () => ({ agentId: run.agentId, agentName: run.agentName, success: false, error: 'Cancelled before start', text: '' })
       }
 
-      const loop = new AgentLoop(loopConfig)
-      activeLoops.set(loopKey, loop)
-      activeLoopMeta.set(loopKey, { chatId, agentId: run.agentId, agentName: run.agentName, isGroup: true })
-
       const accumulator = createChunkAccumulator()
 
       return (async () => {
+        let activeLoop = null
         try {
           const runRagContext = await (async () => {
             if (!run.knowledgeConfig) return null
@@ -2868,31 +2918,39 @@ ipcMain.handle('agent:send-message', async (event, {
             runAgentPrompts.systemAgentPrompt = (runAgentPrompts.systemAgentPrompt || '') + block
           }
 
-          const result = await loop.run(
-            runMessages,
-            run.enabledAgents ?? [],
-            run.enabledSkills ?? [],
-            (chunk) => {
-              if (!event.sender.isDestroyed()) {
-                event.sender.send('agent:chunk', { chatId, chunk: { ...chunk, agentId: run.agentId, agentName: run.agentName } })
-              }
-              if (chunk?.type === 'permission_request') {
-                notifier.notifyPermissionRequest({
-                  chatId,
-                  agentName: run.agentName,
-                  toolName:  chunk.toolName,
-                  config:    fullCfg,
-                })
-              }
-              accumulator.onChunk(chunk)
-            },
-            attachments,
-            runAgentPrompts,
-            run.mcpServers ?? [],
-            run.httpTools ?? [],
-            runRagContext
-          )
-          return { agentId: run.agentId, agentName: run.agentName, success: true, result, text: accumulator.getText(), loadedSkills: loop.getLoadedSkills() }
+          const result = await withIsolatedAgentLoop({
+            loopConfig,
+            registrationKey:  loopKey,
+            registrationMeta: { chatId, agentId: run.agentId, agentName: run.agentName, isGroup: true },
+            systemAgentId:    run.agentId,
+          }, async (loop) => {
+            activeLoop = loop
+            return await loop.run(
+              runMessages,
+              run.enabledAgents ?? [],
+              run.enabledSkills ?? [],
+              (chunk) => {
+                if (!event.sender.isDestroyed()) {
+                  event.sender.send('agent:chunk', { chatId, chunk: { ...chunk, agentId: run.agentId, agentName: run.agentName } })
+                }
+                if (chunk?.type === 'permission_request') {
+                  notifier.notifyPermissionRequest({
+                    chatId,
+                    agentName: run.agentName,
+                    toolName:  chunk.toolName,
+                    config:    fullCfg,
+                  })
+                }
+                accumulator.onChunk(chunk)
+              },
+              attachments,
+              runAgentPrompts,
+              run.mcpServers ?? [],
+              run.httpTools ?? [],
+              runRagContext
+            )
+          })
+          return { agentId: run.agentId, agentName: run.agentName, success: true, result, text: accumulator.getText(), loadedSkills: activeLoop?.getLoadedSkills() }
         } catch (err) {
           // Include last user message and any accumulated LLM response in error log
           const lastUserMsg = [...(run.messages || baseMessages)].reverse().find(m => m.role === 'user')
@@ -2912,18 +2970,19 @@ ipcMain.handle('agent:send-message', async (event, {
           if (!event.sender.isDestroyed()) {
             event.sender.send('agent:chunk', { chatId, chunk: { type: 'agent_end', agentId: run.agentId, agentName: run.agentName } })
           }
-          if (activeLoops.has(loopKey)) lastContextSnapshots.set(loopKey, activeLoops.get(loopKey).getContextSnapshot())
-          activeLoops.delete(loopKey)
-          activeLoopMeta.delete(loopKey)
-          const _pMetrics  = loop.contextManager.getMetrics()
-          const _pProvider = loopConfig.defaultProvider || loopConfig._resolvedProvider || _detectModelProviderType(loopConfig.customModel) || 'anthropic'
-          const _pModel    = loop.anthropicClient.resolveModel()
-          accumulateUsage(chatId, {
-            inputTokens:         _pMetrics.inputTokens         || 0,
-            outputTokens:        _pMetrics.outputTokens        || 0,
-            cacheCreationTokens: _pMetrics.cacheCreationInputTokens || 0,
-            cacheReadTokens:     _pMetrics.cacheReadInputTokens     || 0,
-          }, _pProvider, _pModel).catch(() => {})
+          // Helper already unregistered; snapshot + usage from local reference.
+          if (activeLoop) {
+            try { lastContextSnapshots.set(loopKey, activeLoop.getContextSnapshot()) } catch {}
+            const _pMetrics  = activeLoop.contextManager.getMetrics()
+            const _pProvider = loopConfig.defaultProvider || loopConfig._resolvedProvider || _detectModelProviderType(loopConfig.customModel) || 'anthropic'
+            const _pModel    = activeLoop.anthropicClient.resolveModel()
+            accumulateUsage(chatId, {
+              inputTokens:         _pMetrics.inputTokens         || 0,
+              outputTokens:        _pMetrics.outputTokens        || 0,
+              cacheCreationTokens: _pMetrics.cacheCreationInputTokens || 0,
+              cacheReadTokens:     _pMetrics.cacheReadInputTokens     || 0,
+            }, _pProvider, _pModel).catch(() => {})
+          }
         }
       })()
     })
