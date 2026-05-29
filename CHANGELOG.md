@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/XiamiYoung/ClanKit/compare/v0.1.0...v0.1.1) (2026-05-29)
+
+
+### Code Refactoring
+
+* **agent:** unify AgentLoop entry points via withIsolatedAgentLoop helper ([#42](https://github.com/XiamiYoung/ClanKit/issues/42)) ([4df73bc](https://github.com/XiamiYoung/ClanKit/commit/4df73bc23198ec36e04437eb35c55523c64d545b))
+
 ## [0.1.0](https://github.com/XiamiYoung/ClanKit/compare/v0.0.20...v0.1.0) (2026-05-26)
 
 
