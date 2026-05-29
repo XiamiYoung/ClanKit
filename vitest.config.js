@@ -17,10 +17,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 export default mergeConfig(
   viteConfig,
   defineConfig({
-    // Intentionally NO `test:` block — Vitest defaults (node env, no globals)
-    // match the prior behavior (vite.config.js was being used as the implicit
-    // vitest config and had no test section). Vue component tests opt into
-    // happy-dom per-file via `// @vitest-environment happy-dom`.
+    test: {
+      // Hook Module.prototype.require BEFORE every test file's top-level body
+      // so `require('electron')` is intercepted regardless of whether it goes
+      // through Vitest's transformer, Node's native CJS loader, or a
+      // test-file-level `createRequire(import.meta.url)`. The resolve.alias
+      // below alone is not enough — createRequire bypasses it.
+      setupFiles: [resolve(__dirname, 'test/setup-electron-stub.cjs')],
+    },
     resolve: {
       alias: {
         // Must come BEFORE any other 'electron' resolution. Real electron's
