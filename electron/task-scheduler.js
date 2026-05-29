@@ -24,6 +24,7 @@ try {
 }
 
 const { AgentLoop } = require('./agent/agentLoop')
+const { withIsolatedAgentLoop } = require('./agent/runIsolatedAgentLoop')
 
 const ds = require('./lib/dataStore')
 const { getInstance: getTaskStore } = require('./agent/TaskStore')
@@ -238,23 +239,35 @@ async function _runAgentStep(agent, promptText, globalCfg, agentArtifactsDir, ar
   agentCfg.chatAllowList      = []
   agentCfg.sandboxConfig      = sandboxConfig || { defaultMode: 'all_permissions', sandboxAllowList: [], dangerBlockList: [] }
 
+  // Synthesize a registration key so agent:stop IPC can find this loop.
+  // Scheduled tasks aren't chat-bound, so the "chatId" slot is a synthetic
+  // prefix unique to this run. Without registration the loop was previously
+  // unstoppable (violated AgentLoop entry-point Iron Law).
+  const taskKey = `scheduled-task:${agent.id}:${uuidv4()}`
+
   let output = ''
-  const loop = new AgentLoop({ ...agentCfg })
-  await loop.run(
-    [{ role: 'user', content: promptText }],
-    [],   // enabledAgents
-    [],   // enabledSkills
-    (chunk) => {
-      if (chunk.type === 'text' && chunk.text) {
-        output += chunk.text
-      }
-    },
-    null,
-    { systemAgentPrompt: agent.prompt || '', systemAgentId: agent.id, userAgentId: '__task_user__', groupChatContext: { agentName: agent.name, agentDescription: agent.description || '', otherParticipants: [] } },
-    [],   // mcpServers
-    [],   // httpTools
-    null  // ragContext
-  )
+  await withIsolatedAgentLoop({
+    loopConfig: { ...agentCfg },
+    registrationKey:  taskKey,
+    registrationMeta: { chatId: taskKey, agentId: agent.id, agentName: agent.name, isGroup: false, type: 'scheduled-task' },
+    systemAgentId:    agent.id,
+  }, async (loop) => {
+    await loop.run(
+      [{ role: 'user', content: promptText }],
+      [],   // enabledAgents
+      [],   // enabledSkills
+      (chunk) => {
+        if (chunk.type === 'text' && chunk.text) {
+          output += chunk.text
+        }
+      },
+      null,
+      { systemAgentPrompt: agent.prompt || '', systemAgentId: agent.id, userAgentId: '__task_user__', groupChatContext: { agentName: agent.name, agentDescription: agent.description || '', otherParticipants: [] } },
+      [],   // mcpServers
+      [],   // httpTools
+      null  // ragContext
+    )
+  })
   return output
 }
 
