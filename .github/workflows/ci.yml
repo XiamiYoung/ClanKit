@@ -35,7 +35,27 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        shell: pwsh
+        # Two unrelated levers, both required:
+        #   1. Force ELECTRON_SKIP_BINARY_DOWNLOAD='' to override any default
+        #      the runner image may set. Symptom: install.js exits with zero
+        #      output in <1s during npm ci's postinstall, dist/ stays empty,
+        #      and require('electron') from any test then throws "Electron
+        #      failed to install correctly".
+        #   2. Wipe the @electron/get cache before npm ci. The Windows runner
+        #      base image carries a pre-warmed cache that contains a 110MB
+        #      zip but its extraction has been observed to fail partially
+        #      (only locales/ ends up in dist/). Forcing a fresh download
+        #      avoids both the silent-skip path and the bad-cache path.
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: ''
+          npm_config_electron_skip_binary_download: ''
+        run: |
+          if (Test-Path "$env:LOCALAPPDATA/electron/Cache") {
+            Write-Host "Removing pre-warmed electron cache from runner image"
+            Remove-Item -Recurse -Force "$env:LOCALAPPDATA/electron/Cache"
+          }
+          npm ci
 
       # Diagnostic only — do NOT block the build. install.js's stderr is
       # swallowed by npm's postinstall context; rerun it explicitly so any
