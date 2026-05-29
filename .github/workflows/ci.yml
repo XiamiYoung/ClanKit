@@ -37,33 +37,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Diagnostic only — do NOT block the build. install.js's stderr is
-      # swallowed by npm's postinstall context; rerun it explicitly so any
-      # @electron/get download/checksum/extraction error reaches the GH log.
-      # Also dump the @electron/get cache + dist/ + path.txt to distinguish:
-      #   (a) zip never downloaded   → no cache, no dist
-      #   (b) zip downloaded but extraction failed midway → cache has zip, dist partial
-      #   (c) checksum mismatch       → @electron/get throws BadChecksumError
-      - name: Diagnose electron install state
-        if: always()
-        shell: pwsh
-        continue-on-error: true
-        run: |
-          Write-Host "=== node node_modules/electron/install.js (stderr merged) ==="
-          node node_modules/electron/install.js 2>&1
-          Write-Host "=== node_modules/electron/path.txt ==="
-          if (Test-Path "node_modules/electron/path.txt") {
-            Get-Content "node_modules/electron/path.txt"
-          } else { Write-Host "(missing)" }
-          Write-Host "=== node_modules/electron/dist (top level) ==="
-          if (Test-Path "node_modules/electron/dist") {
-            Get-ChildItem "node_modules/electron/dist" | Select-Object Name, Length
-          } else { Write-Host "(missing)" }
-          Write-Host "=== %LOCALAPPDATA%/electron/Cache ==="
-          if (Test-Path "$env:LOCALAPPDATA/electron/Cache") {
-            Get-ChildItem -Recurse "$env:LOCALAPPDATA/electron/Cache" -File | Select-Object FullName, Length
-          } else { Write-Host "(missing)" }
-
       - name: Run test suite
         run: npm test
 
