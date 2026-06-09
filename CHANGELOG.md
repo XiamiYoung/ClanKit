@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/XiamiYoung/ClanKit/compare/v0.1.1...v0.1.2) (2026-06-09)
+
+
+### Bug Fixes
+
+* **skills:** fall back to api.skillhub.cn when lightmake.site mirror is unreachable ([#44](https://github.com/XiamiYoung/ClanKit/issues/44)) ([514ab65](https://github.com/XiamiYoung/ClanKit/commit/514ab65d82dedaef6f244c8154f197773f1d70a5))
+
 ## [0.1.1](https://github.com/XiamiYoung/ClanKit/compare/v0.1.0...v0.1.1) (2026-05-29)
 
 
