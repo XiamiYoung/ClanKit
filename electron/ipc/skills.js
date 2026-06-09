@@ -316,6 +316,53 @@ function register() {
    * Fetch remote skills from a skillhub source
    * ClawHub uses Convex backend: POST https://wry-manatee-359.convex.cloud/api/query
    */
+  // Tencent skill listings are served by lightmake.site (mirror) with
+  // api.skillhub.cn (official backend) as a DNS/availability fallback —
+  // both expose identical /api/skills + /api/skills/top endpoints and schema.
+  const TENCENT_HOSTS = ['https://lightmake.site', 'https://api.skillhub.cn']
+
+  const mapTencentSkill = (s, sourceId) => ({
+    id: s.slug || s.id || s.name?.toLowerCase().replace(/\s+/g, '-'),
+    name: s.name || '',
+    description: s.description_zh || s.description || '',
+    category: s.category || 'general',
+    author: s.ownerName || s.author || 'Tencent',
+    downloadUrl: s.packageUrl || s.downloadUrl || s.homepage || '',
+    rating: s.score || 0,
+    downloads: s.downloads || 0,
+    stars: s.stars || 0,
+    installs: s.installs || 0,
+    homepage: s.homepage || '',
+    version: s.version || '',
+    sourceId,
+    installed: false
+  })
+
+  // Try each host in order; return mapped skills from the first that succeeds.
+  const fetchTencentSkills = async (pathAndQuery, sourceId) => {
+    let lastErr
+    for (const host of TENCENT_HOSTS) {
+      const url = `${host}${pathAndQuery}`
+      try {
+        const response = await fetch(url, { headers: { 'Accept': 'application/json' } })
+        if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        const data = await response.json()
+        let skills
+        if (data.data && Array.isArray(data.data.skills)) skills = data.data.skills
+        else if (Array.isArray(data.data)) skills = data.data
+        else if (Array.isArray(data.skills)) skills = data.skills
+        else if (Array.isArray(data)) skills = data
+        if (!skills) throw new Error(`Unexpected response format: ${JSON.stringify(data).substring(0, 200)}`)
+        logger.info(`[Skills] Tencent fetched ${skills.length} skills from ${url}`)
+        return skills.map(s => mapTencentSkill(s, sourceId))
+      } catch (e) {
+        lastErr = e
+        logger.warn(`[Skills] Tencent host failed (${host}): ${(e.cause && e.cause.code) || e.message} — trying next`)
+      }
+    }
+    throw lastErr || new Error('All Tencent hosts failed')
+  }
+
   ipcMain.handle('skills:fetch-remote', async (_, sourceId, options = {}) => {
     try {
       const sources = {
@@ -469,107 +516,17 @@ function register() {
           }
         },
 
-        'tencent-top': async () => {
-          try {
-            logger.info(`[Skills] Fetching Tencent Top 50 skills from lightmake.site/api/skills/top`)
-            const response = await fetch('https://lightmake.site/api/skills/top', {
-              headers: { 'Accept': 'application/json' }
-            })
-            if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-            const data = await response.json()
-            let skills = []
-            if (data.data && data.data.skills && Array.isArray(data.data.skills)) skills = data.data.skills
-            else if (data.data && Array.isArray(data.data)) skills = data.data
-            else if (data.skills && Array.isArray(data.skills)) skills = data.skills
-            else if (Array.isArray(data)) skills = data
-
-            return skills.map(s => ({
-              id: s.slug || s.id || s.name?.toLowerCase().replace(/\s+/g, '-'),
-              name: s.name || '',
-              description: s.description_zh || s.description || '',
-              category: s.category || 'general',
-              author: s.ownerName || s.author || 'Tencent',
-              downloadUrl: s.packageUrl || s.downloadUrl || s.homepage || '',
-              rating: s.score || 0,
-              downloads: s.downloads || 0,
-              stars: s.stars || 0,
-              installs: s.installs || 0,
-              homepage: s.homepage || '',
-              version: s.version || '',
-              sourceId: 'tencent-top',
-              installed: false
-            }))
-          } catch (e) {
-            logger.error(`[Skills] Tencent Top API error:`, e.message)
-            throw e
-          }
-        },
+        'tencent-top': async () => fetchTencentSkills('/api/skills/top', 'tencent-top'),
 
         tencent: async () => {
-          try {
-
-            const url = new URL('https://lightmake.site/api/skills')
-            url.searchParams.append('page', String(options.page || 1))
-            url.searchParams.append('pageSize', String(options.pageSize || 24))
-            url.searchParams.append('sortBy', options.sortBy || 'score')
-            url.searchParams.append('order', options.order || 'desc')
-            if (options.category) {
-              url.searchParams.append('category', options.category)
-            }
-            if (options.keyword && options.keyword.trim()) {
-              url.searchParams.append('keyword', options.keyword.trim())
-            }
-
-            const requestUrl = url.toString()
-            const response = await fetch(requestUrl, {
-              timeout: 10000,
-              headers: { 'Accept': 'application/json' }
-            })
-
-            if (!response.ok) {
-              throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-            }
-
-            const data = await response.json()
-
-            let skills = []
-
-            // Handle nested response: {code: 0, data: {skills: [...]}}
-            if (data.data && data.data.skills && Array.isArray(data.data.skills)) {
-              skills = data.data.skills
-            } else if (data.data && Array.isArray(data.data)) {
-              skills = data.data
-            } else if (data.skills && Array.isArray(data.skills)) {
-              skills = data.skills
-            } else if (Array.isArray(data)) {
-              skills = data
-            } else {
-              logger.warn(`[Skills] Unexpected Tencent response format:`, JSON.stringify(data).substring(0, 200))
-              return []
-            }
-
-
-            return skills.map(s => ({
-              id: s.slug || s.id || s.name?.toLowerCase().replace(/\s+/g, '-'),
-              name: s.name || '',
-              description: s.description_zh || s.description || '',
-              category: s.category || 'general',
-              author: s.ownerName || s.author || 'Tencent',
-              downloadUrl: s.packageUrl || s.downloadUrl || s.homepage || '',
-              rating: s.score || 0,
-              downloads: s.downloads || 0,
-              stars: s.stars || 0,
-              installs: s.installs || 0,
-              homepage: s.homepage || '',
-              version: s.version || '',
-              sourceId: 'tencent',
-              installed: false
-            }))
-          } catch (e) {
-            logger.error(`[Skills] Tencent API error:`, e.message)
-            logger.error(`[Skills] Stack:`, e.stack)
-            throw e
-          }
+          const params = new URLSearchParams()
+          params.set('page', String(options.page || 1))
+          params.set('pageSize', String(options.pageSize || 24))
+          params.set('sortBy', options.sortBy || 'score')
+          params.set('order', options.order || 'desc')
+          if (options.category) params.set('category', options.category)
+          if (options.keyword && options.keyword.trim()) params.set('keyword', options.keyword.trim())
+          return fetchTencentSkills(`/api/skills?${params.toString()}`, 'tencent')
         }
       }
 
