@@ -1,5 +1,49 @@
 # Changelog
 
+## [0.3.0](https://github.com/XiamiYoung/ClanKit/compare/v0.4.0...v0.3.0) (2026-06-14)
+
+
+### Features
+
+* **agent:** Anthropic prompt caching + accurate context token accounting ([#23](https://github.com/XiamiYoung/ClanKit/issues/23)) ([1fb6f1a](https://github.com/XiamiYoung/ClanKit/commit/1fb6f1adb229a92a337eb5319ac0096715ac98f6))
+* **agent:** Anthropic thinking effort tiers + family-heuristic max_tokens fallback ([#21](https://github.com/XiamiYoung/ClanKit/issues/21)) ([47fcbc8](https://github.com/XiamiYoung/ClanKit/commit/47fcbc8b821e74f9cdf1cdc8e97c5df5d71da8b5))
+* **chat:** per-agent context bars + scroll-to-bottom alert pulse ([#30](https://github.com/XiamiYoung/ClanKit/issues/30)) ([bd140df](https://github.com/XiamiYoung/ClanKit/commit/bd140dfefb6c0e863d3b3d7c337f73392075df83))
+* **compact:** manual compaction for OpenAI + Google, Claude Code / Codex style ([#39](https://github.com/XiamiYoung/ClanKit/issues/39)) ([2d42cc6](https://github.com/XiamiYoung/ClanKit/commit/2d42cc6f7f83c8530b47896860db161bd1bdb1ea))
+* context bars, focus polish, max_tokens banner, 1MB file-read cap ([#32](https://github.com/XiamiYoung/ClanKit/issues/32)) ([fcd0c74](https://github.com/XiamiYoung/ClanKit/commit/fcd0c743b53a4ee93944f124d5cbeef529037448))
+* **context:** token-aware history assembly (recent verbatim + summary + FTS retrieval) ([#36](https://github.com/XiamiYoung/ClanKit/issues/36)) ([b23684d](https://github.com/XiamiYoung/ClanKit/commit/b23684dc86e0fab9dd5fcfc3e4901d00b9e0e20b))
+* **focus:** draggable hamburger toggles + bar centers over docs header ([#28](https://github.com/XiamiYoung/ClanKit/issues/28)) ([ecd878f](https://github.com/XiamiYoung/ClanKit/commit/ecd878f9ee3e5e6c53735254b370ae8890b7cec2))
+* **updater:** manual check-for-updates button with R2/GitHub mirror race ([#8](https://github.com/XiamiYoung/ClanKit/issues/8)) ([24da1b6](https://github.com/XiamiYoung/ClanKit/commit/24da1b662679b6018af51ddc0a6260b8a2eefbd7))
+* **voice:** share chat history with voice agent + enable ClanKit action delegation ([#48](https://github.com/XiamiYoung/ClanKit/issues/48)) ([d975305](https://github.com/XiamiYoung/ClanKit/commit/d9753057fda1be982f604d983090037d5b3cbb52))
+
+
+### Bug Fixes
+
+* **chat:** render error tooltip via v-tooltip to escape overflow ancestors ([#16](https://github.com/XiamiYoung/ClanKit/issues/16)) ([f9e2b32](https://github.com/XiamiYoung/ClanKit/commit/f9e2b32a801612e4a9c89f73c3a35db71b2d32c6))
+* **chat:** runaway cap + oversize defense + focus bulbs + skill tool ergonomics ([#33](https://github.com/XiamiYoung/ClanKit/issues/33)) ([2766653](https://github.com/XiamiYoung/ClanKit/commit/2766653cf684e56ec71350b87509140a2abeaedc))
+* **ci:** dispatch ci.yml on release-please PRs to bypass anti-recursion ([#22](https://github.com/XiamiYoung/ClanKit/issues/22)) ([a354638](https://github.com/XiamiYoung/ClanKit/commit/a3546389a90c769bcd20ac6b2c2534368c9c516b))
+* **ci:** pass --repo to gh workflow run in release-please ([#12](https://github.com/XiamiYoung/ClanKit/issues/12)) ([02ab40f](https://github.com/XiamiYoung/ClanKit/commit/02ab40f16a52e1fe36c90c185033affebb1429ac))
+* **context+memory:** context-assembly runtime fixes + vectra index self-heal ([#38](https://github.com/XiamiYoung/ClanKit/issues/38)) ([7459533](https://github.com/XiamiYoung/ClanKit/commit/7459533ed1fb192c96432261841cc37c8c502377))
+* **manage-tasks:** add missing items schema to plan.allowList ([#14](https://github.com/XiamiYoung/ClanKit/issues/14)) ([58fba2f](https://github.com/XiamiYoung/ClanKit/commit/58fba2f6d84f871634146f17f84833b6b8497403))
+* **provider:** treat user-defined provider types (e.g. 'custom') as OpenAI-compatible ([#5](https://github.com/XiamiYoung/ClanKit/issues/5)) ([36a9b59](https://github.com/XiamiYoung/ClanKit/commit/36a9b5948575a06a3aea1e50dedc6a3d9f2b1388))
+* **skills:** fall back to api.skillhub.cn when lightmake.site mirror is unreachable ([#44](https://github.com/XiamiYoung/ClanKit/issues/44)) ([514ab65](https://github.com/XiamiYoung/ClanKit/commit/514ab65d82dedaef6f244c8154f197773f1d70a5))
+
+
+### Code Refactoring
+
+* **agent:** unify AgentLoop entry points via withIsolatedAgentLoop helper ([#42](https://github.com/XiamiYoung/ClanKit/issues/42)) ([4df73bc](https://github.com/XiamiYoung/ClanKit/commit/4df73bc23198ec36e04437eb35c55523c64d545b))
+
+
+### Documentation
+
+* add website link and per-language demo previews in READMEs ([8cec26a](https://github.com/XiamiYoung/ClanKit/commit/8cec26a8b19f5e383197362aff62c1c0a27df596))
+* replace demo links with play-button thumbnails per language ([2700547](https://github.com/XiamiYoung/ClanKit/commit/2700547c6e665d46e197a1b8d0c1e6dbf3ade002))
+* **zh:** add first-chat screenshot as the opening feature ([#10](https://github.com/XiamiYoung/ClanKit/issues/10)) ([f2b54f5](https://github.com/XiamiYoung/ClanKit/commit/f2b54f51752936d45debfd2231007b2f24a21a3e))
+
+
+### Miscellaneous Chores
+
+* **license:** relicense project under Apache License 2.0 ([#46](https://github.com/XiamiYoung/ClanKit/issues/46)) ([737003a](https://github.com/XiamiYoung/ClanKit/commit/737003a49e3b63113f1fcc624cb10463b6e4b902))
+
 ## [0.4.0](https://github.com/XiamiYoung/ClanKit/compare/v0.3.0...v0.4.0) (2026-06-14)
 
 
