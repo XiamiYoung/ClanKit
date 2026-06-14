@@ -262,6 +262,6 @@ For security vulnerabilities, please **do not** open a public issue — see [SEC
 
 ## License
 
-See [LICENSE](./LICENSE).
+ClanKit is open source under the [Apache License 2.0](./LICENSE).
 
-This software is free for personal and internal use. Productization, redistribution, and commercial derivative products require a separate commercial license — see section 8 of the LICENSE file.
+You are free to use, modify, and redistribute this software, including for commercial purposes, under the terms of the license. The "ClanKit" name and logo are trademarks and are not covered by the license — see Section 6 of the LICENSE file and the [NOTICE](./NOTICE) file.

@@ -97,7 +97,7 @@
 
             <section class="privacy-section">
               <h2>8. License</h2>
-              <p>ClanKit is distributed under the <strong>ClanKit Community License</strong>. Personal use, internal use within an individual or organization for their own workflows, source-code study for education, and contributions via pull requests are permitted. Productization (offering the software as a hosted service or embedded component to third parties), redistribution, and derivative commercial products are prohibited without prior written permission. The full license text is in the <code>LICENSE</code> file at the root of the source repository.</p>
+              <p>ClanKit is open source, distributed under the <strong>Apache License 2.0</strong>. You are free to use, modify, and redistribute the software, including for commercial purposes, subject to the conditions of the license (such as preserving copyright and attribution notices). The license does not grant rights to the "ClanKit" name or logo. The full license text is in the <code>LICENSE</code> file at the root of the source repository.</p>
             </section>
 
             <section class="privacy-section">
@@ -178,7 +178,7 @@
 
             <section class="privacy-section">
               <h2>8. 许可</h2>
-              <p>叮咣AI 以 <strong>ClanKit Community License</strong> 形式发布。个人使用、个人或组织在自身工作流中的内部使用、用于学习目的的源码阅读、以及通过 Pull Request 提交贡献，均被许可。未经书面授权，禁止将本软件作为托管服务、SaaS 或嵌入式组件提供给第三方（产品化），禁止再分发，禁止用于衍生商业产品。完整许可文本见源码仓库根目录的 <code>LICENSE</code> 文件。</p>
+              <p>叮咣AI 是开源软件，以 <strong>Apache License 2.0</strong> 许可证发布。在遵守许可证条件（如保留版权与署名声明）的前提下，您可以自由使用、修改和再分发本软件，包括用于商业目的。本许可证不授予 "ClanKit" 名称或徽标的使用权。完整许可文本见源码仓库根目录的 <code>LICENSE</code> 文件。</p>
             </section>
 
             <section class="privacy-section">
