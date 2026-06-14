@@ -6,15 +6,11 @@ Thanks for your interest in contributing. This document covers what you need to 
 
 ### License terms attached to contributions
 
-ClanKit is distributed under the **ClanKit Community License** (see [LICENSE](./LICENSE)) — a source-available license, **not** an OSI-approved open-source license. Please read it.
+ClanKit is distributed under the **Apache License 2.0** (see [LICENSE](./LICENSE)).
 
-By submitting a contribution (pull request, patch, or any other form), you agree that:
+Per Section 5 of the license, any contribution you intentionally submit for inclusion in the project (pull request, patch, or any other form) is licensed under the Apache License 2.0, without any additional terms or conditions. By submitting, you also represent that you are the original author of the contribution, or that you otherwise have the right to submit it under this license.
 
-1. You are the original author of the contribution, or you have the right to submit it under the project license;
-2. Your contribution will be licensed under the same ClanKit Community License as the rest of the project; and
-3. You grant the project maintainers the right to relicense your contribution if the project's license terms change in the future.
-
-This is a lightweight inbound license grant in lieu of a formal CLA. If you cannot agree to these terms, please do not submit a contribution.
+If you cannot agree to these terms, please do not submit a contribution.
 
 ### Discuss non-trivial changes first
 

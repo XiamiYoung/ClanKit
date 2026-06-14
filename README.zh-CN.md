@@ -268,6 +268,6 @@ Electron 31 · Vue 3.4（Composition API）· Pinia 2 · Vue Router 4 · Vite 5 
 
 ## 许可
 
-参见 [LICENSE](./LICENSE)。
+ClanKit 以 [Apache License 2.0](./LICENSE) 开源。
 
-本软件对个人与企业内部使用免费。产品化、再分发、商业衍生品需要单独的商业授权——详见 LICENSE 第 8 条。
+在遵守许可证条款的前提下，您可以自由使用、修改和再分发本软件，包括商业用途。"ClanKit" 名称与徽标为商标，不在许可范围内——详见 LICENSE 第 6 条及 [NOTICE](./NOTICE) 文件。
