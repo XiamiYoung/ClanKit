@@ -12,6 +12,18 @@ import { useI18n } from '../i18n/useI18n'
 
 import { ref, watch } from 'vue'
 
+// Render a chat message as plain text for the voice context. Prefer the text
+// content; fall back to joining text segments. NEVER JSON.stringify a segments
+// array — that dumps raw tool-call/tool-result JSON into the voice LLM's
+// context, which is unreadable noise for the spoken agent.
+function messageToVoiceText(m) {
+  if (typeof m.content === 'string' && m.content.trim()) return m.content
+  if (Array.isArray(m.segments)) {
+    return m.segments.filter(s => s.type === 'text').map(s => s.content || '').join('\n')
+  }
+  return typeof m.content === 'string' ? m.content : ''
+}
+
 export function useVoiceRecording({ inputText, sendMessage } = {}) {
   const voiceStore = useVoiceStore()
   const configStore = useConfigStore()
@@ -73,7 +85,7 @@ export function useVoiceRecording({ inputText, sendMessage } = {}) {
     await chatsStore.ensureMessages(chatId)
     const history = (chat.messages || []).map(m => ({
       role: m.role,
-      content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+      content: messageToVoiceText(m),
     }))
 
     // Resolve voice mode config
@@ -438,7 +450,12 @@ export function useVoiceRecording({ inputText, sendMessage } = {}) {
 
   function speakText(text) {
     if (!text) return
-    ttsIsSpeaking = true
+    // ttsIsSpeaking is intentionally NOT set here. It is set only when audio
+    // actually starts playing (see _playTTSAudio). Setting it at enqueue time
+    // made a not-yet-audible reply barge-in-able during the TTS fetch window:
+    // the user's own residual speech / room noise (status still 'listening')
+    // triggered barge-in → stopSpeaking() bumped ttsGeneration → the queued
+    // audio was then judged stale and silently dropped, so the AI never spoke.
     ttsPending++
     const gen = ttsGeneration  // capture generation at enqueue time
     // Kick off TTS fetch immediately (runs concurrently with whatever is currently playing)
@@ -533,6 +550,7 @@ export function useVoiceRecording({ inputText, sendMessage } = {}) {
         }
         activeAudioEl.onended = finish
         activeAudioEl.onerror = () => finish()
+        ttsIsSpeaking = true   // genuinely audible now — barge-in may interrupt from here on
         voiceStore.setStatus('speaking')
         activeAudioEl.play()
       })
@@ -549,6 +567,7 @@ export function useVoiceRecording({ inputText, sendMessage } = {}) {
       const finish = () => { done(); resolve() }
       utterance.onend = finish
       utterance.onerror = () => finish()
+      ttsIsSpeaking = true   // genuinely audible now — barge-in may interrupt from here on
       voiceStore.setStatus('speaking')
       window.speechSynthesis.speak(utterance)
     })
@@ -685,7 +704,7 @@ export function useVoiceRecording({ inputText, sendMessage } = {}) {
     if (updatedChat?.messages && window.electronAPI?.voice?.updateHistory) {
       const updatedHistory = updatedChat.messages.map(m => ({
         role: m.role,
-        content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+        content: messageToVoiceText(m),
       }))
       window.electronAPI.voice.updateHistory(updatedHistory)
     }

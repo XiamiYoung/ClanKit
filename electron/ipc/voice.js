@@ -285,9 +285,10 @@ function register() {
 
   ipcMain.handle('voice:update-history', async (event, history) => {
     if (activeVoiceSession) {
+      // History is read live from this array when building each turn's system
+      // message (VoiceSession._buildChatTranscript), so just replace it — no
+      // pre-summarization step needed.
       activeVoiceSession.history = history || []
-      // Regenerate the status digest so voice agent stays aware of new actions
-      await activeVoiceSession._generateChatDigest()
     }
     return { success: true }
   })
