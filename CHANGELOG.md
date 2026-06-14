@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/XiamiYoung/ClanKit/compare/v0.4.0...v0.4.1) (2026-06-14)
+
+
+### Miscellaneous Chores
+
+* **data:** refresh litellm model catalog and add AGENTS.md guide ([#50](https://github.com/XiamiYoung/ClanKit/issues/50)) ([3738654](https://github.com/XiamiYoung/ClanKit/commit/373865448fb30e74d4035e88d5c4e8aefcb0b4b8))
+
 ## [0.4.0](https://github.com/XiamiYoung/ClanKit/compare/v0.3.0...v0.4.0) (2026-06-14)
 
 
