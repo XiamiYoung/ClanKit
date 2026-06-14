@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/XiamiYoung/ClanKit/compare/v0.1.2...v0.3.0) (2026-06-14)
+
+
+### Miscellaneous Chores
+
+* **license:** relicense project under Apache License 2.0 ([#46](https://github.com/XiamiYoung/ClanKit/issues/46)) ([737003a](https://github.com/XiamiYoung/ClanKit/commit/737003a49e3b63113f1fcc624cb10463b6e4b902))
+
 ## [0.1.2](https://github.com/XiamiYoung/ClanKit/compare/v0.1.1...v0.1.2) (2026-06-09)
 
 
