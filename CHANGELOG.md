@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0](https://github.com/XiamiYoung/ClanKit/compare/v0.3.0...v0.4.0) (2026-06-14)
+
+
+### Features
+
+* **voice:** share live chat history with the voice agent and let it delegate ClanKit persona/agent/config creation via `<task>`
+
+
+### Bug Fixes
+
+* **voice:** stop silently dropping the AI reply when residual mic noise triggers a premature barge-in during the TTS fetch window
+* **voice:** read prior chat content as real text instead of a lossy, often-empty status digest
+
 ## [0.3.0](https://github.com/XiamiYoung/ClanKit/compare/v0.1.2...v0.3.0) (2026-06-14)
 
 

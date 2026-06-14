@@ -13,7 +13,6 @@ class VoiceSession {
     this.userMemoryContent = opts.userMemoryContent || ''
     this.history = opts.history || []
     this.conversationHistory = []
-    this._chatDigest = '' // LLM-generated status summary of chat history
 
     this.onStatus = opts.onStatus || (() => {})
     this.onTranscript = opts.onTranscript || (() => {})
@@ -50,10 +49,11 @@ class VoiceSession {
   start() {
     this.active = true
     this.onStatus('processing')
-    // Generate chat digest before greeting so the agent knows what happened
-    this._generateChatDigest().then(() => {
-      return this._greet()
-    }).catch(err => {
+    // Chat history is injected directly into the system message every turn (see
+    // _buildChatTranscript), so there is no pre-call summarization step — greet
+    // immediately. The greeting's system message already includes the transcript,
+    // so the agent picks up the call aware of the prior chat.
+    Promise.resolve(this._greet()).catch(err => {
       this.onError(err.message || 'Greeting failed')
       if (this.active) this.onStatus('standby')
     })
@@ -330,50 +330,32 @@ class VoiceSession {
   }
 
   /**
-   * Use a lightweight LLM call to distill the chat history into a structured
-   * status digest: what the user asked, what the agent did, what's done / pending.
-   * Called once at call start and again whenever history is updated after a task.
+   * Build a plain-text rendering of the chat history for injection into the
+   * voice system message. This is the voice agent's window into what was said
+   * in the chat — the ACTUAL content, not a lossy status summary.
+   *
+   * Reuses _cleanChatContent to strip markdown / code / emoji / chat-only
+   * annotations. Recency-capped (NOT context-window-capped): voice latency and
+   * written-style priming both scale with history length, so we keep only the
+   * most recent turns regardless of how large the model's window is. Only
+   * user/assistant turns are included — system banners (compaction, summaries)
+   * are not part of the conversation.
    */
-  async _generateChatDigest() {
-    if (!this.history || this.history.length === 0) {
-      this._chatDigest = ''
-      return
-    }
-    // Build a compact representation: role + cleaned content, capped per message
-    const compact = this.history.slice(-20).map(m => {
+  _buildChatTranscript() {
+    if (!this.history || this.history.length === 0) return ''
+    const RECENT_TURNS = 40   // bounds latency + style-priming; tiny for any modern window
+    const PER_MSG_CAP = 800   // runaway guard for giant pasted / tool blobs
+    const convo = this.history.filter(m => m.role === 'user' || m.role === 'assistant')
+    const recent = convo.slice(-RECENT_TURNS)
+    const lines = recent.map(m => {
       const role = m.role === 'assistant' ? 'Agent' : 'User'
       const raw = typeof m.content === 'string' ? m.content : JSON.stringify(m.content)
-      const cleaned = this._cleanChatContent(raw)
+      let cleaned = this._cleanChatContent(raw)
       if (!cleaned) return null
-      const capped = cleaned.length > 200 ? cleaned.slice(0, 200) + '…' : cleaned
-      return `${role}: ${capped}`
+      if (cleaned.length > PER_MSG_CAP) cleaned = cleaned.slice(0, PER_MSG_CAP) + '…'
+      return `${role}: ${cleaned}`
     }).filter(Boolean)
-
-    if (compact.length === 0) {
-      this._chatDigest = ''
-      return
-    }
-
-    try {
-      const result = await this.llmCall([
-        {
-          role: 'system',
-          content: `You are a concise summarizer. Given a chat log between a user and an AI agent, produce a SHORT status digest (max 4-5 bullet lines). Format:
-- What the user asked or requested (topic only, not content)
-- What the agent did (actions taken, tools used, files created/read — be specific)
-- Status: what is completed, what is in progress, what failed or was skipped
-Do NOT include the actual content of messages, code, or long text. Only actions and status. Write in the same language the user used.`,
-        },
-        {
-          role: 'user',
-          content: compact.join('\n'),
-        },
-      ], this.voiceConfig)
-      this._chatDigest = result?.text?.trim() || ''
-    } catch (err) {
-      logger.warn('[voice] chat digest generation failed:', err.message)
-      this._chatDigest = ''
-    }
+    return lines.join('\n')
   }
 
   _buildSystemMessage() {
@@ -427,13 +409,18 @@ This profile is a fact card, NOT a chat topic bank. Do NOT mine it for things to
       }
     }
 
-    // Chat session status — a pre-generated digest of what happened in chat.
-    // Contains only topics, actions, and status — no actual message content.
-    if (this._chatDigest) {
-      parts.push(`## CHAT SESSION STATUS
-What happened in the chat before this voice call. Use it to stay aware of progress. Do NOT read this aloud or repeat it unless the user explicitly asks about status.
+    // Prior chat transcript — the ACTUAL content of the chat conversation from
+    // before (and, after tasks, during) this voice call. This is the voice
+    // agent's window into the chat history. It is injected here as a reference
+    // block, NOT as conversational turns, so the model can answer questions
+    // about it without mimicking the long, markdown-heavy written style of the
+    // chat — voice replies stay short and spoken (governed by VOICE CALL RULES).
+    const transcript = this._buildChatTranscript()
+    if (transcript) {
+      parts.push(`## PRIOR CHAT TRANSCRIPT
+This is the conversation from the chat window, before this call. These were TYPED messages — they may be long and formatted. When the user refers to "what we talked about", "that thing from before", "the file you made", etc., answer naturally and specifically from this transcript. NEVER imitate its length or formatting: reply in 1-3 short spoken sentences.
 
-${this._chatDigest}`)
+${transcript}`)
     }
 
     // Topic guardrail (only when a user persona is attached) — placed right
@@ -467,8 +454,14 @@ Use <task> ONLY when the user explicitly asks you to perform an action that requ
 - Creating, editing, or deleting files or code
 - Running commands or scripts
 - Searching the web (NOT answering from knowledge)
+- Creating / editing / deleting ClanKit digital personas (数字人), user personas (用户画像), or agents
+- Managing ClanKit config: knowledge bases, MCP servers, tools, scheduled tasks / plans, categories
 
 If in doubt, answer directly. Do NOT use <task> for conversation, knowledge questions, stories, or creative requests.
+
+### CRITICAL — you cannot inspect or build anything yourself.
+You have NO direct access to ClanKit's agents, personas, files, database, or config. You cannot "check the structure", "look up the template", "see what exists", or "set it up" on your own — you have no tools, only your voice.
+So if you catch yourself about to say "let me check…", "I'll look up how it's structured…", "I'll create one for you…", "先查一下…", "我来建一个…" about anything in ClanKit (agents, personas, config, files, knowledge), STOP: that is an ACTION. Emit a <task> for it. Saying you will do it WITHOUT a <task> means absolutely nothing happens — you will have lied to the user. A brief spoken acknowledgment is fine, but it MUST be followed by the <task> tag in the same turn.
 
 ### Task format (only when needed):
 <task>{"instruction": "complete, self-contained description of what to do"}</task>
@@ -480,6 +473,9 @@ User: "Send that to my email" → "On it." <task>{"instruction": "Send the last 
 User: "Tell me a joke" → Answer directly with a joke. No task tag.
 User: "Tell me a story about a dragon" → Answer directly with the story. No task tag.
 User: "Search for the latest news on AI" → "Let me look that up." <task>{"instruction": "Search the web for the latest AI news"}</task>
+User: "Create a user persona named Dingdang, a 5-year-old boy who loves dinosaurs and Ultraman" → "On it." <task>{"instruction": "Create a ClanKit user persona (type=user) named Dingdang: a 5-year-old boy, energetic and playful, loves dinosaurs / Ultraman / toy cars / ice cream, childlike simple speech with a cheeky streak"}</task>
+User: "Make me a digital human that helps with travel" → "Sure, setting that up." <task>{"instruction": "Create a ClanKit digital persona (type=system) that acts as a travel assistant"}</task>
+User: "Do you know how to create a user persona?" → If they want one made, treat it as the request and delegate it. Don't just say "yes, let me check" and stall.
 User: "What did we just talk about?" → Answer directly from context.`)
 
     return {
