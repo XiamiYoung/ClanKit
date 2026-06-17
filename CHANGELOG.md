@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/XiamiYoung/ClanKit/compare/v0.4.1...v0.5.0) (2026-06-17)
+
+
+### Features
+
+* **memory:** smarter dedup with Jaccard similarity and revision tracking ([d774b25](https://github.com/XiamiYoung/ClanKit/commit/d774b2540c05f378a121a9d0957ba8c181b580b9))
+
 ## [0.4.1](https://github.com/XiamiYoung/ClanKit/compare/v0.4.0...v0.4.1) (2026-06-14)
 
 
