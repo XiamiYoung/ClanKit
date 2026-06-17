@@ -282,6 +282,7 @@
                             <div class="bv-mem-card-meta">
                               <span v-if="row.source && row.source !== 'unknown'" class="bv-mem-chip">{{ row.source }}</span>
                               <span v-if="row.confidence != null" class="bv-mem-chip">conf {{ row.confidence.toFixed(2) }}</span>
+                              <span v-if="row.revision > 0" class="bv-mem-chip bv-mem-chip-revision">rev {{ row.revision }}</span>
                               <span v-if="row.updatedAt" class="bv-mem-meta-date">{{ formatMemoryDate(row.updatedAt) }}</span>
                               <span v-if="!readOnly" class="bv-mem-card-buttons">
                                 <button class="bv-mem-card-icon" :title="t('common.edit')" @click="startEditEntry(row)">
@@ -1013,17 +1014,17 @@ const MEMORY_SECTION_ORDER = [
   'Mental Models', 'Decision Heuristics', 'Values & Anti-Patterns',
   'Relational Genealogy', 'Honest Boundaries', 'Core Tensions', 'Relationship Timeline',
   'Preferences', 'Communication', 'Technical', 'Projects', 'Personal', 'Interaction Notes',
-  'Memory Updates Log',
 ]
 const SECTION_RANK = new Map(MEMORY_SECTION_ORDER.map((s, i) => [s, i]))
 
-const memoryEntryCount = computed(() => memoryRows.value.length)
+const memoryEntryCount = computed(() => memoryRows.value.filter(r => r.section !== 'Memory Updates Log').length)
 
 // Group rows by section for card rendering. Sections appear in canonical order;
 // unknown sections sort alphabetically after.
 const memoryGroups = computed(() => {
   const bySection = new Map()
   for (const r of memoryRows.value) {
+    if (r.section === 'Memory Updates Log') continue
     if (!bySection.has(r.section)) bySection.set(r.section, [])
     bySection.get(r.section).push(r)
   }
@@ -1992,6 +1993,9 @@ function saveAll() {
   background: #232323; color: #9CA3AF;
   padding: 0.0625rem 0.4375rem; border-radius: 999px;
   font-size: 0.625rem; font-weight: 500;
+}
+.bv-mem-chip-revision {
+  background: #1a2332; color: #60A5FA;
 }
 .bv-mem-meta-date {
   font-family: 'JetBrains Mono', monospace; font-size: 0.625rem; color: #6B7280;
