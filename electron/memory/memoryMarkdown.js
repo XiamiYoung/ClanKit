@@ -43,7 +43,6 @@ const SECTIONS = [
   'Projects',
   'Personal',
   'Interaction Notes',
-  'Memory Updates Log',
 ]
 
 const SECTION_ORDER = new Map(SECTIONS.map((s, i) => [s, i]))

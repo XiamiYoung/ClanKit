@@ -32,8 +32,6 @@ const SAMPLE_MD = `# Memory: Alice
 
 ## Mental Models
 
-## Memory Updates Log
-- [2026-04-27] add: Likes concise replies
 `
 
 const PERSONA_MD = `# Memory: Bob
@@ -67,7 +65,7 @@ describe('parseMarkdownToRows', () => {
     expect(sections.has('Preferences')).toBe(true)
     expect(sections.has('Communication')).toBe(true)
     expect(sections.has('Technical')).toBe(true)
-    expect(sections.has('Memory Updates Log')).toBe(true)
+    expect(sections.has('Memory Updates Log')).toBe(false)
     // Mental Models is empty in the fixture — should produce zero rows for it
     expect(sections.has('Mental Models')).toBe(false)
   })
@@ -163,16 +161,16 @@ describe('rowsToMarkdown', () => {
 
   it('emits sections in canonical SECTIONS order regardless of row insertion order', () => {
     const rows = [
-      { section: 'Memory Updates Log', content: 'log', agentId: 'a', agentType: 'system' },
+      { section: 'Interaction Notes',    content: 'note', agentId: 'a', agentType: 'system' },
       { section: 'Preferences',         content: 'pref', agentId: 'a', agentType: 'system' },
       { section: 'Mental Models',       content: 'model', agentId: 'a', agentType: 'system' },
     ]
     const md = rowsToMarkdown(rows, { agentName: 'A' })
     const idxMM   = md.indexOf('## Mental Models')
     const idxPref = md.indexOf('## Preferences')
-    const idxLog  = md.indexOf('## Memory Updates Log')
+    const idxNote = md.indexOf('## Interaction Notes')
     expect(idxMM).toBeLessThan(idxPref)
-    expect(idxPref).toBeLessThan(idxLog)
+    expect(idxPref).toBeLessThan(idxNote)
   })
 
   it('emits unknown sections after all known sections, alphabetically', () => {
@@ -328,6 +326,6 @@ describe('SECTIONS constant', () => {
     expect(SECTIONS[0]).toBe('Identity')
     expect(SECTIONS).toContain('Mental Models')
     expect(SECTIONS).toContain('Preferences')
-    expect(SECTIONS[SECTIONS.length - 1]).toBe('Memory Updates Log')
+    expect(SECTIONS[SECTIONS.length - 1]).toBe('Interaction Notes')
   })
 })

@@ -90,3 +90,6 @@ __pycache__/
 
 # jsc
 *.jsc
+
+.understand-anything/
+.understandignore

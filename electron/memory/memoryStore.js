@@ -80,7 +80,8 @@ CREATE TABLE IF NOT EXISTS memory_entries (
   confidence  REAL,
   created_at  INTEGER NOT NULL,
   updated_at  INTEGER NOT NULL,
-  vec_indexed INTEGER NOT NULL DEFAULT 0
+  vec_indexed INTEGER NOT NULL DEFAULT 0,
+  revision    INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_memory_agent
@@ -131,6 +132,7 @@ let _instance = null
  * @property {number|null} confidence
  * @property {number} createdAt
  * @property {number} updatedAt
+ * @property {number} revision
  */
 
 class MemoryStore {
@@ -158,6 +160,9 @@ class MemoryStore {
     this._db = new Database(this.dbPath)
     this._db.pragma('journal_mode = WAL')
     this._db.exec(SCHEMA)
+    try {
+      this._db.exec('ALTER TABLE memory_entries ADD COLUMN revision INTEGER NOT NULL DEFAULT 0')
+    } catch (_) { /* column already exists */ }
     return this._db
   }
 
@@ -243,7 +248,8 @@ class MemoryStore {
     const db = this._ensureDb()
     const rows = db.prepare(`
       SELECT id, agent_id AS agentId, agent_type AS agentType, section, content,
-             source, confidence, created_at AS createdAt, updated_at AS updatedAt
+             source, confidence, created_at AS createdAt, updated_at AS updatedAt,
+             revision
       FROM memory_entries
       WHERE agent_id = ? AND agent_type = ?
       ORDER BY section ASC, created_at ASC
@@ -258,7 +264,8 @@ class MemoryStore {
     const db = this._ensureDb()
     return db.prepare(`
       SELECT id, agent_id AS agentId, agent_type AS agentType, section, content,
-             source, confidence, created_at AS createdAt, updated_at AS updatedAt
+             source, confidence, created_at AS createdAt, updated_at AS updatedAt,
+             revision
       FROM memory_entries WHERE id = ?
     `).get(id) || null
   }
@@ -273,8 +280,8 @@ class MemoryStore {
     const now = Date.now()
     db.prepare(`
       INSERT INTO memory_entries
-        (id, agent_id, agent_type, section, content, source, confidence, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (id, agent_id, agent_type, section, content, source, confidence, created_at, updated_at, revision)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       row.agentId,
@@ -285,6 +292,7 @@ class MemoryStore {
       row.confidence == null ? null : row.confidence,
       row.createdAt || now,
       row.updatedAt || now,
+      row.revision || 0,
     )
     this.upsertMeta(row.agentId, row.agentType, null)
     this._scheduleEmbedding(id, row.content)
@@ -304,11 +312,12 @@ class MemoryStore {
     const newContent = patch.content !== undefined ? patch.content : existing.content
     const newSection = patch.section !== undefined ? patch.section : existing.section
     const newConfidence = patch.confidence !== undefined ? patch.confidence : existing.confidence
+    const newRevision = patch.bumpRevision ? (existing.revision || 0) + 1 : (existing.revision || 0)
     db.prepare(`
       UPDATE memory_entries
-      SET content = ?, section = ?, confidence = ?, updated_at = ?, vec_indexed = 0
+      SET content = ?, section = ?, confidence = ?, updated_at = ?, vec_indexed = 0, revision = ?
       WHERE id = ?
-    `).run(newContent, newSection, newConfidence, now, id)
+    `).run(newContent, newSection, newConfidence, now, newRevision, id)
     this.upsertMeta(existing.agentId, existing.agentType, null)
     if (patch.content !== undefined) this._scheduleEmbedding(id, newContent)
     return this.getRow(id)
@@ -417,8 +426,8 @@ class MemoryStore {
 
       const ins = db.prepare(`
         INSERT INTO memory_entries
-          (id, agent_id, agent_type, section, content, source, confidence, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          (id, agent_id, agent_type, section, content, source, confidence, created_at, updated_at, revision)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
       for (const r of inserts) {
         ins.run(
@@ -431,6 +440,7 @@ class MemoryStore {
           r.confidence == null ? null : r.confidence,
           r.createdAt || now,
           r.updatedAt || now,
+          r.revision || 0,
         )
       }
     })
