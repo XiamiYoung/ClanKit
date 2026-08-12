@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/XiamiYoung/ClanKit/compare/v0.5.0...v0.5.1) (2026-08-12)
+
+
+### Miscellaneous Chores
+
+* **data:** refresh litellm model catalog ([#54](https://github.com/XiamiYoung/ClanKit/issues/54)) ([c1aa0f8](https://github.com/XiamiYoung/ClanKit/commit/c1aa0f8c488c59b6ada4bfdd4d98cf4f3d34403b))
+
 ## [0.5.0](https://github.com/XiamiYoung/ClanKit/compare/v0.4.1...v0.5.0) (2026-06-17)
 
 
