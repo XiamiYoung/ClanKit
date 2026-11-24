@@ -16,6 +16,7 @@ Every wiki page has exactly one type:
 - \`entity\` - a page about a person, organization, product, or tool that appears in one or more sources.
 - \`concept\` - a page explaining an idea, term, method, or topic that spans sources.
 - \`comparison\` - a page comparing two or more entities or concepts side by side.
+- \`other\` - anything that fits none of the types above.
 
 ## Page format
 
@@ -23,17 +24,19 @@ Each page is a Markdown file that starts with frontmatter:
 
 \`\`\`
 ---
-type: summary | entity | concept | comparison
+type: summary | entity | concept | comparison | other
 title: Page Title
-sources: [source-file-name.pdf, other-source.md]
+sources: [kb_source/papers/attention.pdf, kb_source/notes/other-source.md]
 updated: YYYY-MM-DD
 ---
 \`\`\`
 
-- \`sources\` lists every source file the page draws on.
-- \`updated\` is the date of the last change.
+- \`type\` must be one of: summary, entity, concept, comparison, other.
+- \`title\` is required, must not be empty, and must equal the page file name without \`.md\` so that \`[[Title]]\` links resolve.
+- \`sources\` is required: a non-empty list of source paths relative to the documents root, each starting with \`kb_source/\`.
+- \`updated\` is the date of the last change, formatted YYYY-MM-DD.
 - Link to other wiki pages with \`[[Page Name]]\`.
-- Cite a source file with \`[[source-file-name.ext]]\` (include the extension).
+- Cite a source file in a page body with its full path, for example \`[[kb_source/papers/attention.pdf]]\` (include the folder and extension).
 
 ## File names
 
@@ -59,6 +62,8 @@ updated: YYYY-MM-DD
 
 ## Rules
 
+- \`wiki/log.md\` and \`wiki/SCHEMA.md\` are owned by the app and the user. Never write them; the app appends to the log itself.
+- Every page you write or revise must be listed in \`index.md\`.
 - Do not invent anything that the source does not say.
 - If new information conflicts with an existing page, keep both and note the conflict (with its sources) inside the page. Never silently overwrite.
 - Do not edit or delete the user's source files.
@@ -142,8 +147,9 @@ async function ensureIndexCoverage(root, pages) {
   }
   if (!added.length) return { added }
 
-  const block = lines.join('\n')
-  const heading = new RegExp(`^${UNCATEGORIZED}[ \\t]*$`, 'm').exec(content)
+  const eol = content.includes('\r\n') ? '\r\n' : '\n'
+  const block = lines.join(eol)
+  const heading = new RegExp(`^${UNCATEGORIZED}[ \\t]*\\r?$`, 'im').exec(content)
   let next
   if (heading) {
     const afterHeading = heading.index + heading[0].length
@@ -151,9 +157,9 @@ async function ensureIndexCoverage(root, pages) {
     const end = nextSection ? afterHeading + nextSection.index : content.length
     const head = content.slice(0, end).replace(/\s+$/, '')
     const tail = content.slice(end)
-    next = `${head}\n${block}\n${tail ? `\n${tail}` : ''}`
+    next = `${head}${eol}${block}${eol}${tail ? `${eol}${tail}` : ''}`
   } else {
-    next = `${content.replace(/\s+$/, '')}\n\n${UNCATEGORIZED}\n\n${block}\n`
+    next = `${content.replace(/\s+$/, '')}${eol}${eol}${UNCATEGORIZED}${eol}${eol}${block}${eol}`
   }
   await fs.promises.writeFile(indexPath, next, 'utf8')
   return { added }

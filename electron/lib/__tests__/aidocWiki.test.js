@@ -25,6 +25,19 @@ describe('DEFAULT_SCHEMA_MD', () => {
       expect(DEFAULT_SCHEMA_MD).toContain(word)
     }
   })
+
+  it('shows kb_source paths in the frontmatter example and names all five types', () => {
+    expect(DEFAULT_SCHEMA_MD).toMatch(/sources: \[kb_source\//)
+    expect(DEFAULT_SCHEMA_MD).toContain('type: summary | entity | concept | comparison | other')
+    expect(DEFAULT_SCHEMA_MD).toContain('`other`')
+  })
+
+  it('states ownership, title and index rules', () => {
+    expect(DEFAULT_SCHEMA_MD).toContain('`wiki/log.md` and `wiki/SCHEMA.md` are owned by the app and the user')
+    expect(DEFAULT_SCHEMA_MD).toContain('Never write them')
+    expect(DEFAULT_SCHEMA_MD).toContain('must equal the page file name without `.md`')
+    expect(DEFAULT_SCHEMA_MD).toContain('Every page you write or revise must be listed in `index.md`')
+  })
 })
 
 describe('ensureWikiScaffold', () => {
@@ -136,5 +149,26 @@ describe('ensureIndexCoverage', () => {
     expect(index.indexOf('[[New]]')).toBeGreaterThan(index.indexOf('[[Old]]'))
     expect(index.indexOf('[[New]]')).toBeLessThan(index.indexOf('## Concepts'))
     expect(index.match(/## Uncategorized/g)).toHaveLength(1)
+  })
+
+  it.each(['## Uncategorized', '## uncategorized'])('handles CRLF index files with heading %s', async heading => {
+    fs.mkdirSync(wikiFile(''), { recursive: true })
+    fs.writeFileSync(wikiFile('index.md'), `# Index\r\n\r\n${heading}\r\n\r\n- [[Old]] - o\r\n\r\n## Concepts\r\n\r\n- [[C1]] - c\r\n`)
+    await ensureIndexCoverage(root, [{ rel: 'New.md', title: 'New' }])
+    await ensureIndexCoverage(root, [{ rel: 'New.md', title: 'New' }])
+    const index = read('index.md')
+    expect(index.match(/## uncategorized/gi)).toHaveLength(1)
+    expect(index).toContain('\r\n- [[New]] — New\r\n')
+    expect(index.replace(/\r\n/g, '')).not.toMatch(/[\r\n]/)
+    expect(index.indexOf('[[New]]')).toBeLessThan(index.indexOf('## Concepts'))
+  })
+
+  it('uses CRLF when appending a new Uncategorized section to a CRLF file', async () => {
+    fs.mkdirSync(wikiFile(''), { recursive: true })
+    fs.writeFileSync(wikiFile('index.md'), '# Index\r\n\r\n- [[A]] - a\r\n')
+    await ensureIndexCoverage(root, [{ rel: 'B.md', title: 'B' }])
+    const index = read('index.md')
+    expect(index.replace(/\r\n/g, '')).not.toMatch(/[\r\n]/)
+    expect(index).toContain('## Uncategorized\r\n\r\n- [[B]]')
   })
 })
