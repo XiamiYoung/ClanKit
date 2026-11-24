@@ -1193,6 +1193,7 @@ ipcMain.handle('agent:run-additional', async (event, {
     _attachContextDeps(loopConfig, groupCfg)
     loopConfig.mode                = meta.mode || 'chat'
     loopConfig.chatWorkingPath     = meta.chatWorkingPath || null
+    loopConfig.aiDocEnabled          = meta.aiDocEnabled !== false
     loopConfig.modeTransitionPending = meta.modeTransitionPending || null
     _injectCachedModelMaxOutputTokens(loopConfig)
 
@@ -2853,6 +2854,7 @@ ipcMain.handle('agent:send-message', async (event, {
       loopConfig.smtpConfig = fullCfg.smtp || null
       loopConfig.mode = targetChatMeta.mode || 'chat'
       loopConfig.chatWorkingPath = targetChatMeta.chatWorkingPath || null
+      loopConfig.aiDocEnabled = targetChatMeta.aiDocEnabled !== false
       loopConfig.modeTransitionPending = targetChatMeta.modeTransitionPending || null
       loopConfig.dataPath     = ds.paths().DATA_DIR
       loopConfig.artifactPath = fullCfg.artifactPath || fullCfg.artyfactPath || ''

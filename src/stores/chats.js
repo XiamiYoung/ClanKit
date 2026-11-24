@@ -6,6 +6,7 @@ import { en, zh } from '../i18n'
 import { parseToolLogBlock, deduplicateToolSegments } from '../utils/parseToolLog'
 import { mergeContextMetrics } from '../utils/contextMetricsMerge'
 import { PREVIEW_LIMITS, isLimitEnforced } from '../utils/guestLimits'
+import { isAiDocEnabledForChat } from '../utils/aidocMeta'
 
 const NEW_CHAT_TITLES = new Set([
   en.chats.newChat,
@@ -1573,6 +1574,7 @@ export const useChatsStore = defineStore('chats', () => {
         maxAgentRounds: targetChat.maxAgentRounds ?? 10,
         mode: targetChat.mode || 'chat',
         chatWorkingPath: (targetChat.mode === 'productivity' && targetChat.workingPath) ? targetChat.workingPath : null,
+        aiDocEnabled: isAiDocEnabledForChat(targetChat),
         modeTransitionPending: targetChat.modeTransitionPending ? JSON.parse(JSON.stringify(targetChat.modeTransitionPending)) : null,
         userAgentId: targetChat.userAgentId || null,
         systemAgentId: isGroup ? null : (groupIds[0] || null),

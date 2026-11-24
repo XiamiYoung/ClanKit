@@ -478,6 +478,44 @@ describe('useSendMessage', () => {
       expect(meta.mode).toBe('productivity')
       expect(meta.chatWorkingPath).toBeNull()
     })
+
+    it('productivity chat with useAiDoc unset sends aiDocEnabled=true', async () => {
+      mockChat.mode = 'productivity'
+      mockChat.workingPath = '/work'
+      delete mockChat.useAiDoc
+      const inputText = ref('Hello')
+      const { sendMessage } = createSendMessage({ inputText })
+
+      await sendMessage()
+
+      const meta = mockElectronAPI.sendMessage.mock.calls[0][0].targetChatMeta
+      expect(meta.aiDocEnabled).toBe(true)
+    })
+
+    it('productivity chat with useAiDoc=false sends aiDocEnabled=false', async () => {
+      mockChat.mode = 'productivity'
+      mockChat.workingPath = '/work'
+      mockChat.useAiDoc = false
+      const inputText = ref('Hello')
+      const { sendMessage } = createSendMessage({ inputText })
+
+      await sendMessage()
+
+      const meta = mockElectronAPI.sendMessage.mock.calls[0][0].targetChatMeta
+      expect(meta.aiDocEnabled).toBe(false)
+    })
+
+    it('chat mode sends aiDocEnabled=false', async () => {
+      mockChat.mode = 'chat'
+      mockChat.useAiDoc = true
+      const inputText = ref('Hello')
+      const { sendMessage } = createSendMessage({ inputText })
+
+      await sendMessage()
+
+      const meta = mockElectronAPI.sendMessage.mock.calls[0][0].targetChatMeta
+      expect(meta.aiDocEnabled).toBe(false)
+    })
   })
 })
 
