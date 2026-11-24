@@ -630,6 +630,15 @@ app.whenReady().then(async () => {
     logger.error('[Startup] ensureBuiltinSkills failed:', err.message)
   }
 
+  // ── AI Doc layout: make sure general/kb_source/wiki exist under the AI Doc root ──
+  try {
+    const { resolveAiDocRoot, ensureAiDocLayout } = require('./lib/aidocLayout')
+    const startupCfg = readJSON(p().CONFIG_FILE, {})
+    ensureAiDocLayout(resolveAiDocRoot({ DoCPath: startupCfg.DoCPath, dataPath: p().DATA_DIR }))
+  } catch (err) {
+    logger.error('[Startup] ensureAiDocLayout failed:', err.message)
+  }
+
   // Refresh LiteLLM model catalog in background (best-effort)
   require('./agent/modelDefaults').refreshFromRemote(p().DATA_DIR).catch(() => {})
 

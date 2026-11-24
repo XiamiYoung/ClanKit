@@ -269,6 +269,15 @@ function register({ DEFAULT_CONFIG }) {
       const existing = ds.readJSON(p().CONFIG_FILE, {})
       existing[key] = value
       ds.writeJSON(p().CONFIG_FILE, existing)
+      if (key === 'DoCPath') {
+        // Best-effort: a bad path must never fail the save itself.
+        try {
+          const { resolveAiDocRoot, ensureAiDocLayout } = require('../lib/aidocLayout')
+          ensureAiDocLayout(resolveAiDocRoot({ DoCPath: value, dataPath: p().DATA_DIR }))
+        } catch (layoutErr) {
+          logger.warn('[store] ensureAiDocLayout failed:', layoutErr.message)
+        }
+      }
       return { success: true }
     } catch (err) {
       logger.error(`Failed to save ${key} to config.json:`, err.message)
