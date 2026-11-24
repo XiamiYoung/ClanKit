@@ -167,4 +167,34 @@ describe('use AI Doc switch', () => {
     const wrapper = mountModal({ chatId: 'c1' })
     expect(wrapper.find('.ccm-use-aidoc').exists()).toBe(false)
   })
+
+  it('has an accessible name', () => {
+    const wrapper = mountModal({ chatId: 'c2' })
+    expect(wrapper.find('.ccm-use-aidoc input').attributes('aria-label')).toBe('chats.useAiDoc')
+  })
+
+  it('reverts to checked after toggling off, cancelling and reopening', async () => {
+    const wrapper = mountModal({ chatId: 'c2' })
+    const el = wrapper.find('.ccm-use-aidoc input').element
+    el.checked = false
+    el.dispatchEvent(new Event('change'))
+    await wrapper.vm.$nextTick()
+    wrapper.find('.ccm-close').element.click()
+    await wrapper.vm.$nextTick()
+    await wrapper.setProps({ visible: false })
+    await wrapper.setProps({ visible: true })
+    expect(wrapper.find('.ccm-use-aidoc input').element.checked).toBe(true)
+  })
+
+  it('loads unchecked when the chat stores useAiDoc: false', async () => {
+    const chat = mockChats[1]
+    chat.useAiDoc = false
+    try {
+      const wrapper = mountModal({ chatId: 'c2', visible: false })
+      await wrapper.setProps({ visible: true })
+      expect(wrapper.find('.ccm-use-aidoc input').element.checked).toBe(false)
+    } finally {
+      delete chat.useAiDoc
+    }
+  })
 })

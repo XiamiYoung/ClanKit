@@ -186,7 +186,7 @@ function _loadDraftFromChat() {
             <div class="ccm-use-aidoc-row">
               <div class="ccm-dark-section-label">{{ t('chats.useAiDoc') }}</div>
               <label class="ccm-toggle">
-                <input v-model="draftUseAiDoc" type="checkbox" />
+                <input v-model="draftUseAiDoc" type="checkbox" :aria-label="t('chats.useAiDoc')" />
                 <span class="ccm-toggle-track"><span class="ccm-toggle-thumb"></span></span>
               </label>
             </div>
@@ -684,7 +684,8 @@ function _loadDraftFromChat() {
 .ccm-toggle {
   display: inline-flex; align-items: center; cursor: pointer; flex-shrink: 0;
 }
-.ccm-toggle input { display: none; }
+.ccm-toggle input { position: absolute; opacity: 0; width: 0.0625rem; height: 0.0625rem; margin: 0; pointer-events: none; }
+.ccm-toggle input:focus-visible + .ccm-toggle-track { outline: 0.125rem solid var(--accent); outline-offset: 0.125rem; }
 .ccm-toggle-track {
   position: relative; width: 2.375rem; height: 1.375rem;
   border-radius: 0.6875rem; background: #2A2A2A;
