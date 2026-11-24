@@ -9,20 +9,17 @@
 
 const REQUEST_TIMEOUT_MS = 15000
 
-let baseUrlPromise = null
+let backendConfigPromise = null
 
-function resolveBaseUrl() {
-  if (!baseUrlPromise) {
-    baseUrlPromise = (async () => {
-      const r = await window.electronAPI.getAuthBaseUrl()
-      return r.apiBaseUrl || ''
-    })()
+export function getBackendConfig() {
+  if (!backendConfigPromise) {
+    backendConfigPromise = window.electronAPI?.getAuthBaseUrl?.() ?? Promise.resolve({})
   }
-  return baseUrlPromise
+  return backendConfigPromise
 }
 
 async function request(path, body, { authToken, method = 'POST' } = {}) {
-  const baseUrl = await resolveBaseUrl()
+  const { apiBaseUrl: baseUrl } = await getBackendConfig()
   if (!baseUrl) {
     const msg = 'API base URL not configured (check electron/build-config.<env>.json)'
     console.error('[authApi]', path, '✗', msg)

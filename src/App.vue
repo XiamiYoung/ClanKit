@@ -282,23 +282,7 @@ onMounted(async () => {
   if (!hasToken && !configStore.config.authOnboarded && !wizardWillShow) {
     auth.openAuthDialog()
   } else if (hasToken) {
-    // 1) Refresh if near expiry (local exp check, may hit /auth/refresh).
-    // 2) If we didn't just refresh, hit GET /auth/me so the backend confirms
-    //    the token is still recognized (catches jwt_secret rotation, account
-    //    deletion, tampering) AND bumps last_opened_at. 401 → signOut;
-    //    network failure → keep state.
-    ;(async () => {
-      try {
-        const r = await auth.ensureFreshAccessToken()
-        if (r.ok && !r.refreshed) {
-          await auth.fetchMe()
-        } else if (!r.ok) {
-          console.warn('[auth] startup: ensureFreshAccessToken failed (' + r.error + ') — skipping /auth/me')
-        }
-      } catch (err) {
-        console.error('[auth] startup auth check threw:', err)
-      }
-    })()
+    void auth.syncStartupSession()
   }
 
   // Load cached model lists from disk (instant, no API calls)
