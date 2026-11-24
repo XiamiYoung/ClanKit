@@ -9,7 +9,7 @@
         :loading="store.updating"
         @click="store.updateIndex()"
       >
-        <svg v-if="!store.updating" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <svg v-if="!store.updating" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <path d="M20 7v5h-5M4 17v-5h5" />
           <path d="M6 7a7 7 0 0 1 11.6-1L20 12M4 12l2.4 6A7 7 0 0 0 18 17" />
         </svg>
@@ -32,7 +32,7 @@
         :disabled="store.updating"
         @click="showOptions = true"
       >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <path d="m6 9 6 6 6-6" />
         </svg>
       </AppButton>
@@ -44,7 +44,7 @@
         :aria-label="t('aidoc.graph')"
         @click="$emit('open-graph')"
       >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <circle cx="5" cy="12" r="2.5" />
           <circle cx="18" cy="5" r="2.5" />
           <circle cx="17" cy="19" r="2.5" />
@@ -111,7 +111,6 @@ onMounted(() => store.refreshStatus())
   align-items: center;
   gap: 0.5rem;
 }
-.aidoc-toolbar svg { width: 0.875rem; height: 0.875rem; }
 .aidoc-index-update { position: relative; }
 .sync-dot {
   position: absolute;
