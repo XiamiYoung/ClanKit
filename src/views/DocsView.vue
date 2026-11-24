@@ -65,8 +65,7 @@
       </div>
 
       <!-- Main content: file tree + editor -->
-      <div class="relative flex-1 flex overflow-hidden">
-        <AiDocGraphPanel v-if="showGraph" @close="showGraph = false" @open-file="openGraphFile" />
+      <div class="flex-1 flex overflow-hidden">
 
         <!-- ── LEFT: File Tree Panel (resizable) ── -->
         <div
@@ -157,7 +156,8 @@
         </div>
 
         <!-- ── RIGHT: Editor / Preview Panel ── -->
-        <div class="flex-1 flex flex-col overflow-hidden" style="background:#fff;position:relative;" @mouseup="onEditorMouseUp" @mousedown="onEditorMouseDown">
+        <div class="docs-display-panel flex-1 flex flex-col overflow-hidden" style="background:#fff;position:relative;" @mouseup="onEditorMouseUp" @mousedown="onEditorMouseDown">
+          <AiDocGraphPanel v-if="showGraph" @close="showGraph = false" @open-file="openGraphFile" />
           <!-- Hamburger toggle tab -->
           <button
             ref="hamburgerBtnRef"

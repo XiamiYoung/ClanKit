@@ -41,7 +41,7 @@ describe('AiDocGraphPanel', () => {
     wrapper.unmount()
   })
 
-  it('reports stale status and uses an icon-only back button', async () => {
+  it('reports stale status and uses an icon-only close button', async () => {
     const wrapper = mount(AiDocGraphPanel)
     expect(wrapper.text()).toContain('aidoc.syncStale 3')
     expect(wrapper.text()).not.toContain('aidoc.syncPending')
@@ -53,13 +53,44 @@ describe('AiDocGraphPanel', () => {
     expect(wrapper.emitted('open-file')).toBeUndefined()
     graph.vm.$emit('select', doc)
     expect(wrapper.emitted('open-file')).toEqual([[{ path: doc.path, name: doc.name }]])
-    const back = wrapper.get('[data-testid="aidoc-graph-back"]')
-    expect(back.classes()).toContain('app-btn--icon')
-    expect(back.attributes('aria-label')).toBe('aidoc.back')
-    expect(back.text()).toBe('')
-    await back.trigger('click')
+    const close = wrapper.get('[data-testid="aidoc-graph-close"]')
+    expect(close.classes()).toContain('app-btn--icon')
+    expect(close.attributes('aria-label')).toBe('aidoc.closeGraph')
+    expect(close.text()).toBe('')
+    await close.trigger('click')
     expect(wrapper.emitted('close')).toHaveLength(1)
     wrapper.unmount()
+  })
+
+  it('keeps the overlay inside its host when dragged', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const wrapper = mount(AiDocGraphPanel, { attachTo: host })
+    try {
+      Object.defineProperties(wrapper.element.parentElement, {
+        clientWidth: { value: 600 },
+        clientHeight: { value: 480 },
+      })
+      Object.defineProperties(wrapper.element, {
+        offsetWidth: { value: 400 },
+        offsetHeight: { value: 300 },
+      })
+      const handle = wrapper.get('.graph-drag-handle')
+      handle.element.setPointerCapture = vi.fn()
+      await handle.trigger('pointerdown', { button: 0, pointerId: 7, clientX: 200, clientY: 160 })
+      await handle.trigger('pointermove', { pointerId: 7, clientX: 900, clientY: -100 })
+      expect(handle.element.setPointerCapture).toHaveBeenCalledWith(7)
+      expect(wrapper.element.style.left).toBe('200px')
+      expect(wrapper.element.style.top).toBe('0px')
+      await handle.trigger('pointerup', { pointerId: 7 })
+      await handle.trigger('pointermove', { pointerId: 7, clientX: 0, clientY: 0 })
+      expect(wrapper.element.style.left).toBe('200px')
+      await handle.trigger('keydown', { key: 'ArrowLeft' })
+      expect(wrapper.element.style.left).toBe('184px')
+    } finally {
+      wrapper.unmount()
+      host.remove()
+    }
   })
 
   it('filters orphan nodes and document types', async () => {

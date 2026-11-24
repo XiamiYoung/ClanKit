@@ -8,14 +8,14 @@ import ForceGraph from 'force-graph'
 
 const NODE_FALLBACK = '#8ca6bf'
 const NODE_PLACEHOLDER = '#687281'
-const NODE_RING = '#eff5ff'
-const NODE_LABEL = '#dce7f2'
-const NODE_TYPE = '#141a22'
-const LINK_NORMAL = 'rgba(147, 164, 185, 0.25)'
-const LINK_ACTIVE = 'rgba(176, 205, 236, 0.65)'
-const LINK_DIM = 'rgba(147, 164, 185, 0.07)'
-const PARTICLE = '#a8caeb'
-const PARTICLE_DIM = 'rgba(168, 202, 235, 0.12)'
+const NODE_RING = '#34435a'
+const NODE_LABEL = '#29364a'
+const NODE_TYPE = '#172537'
+const LINK_NORMAL = 'rgba(91, 110, 136, 0.36)'
+const LINK_ACTIVE = 'rgba(53, 91, 142, 0.75)'
+const LINK_DIM = 'rgba(91, 110, 136, 0.10)'
+const PARTICLE = '#4f7fac'
+const PARTICLE_DIM = 'rgba(79, 127, 172, 0.16)'
 
 const props = defineProps({
   graph: { type: Object, required: true },

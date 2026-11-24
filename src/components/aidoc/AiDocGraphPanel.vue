@@ -1,15 +1,36 @@
 <template>
-  <section class="aidoc-graph-panel" :aria-label="t('aidoc.graph')">
+  <section
+    ref="panel"
+    class="aidoc-graph-panel"
+    :style="panelPosition"
+    :aria-label="t('aidoc.graph')"
+    @mousedown.stop
+    @mouseup.stop
+  >
+    <div class="graph-titlebar">
+      <div
+        class="graph-drag-handle"
+        :class="{ 'is-dragging': dragging }"
+        tabindex="0"
+        :aria-description="t('aidoc.moveGraph')"
+        @pointerdown="startDrag"
+        @keydown="moveWithKeys"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01" />
+        </svg>
+        <h2>{{ t('aidoc.graph') }}</h2>
+      </div>
+      <AppTooltip :text="t('aidoc.closeGraph')">
+        <AppButton size="icon" variant="ghost" data-testid="aidoc-graph-close" :aria-label="t('aidoc.closeGraph')" @click="$emit('close')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg>
+        </AppButton>
+      </AppTooltip>
+    </div>
     <header class="graph-header">
       <div class="graph-controls">
-        <AppTooltip :text="t('aidoc.back')">
-          <AppButton size="icon" data-testid="aidoc-graph-back" :aria-label="t('aidoc.back')" @click="$emit('close')">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="m15 18-6-6 6-6" />
-            </svg>
-          </AppButton>
-        </AppTooltip>
-        <h2>{{ t('aidoc.graph') }}</h2>
         <div class="graph-search">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <circle cx="11" cy="11" r="6" />
@@ -100,7 +121,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from '../../i18n/useI18n'
 import { useAiDocStore } from '../../stores/aidoc'
 import { filterGraph } from '../../utils/aidocGraphFilter'
@@ -116,6 +137,62 @@ const graph = computed(() => store.graph)
 const query = ref('')
 const hideOrphans = ref(false)
 const hiddenExts = ref([])
+
+const panel = ref(null)
+const position = ref({ x: 0, y: 0 })
+const dragging = ref(false)
+let drag = null
+let resizeObserver
+const panelPosition = computed(() => ({
+  left: position.value.x + 'px',
+  top: position.value.y + 'px',
+}))
+
+function movePanel(x, y) {
+  const host = panel.value.parentElement
+  if (!host) return
+  const maxX = Math.max(0, host.clientWidth - panel.value.offsetWidth)
+  const maxY = Math.max(0, host.clientHeight - panel.value.offsetHeight)
+  position.value = { x: Math.max(0, Math.min(x, maxX)), y: Math.max(0, Math.min(y, maxY)) }
+}
+
+function startDrag(event) {
+  if (event.button !== 0 || drag) return
+  drag = { id: event.pointerId, x: event.clientX - position.value.x, y: event.clientY - position.value.y }
+  event.currentTarget.setPointerCapture(event.pointerId)
+  dragging.value = true
+  window.addEventListener('pointermove', moveDrag, true)
+  window.addEventListener('pointerup', stopDrag, true)
+  window.addEventListener('pointercancel', stopDrag, true)
+  window.addEventListener('blur', clearDrag)
+}
+
+function moveDrag(event) {
+  if (drag?.id === event.pointerId) movePanel(event.clientX - drag.x, event.clientY - drag.y)
+}
+
+function stopDrag(event) {
+  if (drag?.id === event.pointerId) clearDrag()
+}
+
+function clearDrag() {
+  if (!drag) return
+  drag = null
+  dragging.value = false
+  window.removeEventListener('pointermove', moveDrag, true)
+  window.removeEventListener('pointerup', stopDrag, true)
+  window.removeEventListener('pointercancel', stopDrag, true)
+  window.removeEventListener('blur', clearDrag)
+}
+
+function moveWithKeys(event) {
+  const step = 16
+  const directions = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }
+  const direction = directions[event.key]
+  if (!Array.isArray(direction)) return
+  event.preventDefault()
+  movePanel(position.value.x + direction[0], position.value.y + direction[1])
+}
 
 const extensions = computed(() => [...new Set(
   graph.value?.nodes.map(node => node.ext).filter(Boolean) ?? [],
@@ -147,35 +224,74 @@ function openFile(node) {
 }
 
 onMounted(() => {
+  const host = panel.value.parentElement
+  if (host) {
+    movePanel((host.clientWidth - panel.value.offsetWidth) / 2, (host.clientHeight - panel.value.offsetHeight) / 2)
+    resizeObserver = new ResizeObserver(() => movePanel(position.value.x, position.value.y))
+    resizeObserver.observe(host)
+  }
   store.loadGraph()
   store.refreshStatus()
+})
+onBeforeUnmount(() => {
+  clearDrag()
+  resizeObserver?.disconnect()
 })
 </script>
 
 <style scoped>
 .aidoc-graph-panel {
-  --graph-surface: #11161e;
-  --graph-control: #1c2430;
-  --graph-line: #343f4f;
-  --graph-text: #e3eaf3;
-  --graph-muted: #a4b2c4;
+  --graph-surface: var(--bg-card);
+  --graph-control: var(--bg-hover);
+  --graph-line: var(--border);
+  --graph-muted: var(--text-secondary);
   --graph-placeholder: #687281;
-  --graph-error: #ffadad;
-  --graph-grid: #202a36;
+  --graph-error: #b91c1c;
+  --graph-grid: #d5dce5;
   position: absolute;
-  inset: 0;
   z-index: 70;
   display: flex;
   flex-direction: column;
+  width: min(42rem, calc(100% - 1.25rem));
+  height: min(30rem, calc(100% - 1.25rem));
   min-width: 0;
   min-height: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid var(--graph-line);
+  border-radius: var(--radius-md);
   background: var(--graph-surface);
-  color: var(--graph-text);
+  color: var(--text-primary);
+  box-shadow: 0 0.625rem 2rem var(--shadow-hover), 0 0.125rem 0.375rem var(--shadow);
 }
+.graph-titlebar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.3125rem 0.375rem 0.3125rem 0.625rem;
+  border-bottom: 1px solid var(--graph-line);
+}
+.graph-drag-handle {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  align-self: stretch;
+  gap: 0.375rem;
+  min-width: 0;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.graph-drag-handle.is-dragging { cursor: grabbing; }
+.graph-drag-handle svg { flex: 0 0 auto; color: var(--graph-muted); }
+.graph-drag-handle h2 { margin: 0; font-size: var(--fs-subtitle); font-weight: 700; }
 .graph-header {
   display: grid;
-  gap: 0.625rem;
-  padding: 0.875rem 1rem 0.625rem;
+  gap: 0.5rem;
+  max-height: 50%;
+  overflow: auto;
+  padding: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--graph-line);
 }
 .graph-controls, .graph-meta, .graph-sync, .graph-toggle {
@@ -183,11 +299,6 @@ onMounted(() => {
   flex-wrap: wrap;
   align-items: center;
   gap: 0.625rem;
-}
-.graph-controls h2 {
-  margin: 0 0.375rem 0 0;
-  font-size: var(--fs-subtitle);
-  font-weight: 700;
 }
 .graph-search {
   flex: 1 1 9rem;
