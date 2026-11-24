@@ -8,6 +8,13 @@ const require = createRequire(import.meta.url)
 const { parseFrontmatter, validateWikiFrontmatter, sha256Text, sha256File } = require('../aidocFrontmatter')
 
 describe('parseFrontmatter', () => {
+  it('tolerates a leading UTF-8 BOM', () => {
+    const r = parseFrontmatter('﻿---\ntype: summary\ntitle: Hello\n---\nBody\n')
+    expect(r.hasFrontmatter).toBe(true)
+    expect(r.data.type).toBe('summary')
+    expect(r.body).toBe('Body\n')
+  })
+
   it('parses scalar fields and body', () => {
     const r = parseFrontmatter('---\ntype: summary\ntitle: Hello\n---\nBody text\n')
     expect(r.hasFrontmatter).toBe(true)

@@ -14,7 +14,7 @@ function unquote(value) {
 }
 
 function parseFrontmatter(text) {
-  const src = typeof text === 'string' ? text : ''
+  const src = (typeof text === 'string' ? text : '').replace(/^﻿/, '')
   const none = { data: {}, body: src, hasFrontmatter: false }
   const lines = src.split('\n')
   if (lines[0].replace(/\r$/, '').trimEnd() !== '---') return none

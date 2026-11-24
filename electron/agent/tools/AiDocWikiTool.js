@@ -4,13 +4,19 @@ const fs = require('node:fs')
 const path = require('node:path')
 const { BaseTool } = require('./BaseTool')
 const { INGESTIBLE_EXTS, loadSourceText, readSourceChunk } = require('../../lib/aidocSourceText')
-const { sha256Text } = require('../../lib/aidocFrontmatter')
+const { parseFrontmatter, validateWikiFrontmatter, sha256Text } = require('../../lib/aidocFrontmatter')
 
 const AREAS = ['kb_source', 'wiki']
 const MAX_LIST = 300
 const MAX_WIKI_READ_CHARS = 200000
 // Byte cap checked before reading; generous (4 bytes per char) so only the char count decides near the limit.
 const MAX_WIKI_READ_BYTES = MAX_WIKI_READ_CHARS * 4
+const MAX_WIKI_WRITE_CHARS = 200000
+const MAX_SEGMENT_CHARS = 120
+const READONLY_FILES = {
+  'wiki/schema.md': 'SCHEMA.md is owned by the user and is read-only. Use read_wiki to consult it.',
+  'wiki/log.md': 'log.md is maintained by the application and is read-only.'
+}
 const RESERVED_DEVICE_NAME = /^(con|prn|aux|nul|conin\$|conout\$|com[1-9]|lpt[1-9])$/i
 const USER_EDIT_NOTE = '[NOTE: this page contains edits made by the user; preserve their content]'
 
@@ -119,6 +125,20 @@ class AiDocWikiTool extends BaseTool {
     )
     this.root = root
     this.registry = registry || { version: 1, sources: {}, pages: {} }
+    this._touched = new Set()
+    this._pages = new Map()
+    // Hash of the last content this tool wrote per page, so its own writes never count as user edits.
+    this._lastHash = new Map()
+  }
+
+  /** Pages written or edited during this run (index.md, log.md and SCHEMA.md excluded). */
+  getWrittenPages() {
+    return [...this._pages.values()].map(p => ({ ...p, sources: [...p.sources] }))
+  }
+
+  /** Every file written or edited during this run, including index.md. */
+  getTouchedFiles() {
+    return [...this._touched]
   }
 
   schema() {
@@ -140,7 +160,11 @@ class AiDocWikiTool extends BaseTool {
         query: { type: 'string', description: 'list only: filename substring filter.' },
         path: { type: 'string', description: 'Relative path starting with kb_source/ or wiki/. Never absolute, never containing "..".' },
         offset: { type: 'number', description: 'read_source only: character offset to start from.' },
-        limit: { type: 'number', description: 'read_source only: maximum characters to return.' }
+        limit: { type: 'number', description: 'read_source only: maximum characters to return.' },
+        content: { type: 'string', description: 'write_wiki only: the full page content, including frontmatter (type, title, sources, updated).' },
+        oldText: { type: 'string', description: 'edit_wiki only: exact text to replace.' },
+        newText: { type: 'string', description: 'edit_wiki only: replacement text.' },
+        occurrences: { type: 'number', description: 'edit_wiki only: how many matches oldText must have (default 1).' }
       },
       required: ['operation']
     }
@@ -152,9 +176,8 @@ class AiDocWikiTool extends BaseTool {
         case 'list': return this._list(params)
         case 'read_source': return await this._readSource(params)
         case 'read_wiki': return this._readWiki(params)
-        case 'write_wiki':
-        case 'edit_wiki':
-          return this._err(`Operation "${params.operation}" is not implemented yet`)
+        case 'write_wiki': return this._writeWiki(params)
+        case 'edit_wiki': return this._editWiki(params)
         default:
           return this._err(`Unknown operation: ${params.operation}`)
       }
@@ -249,6 +272,122 @@ class AiDocWikiTool extends BaseTool {
       ? `\n\n[End of document. totalChars=${totalChars}]`
       : `\n\n[totalChars=${totalChars}. More content follows; continue with offset=${nextOffset}]`
     return this._ok(text, { totalChars, nextOffset })
+  }
+
+  /** Resolve and vet a write target. Returns {ok:false,error} or {ok:true, target, isIndex}. */
+  _writeTarget(relPath) {
+    const target = resolveWikiToolPath(this.root, relPath)
+    if (!target.ok) return target
+    if (target.area !== 'wiki') return { ok: false, error: 'Only paths starting with wiki/ can be written' }
+    const lower = target.rel.toLowerCase()
+    if (READONLY_FILES[lower]) return { ok: false, error: READONLY_FILES[lower] }
+    const segments = target.rel.split('/').slice(1)
+    if (segments.length === 0) return { ok: false, error: 'path must point to a .md file inside wiki/' }
+    for (const seg of segments) {
+      if (seg.length > MAX_SEGMENT_CHARS) return { ok: false, error: `Invalid path: a name segment is longer than ${MAX_SEGMENT_CHARS} characters` }
+      if (/[\x00-\x1f\x7f]/.test(seg)) return { ok: false, error: 'Invalid path: control characters are not allowed' }
+    }
+    if (path.extname(target.rel).toLowerCase() !== '.md') return { ok: false, error: 'Only .md files can be written; the path must end with .md' }
+    if (target.exists && !fs.statSync(target.abs).isFile()) return { ok: false, error: `Not a file: ${target.rel}` }
+    return { ok: true, target, isIndex: lower === 'wiki/index.md' }
+  }
+
+  /** True when an existing page differs from what the app (or this tool) last wrote, or is not registered at all. */
+  _isHandEdited(rel, current) {
+    const pages = this.registry?.pages || {}
+    const entry = pages[rel] || pages[rel.replace(/^wiki\//, '')]
+    const expected = this._lastHash.get(rel) || (entry && entry.hash)
+    return !expected || expected !== sha256Text(current)
+  }
+
+  _readExisting(target) {
+    if (fs.statSync(target.abs).size > MAX_WIKI_READ_BYTES) return null
+    return fs.readFileSync(target.abs, 'utf8')
+  }
+
+  /** Validate, persist atomically and record the result. Returns an error result, or null on success. */
+  _commit(target, isIndex, content) {
+    let meta = null
+    if (!isIndex) {
+      const parsed = parseFrontmatter(content)
+      if (!parsed.hasFrontmatter) {
+        return this._err('The page must start with a frontmatter block ("---" ... "---") containing type, title, sources and updated. Nothing was written.')
+      }
+      const valid = validateWikiFrontmatter(parsed.data)
+      if (!valid.ok) return this._err(`${valid.error} Nothing was written.`)
+      const d = parsed.data
+      meta = { rel: target.rel, type: d.type, title: d.title, sources: d.sources, updated: d.updated }
+    }
+    fs.mkdirSync(path.dirname(target.abs), { recursive: true })
+    const tmp = path.join(path.dirname(target.abs), `.${path.basename(target.abs)}.${process.pid}.${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}.tmp`)
+    try {
+      fs.writeFileSync(tmp, content, 'utf8')
+      fs.renameSync(tmp, target.abs)
+    } catch (error) {
+      try { fs.rmSync(tmp, { force: true }) } catch { /* best effort */ }
+      throw error
+    }
+    this._touched.add(target.rel)
+    this._lastHash.set(target.rel, sha256Text(content))
+    if (meta) this._pages.set(target.rel, meta)
+    return null
+  }
+
+  _writeWiki({ path: relPath, content }) {
+    const vet = this._writeTarget(relPath)
+    if (!vet.ok) return this._err(vet.error)
+    const { target, isIndex } = vet
+    if (typeof content !== 'string') return this._err('content must be a string')
+    if (content.length > MAX_WIKI_WRITE_CHARS) {
+      return this._err(`content is too large (${content.length} chars, limit ${MAX_WIKI_WRITE_CHARS}). Split it into several pages.`)
+    }
+    if (target.exists && !isIndex) {
+      const current = this._readExisting(target)
+      if (current === null || this._isHandEdited(target.rel, current)) {
+        return this._err(`${target.rel} contains edits made by the user (or was not created by the application) and cannot be overwritten. Call read_wiki first, then use edit_wiki to make minimal changes that preserve the user's content.`)
+      }
+    }
+    const err = this._commit(target, isIndex, content.replace(/^﻿/, ''))
+    if (err) return err
+    return this._ok(`Wrote ${target.rel}`, { path: target.rel })
+  }
+
+  _editWiki({ path: relPath, oldText, newText, occurrences }) {
+    const vet = this._writeTarget(relPath)
+    if (!vet.ok) return this._err(vet.error)
+    const { target, isIndex } = vet
+    if (typeof oldText !== 'string' || oldText === '') return this._err('oldText is required and must be a non-empty string')
+    if (typeof newText !== 'string') return this._err('newText is required and must be a string')
+    let expected = 1
+    if (occurrences !== undefined && occurrences !== null) {
+      expected = Number(occurrences)
+      if (!Number.isInteger(expected) || expected < 1) return this._err('occurrences must be a positive integer')
+    }
+    if (!target.exists) return this._err(`Page not found: ${target.rel}. Use write_wiki to create it.`)
+    const current = this._readExisting(target)
+    if (current === null) return this._err('Page is too large to edit')
+
+    // Match the file's own line-ending style so multi-line edits do not mix EOLs.
+    const crlf = current.includes('\r\n')
+    const eol = text => (crlf ? text.replace(/\r?\n/g, '\r\n') : text)
+    const needle = eol(oldText)
+    const found = current.split(needle).length - 1
+    if (found === 0) return this._err('oldText was not found in the page. Call read_wiki and copy the exact text to replace.')
+    if (found !== expected) {
+      return this._err(`oldText matches ${found} places but ${expected} expected. Include more surrounding text to make it unique, or pass occurrences=${found} to replace all of them.`)
+    }
+    const next = current.split(needle).join(eol(newText))
+    if (next.length > MAX_WIKI_WRITE_CHARS) {
+      return this._err(`The edited page would be too large (${next.length} chars, limit ${MAX_WIKI_WRITE_CHARS}). Nothing was written.`)
+    }
+    const handEdited = !isIndex && this._isHandEdited(target.rel, current)
+    if (handEdited && next.length < current.length * 0.5) {
+      return this._err("This edit would remove more than half of a page that contains edits made by the user. Keep the user's content and make a smaller change.")
+    }
+    const err = this._commit(target, isIndex, next)
+    if (err) return err
+    const note = handEdited ? `\n\n${USER_EDIT_NOTE}` : ''
+    return this._ok(`Edited ${target.rel}${note}`, { path: target.rel, userEdited: handEdited })
   }
 
   _readWiki({ path: relPath }) {
