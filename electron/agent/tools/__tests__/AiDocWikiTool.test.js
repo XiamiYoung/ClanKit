@@ -257,6 +257,10 @@ describe('path confinement', () => {
     ['wiki/con', 'reserved device name'],
     ['wiki/a/COM1.txt', 'reserved device name'],
     ['wiki/Lpt9.x.y', 'reserved device name'],
+    ['wiki/conin$.md', 'reserved device name'],
+    ['wiki/ConOut$.txt', 'reserved device name'],
+    ['wiki/CONIN$', 'reserved device name'],
+    ['wiki/a/conout$', 'reserved device name'],
     ['wiki/a?.md', 'forbidden characters'],
     ['', 'required'],
     ['   ', 'required'],
@@ -372,6 +376,19 @@ describe('path confinement', () => {
   })
 })
 
+describe('kb_source area link', () => {
+  it('refuses a kb_source junction pointing outside the root', async ctx => {
+    fs.rmSync(path.join(root, 'kb_source'), { recursive: true })
+    fs.writeFileSync(path.join(outside, 'leak.md'), 'LEAKED')
+    if (!tryLink(outside, path.join(root, 'kb_source'))) return ctx.skip()
+    const res = await run({ operation: 'read_source', path: 'kb_source/leak.md' })
+    expect(res.isError).toBe(true)
+    expect(text(res)).not.toContain('LEAKED')
+    expect(resolveWikiToolPath(root, 'kb_source/new.md').ok).toBe(false)
+    expect((await run({ operation: 'list', area: 'kb_source' })).isError).toBe(true)
+  })
+})
+
 describe('canonical rel', () => {
   // Case variants only alias the same file on case-insensitive filesystems.
   const caseInsensitive = process.platform === 'win32' || process.platform === 'darwin'
@@ -398,6 +415,18 @@ describe('canonical rel', () => {
 })
 
 describe('error sanitising', () => {
+  // Only meaningful where a differently spelled root aliases the same directory (case-insensitive win32).
+  it('also strips the canonical root when the configured root is spelled differently', ctx => {
+    if (process.platform !== 'win32') return ctx.skip()
+    const canonical = fs.realpathSync.native(root)
+    const odd = new AiDocWikiTool({ root: canonical.toUpperCase(), registry })
+    expect(odd.root).not.toBe(canonical)
+    const cleaned = odd._clean(`ENOENT: no such file '${canonical}\\wiki\\a.md' / '${canonical.split('\\').join('/')}/x'`)
+    expect(cleaned).not.toContain(canonical)
+    expect(cleaned.toLowerCase()).not.toContain(canonical.toLowerCase())
+    expect(cleaned).toContain('<root>')
+  })
+
   it('strips the absolute root (both separator styles) from messages', async () => {
     const cleaned = tool._clean(`ENOENT: '${root}\\wiki\\a.md' and '${root.split('\\').join('/')}/wiki/b.md'`)
     expect(cleaned).not.toContain(root)

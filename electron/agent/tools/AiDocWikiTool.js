@@ -11,7 +11,7 @@ const MAX_LIST = 300
 const MAX_WIKI_READ_CHARS = 200000
 // Byte cap checked before reading; generous (4 bytes per char) so only the char count decides near the limit.
 const MAX_WIKI_READ_BYTES = MAX_WIKI_READ_CHARS * 4
-const RESERVED_DEVICE_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i
+const RESERVED_DEVICE_NAME = /^(con|prn|aux|nul|conin\$|conout\$|com[1-9]|lpt[1-9])$/i
 const USER_EDIT_NOTE = '[NOTE: this page contains edits made by the user; preserve their content]'
 
 const SOURCE_FAILURES = {
@@ -165,12 +165,31 @@ class AiDocWikiTool extends BaseTool {
 
   /** Strip the absolute root path (either separator style) from messages shown to the model. */
   _clean(message) {
+    if (!this._rootSpellings) {
+      const spellings = new Set()
+      for (const base of [this.root, this._canonicalRoot()]) {
+        if (typeof base !== 'string' || !base) continue
+        spellings.add(base)
+        spellings.add(base.split('\\').join('/'))
+        spellings.add(base.split('/').join('\\'))
+      }
+      this._rootSpellings = [...spellings].sort((x, y) => y.length - x.length)
+    }
     let out = String(message)
-    if (typeof this.root === 'string' && this.root) {
-      const variants = new Set([this.root, this.root.split('\\').join('/'), this.root.split('/').join('\\')])
-      for (const variant of variants) out = out.split(variant).join('<root>')
+    // Windows paths are case-insensitive, so match every spelling regardless of case there.
+    const flags = process.platform === 'win32' ? 'gi' : 'g'
+    for (const spelling of this._rootSpellings) {
+      out = out.replace(new RegExp(spelling.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags), '<root>')
     }
     return out
+  }
+
+  _canonicalRoot() {
+    try {
+      return fs.realpathSync.native(this.root)
+    } catch {
+      return null
+    }
   }
 
   _list({ area, dir, query }) {
