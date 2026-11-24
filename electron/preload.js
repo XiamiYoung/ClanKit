@@ -192,6 +192,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   // ── Obsidian Vault ──────────────────────────────────────────────────────
+  aidoc: {
+    updateIndex: (options) => ipcRenderer.invoke('aidoc:index-update', options),
+    getGraph: (options) => ipcRenderer.invoke('aidoc:graph-data', options),
+    getSyncStatus: (options) => ipcRenderer.invoke('aidoc:sync-status', options),
+    resolveLink: (options) => ipcRenderer.invoke('aidoc:resolve-link', options),
+    onIndexProgress: (cb) => {
+      const listener = (_, progress) => cb(progress)
+      ipcRenderer.on('aidoc:index-progress', listener)
+      return () => ipcRenderer.removeListener('aidoc:index-progress', listener)
+    },
+  },
+
   obsidian: {
     getConfig:    ()                   => ipcRenderer.invoke('obsidian:get-config'),
     saveConfig:   (config)             => ipcRenderer.invoke('obsidian:save-config', config),
