@@ -47,6 +47,18 @@ describe('AiDocWikiPanel', () => {
     wrapper.unmount()
   })
 
+  it('shows the empty state when only the scaffold index exists', async () => {
+    store.wikiPages = [home]
+    const wrapper = await openPanel()
+    expect(wrapper.text()).toContain('aidoc.wikiEmptyTitle')
+    expect(wrapper.find('.wiki-columns').exists()).toBe(false)
+    expect(store.openWikiPage).not.toHaveBeenCalled()
+    store.wikiPages = [home, summary]
+    await flushPromises()
+    expect(wrapper.find('.wiki-columns').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
   it('opens the index after loading, sorts recent pages, and filters grouped pages by title or path', async () => {
     store.wikiPages = null
     store.loadWikiPages.mockImplementation(async () => { store.wikiPages = [summary, concept, home] })
@@ -157,7 +169,7 @@ describe('AiDocWikiPanel', () => {
   })
 
   it('opens a kb_source link as a source file instead of dimming it', async () => {
-    store.wikiPages = [home]
+    store.wikiPages = [home, summary]
     store.currentWikiPage = {
       ...home,
       body: '[[report]]',
@@ -177,7 +189,7 @@ describe('AiDocWikiPanel', () => {
   })
 
   it('renders pages with restricted images', async () => {
-    store.wikiPages = [home]
+    store.wikiPages = [home, summary]
     store.currentWikiPage = { ...home, body: 'x', links: {} }
     await openPanel()
     expect(renderObsidianMarkdown.mock.lastCall[1]).toMatchObject({ restrictImages: true })

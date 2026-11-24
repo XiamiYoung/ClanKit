@@ -1,4 +1,4 @@
-import { Marked, Renderer } from 'marked'
+import { marked, Renderer } from 'marked'
 import hljs from 'highlight.js'
 import DOMPurify from 'dompurify'
 import markedKatex from 'marked-katex-extension'
@@ -45,7 +45,11 @@ renderer.code = function (code, infostring) {
   }
   return `<pre><code>${escapeHtml(code)}</code></pre>`
 }
-const markdown = new Marked({ gfm: true, breaks: true, renderer })
+// Side effect on import: this configures the GLOBAL `marked`. Other views
+// (MessageRenderer, AiTaskTaskBlock) call the global marked.parse and depend on
+// this config for KaTeX, footnotes, highlight.js code blocks and heading ids.
+const markdown = marked
+marked.use({ gfm: true, breaks: true, renderer })
 // strict:'ignore' silences KaTeX warnings about CJK chars / en-dashes / fullwidth
 // punctuation when content inside `$…$` isn't actually math (very common in
 // Chinese docs where `$` shows up as a literal). nonStandard already tolerates
@@ -161,6 +165,8 @@ export function preprocessObsidian(md, { resolveLink, localImageBasePath } = {})
   return out.join('\n')
 }
 
+const RESTRICTED_FORBID_TAGS = ['image', 'use', 'svg', 'math', 'style', 'link', 'iframe', 'object', 'embed']
+
 // Wiki reader only: keep inline data images, drop remote and unresolvable relative images.
 function dropUnsafeImages(html) {
   const template = document.createElement('template')
@@ -182,6 +188,9 @@ export function renderObsidianMarkdown(md, options = {}) {
       ALLOW_UNKNOWN_PROTOCOLS: true,
       USE_PROFILES: { html: true, svg: true, svgFilters: true, mathMl: true },
       ADD_ATTR: ['data-relpath', 'data-abspath', 'data-target', 'data-section', 'data-callout', 'data-rel', 'data-unresolved', 'style'],
+      // Wiki reader renders untrusted LLM output: block every remote-fetch vector
+      // (CSS url(), SVG <image>/<use>, stylesheets, embeds), not just <img>.
+      ...(options.restrictImages ? { FORBID_ATTR: ['style'], FORBID_TAGS: RESTRICTED_FORBID_TAGS } : {}),
     })
     return options.restrictImages ? dropUnsafeImages(clean) : clean
   } catch { return '' }

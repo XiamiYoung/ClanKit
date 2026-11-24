@@ -12,6 +12,8 @@ const { ensureWikiScaffold, appendLog, ensureIndexCoverage } = require('./aidocW
 const { AiDocWikiTool, resolveWikiToolPath } = require('../agent/tools/AiDocWikiTool')
 
 const MAX_SOURCES_PER_RUN = 30
+// Likely an invalid key or provider outage: stop instead of failing every remaining source.
+const MAX_CONSECUTIVE_AGENT_ERRORS = 3
 
 // In-memory guard: registryFile -> true while a runIngest call owns it.
 const activeRuns = new Set()
@@ -130,6 +132,7 @@ async function ingestSequentially({ root, registryFile, sources, runAgent, onPro
   ensureWikiScaffold(root)
   const result = { done: [], failed: [], stopped: false }
   const total = sources.length
+  let agentErrorStreak = 0
   const stopRequested = () => {
     if (typeof shouldStop === 'function' && shouldStop()) result.stopped = true
     return result.stopped
@@ -186,8 +189,11 @@ async function ingestSequentially({ root, registryFile, sources, runAgent, onPro
       await runAgent({ source, tool, previousPages, handEditedPages, schemaText: readSchemaText(root) })
     } catch (error) {
       if (error?.name === 'AbortError' || stopRequested()) { result.stopped = true; halt(); break }
-      fail('agent_error', errorMessage(error)); continue
+      fail('agent_error', errorMessage(error))
+      if (++agentErrorStreak >= MAX_CONSECUTIVE_AGENT_ERRORS) { result.aborted = 'consecutive_agent_errors'; break }
+      continue
     }
+    agentErrorStreak = 0
     if (stopRequested()) { halt(); break }
 
     let pages

@@ -102,6 +102,32 @@ describe('runIngest', () => {
     expect(Object.keys((await readRegistry(registryFile)).sources)).toEqual([b.rel])
   })
 
+  it('aborts after 3 consecutive agent errors and leaves the rest untouched', async () => {
+    const files = ['a', 'b', 'c', 'd', 'e'].map(n => src(n + '.md'))
+    const agent = vi.fn(async () => { throw new Error('401 invalid key') })
+    const result = await run(files, agent)
+    expect(agent).toHaveBeenCalledTimes(3)
+    expect(result.stopped).toBe(false)
+    expect(result.aborted).toBe('consecutive_agent_errors')
+    expect(result.done).toEqual([])
+    expect(result.failed.map(f => f.rel)).toEqual(files.slice(0, 3).map(f => f.rel))
+    expect(Object.keys((await readRegistry(registryFile)).sources)).toEqual([])
+  })
+
+  it('does not abort when agent errors are not consecutive', async () => {
+    const files = ['a', 'b', 'c', 'd', 'e'].map(n => src(n + '.md'))
+    const failing = new Set([files[0].rel, files[1].rel, files[3].rel, files[4].rel])
+    const agent = vi.fn(async ({ source, tool }) => {
+      if (failing.has(source.rel)) throw new Error('boom')
+      await write(tool, 'ok summary', source.rel)
+    })
+    const result = await run(files, agent)
+    expect(agent).toHaveBeenCalledTimes(5)
+    expect(result.aborted).toBeUndefined()
+    expect(result.done).toEqual([files[2].rel])
+    expect(result.failed).toHaveLength(4)
+  })
+
   it('reports read_failed when a planned source disappears and continues', async () => {
     const a = src('a.md'), b = src('b.md')
     fs.rmSync(a.abs)

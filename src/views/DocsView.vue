@@ -135,7 +135,7 @@
               >
                 <component :is="fileTypeIcon(f.name, store.activeFile?.path === f.path ? '#fff' : '#9CA3AF', store.activeFile?.path === f.path)" />
                 <span class="doc-search-item-name">{{ f.name }}</span>
-                <SourceStateDot :state="aidocStore.sourceStates[f.path]" />
+                <SourceStateDot :state="lookupSourceState(aidocStore.sourceStates, f.path)" />
                 <span v-if="f.folderName" class="doc-folder-badge">{{ f.folderName }}</span>
               </div>
             </template>
@@ -932,6 +932,7 @@ import { useVoiceStore } from '../stores/voice'
 import { useI18n } from '../i18n/useI18n'
 import PreviewLimitModal from '../components/common/PreviewLimitModal.vue'
 import { isLimitEnforced } from '../utils/guestLimits'
+import { lookupSourceState } from '../utils/sourceState'
 
 const { t } = useI18n()
 const showPreviewLimitModal = ref(false)
@@ -1784,7 +1785,7 @@ const ctxMenu = ref({ visible: false, x: 0, y: 0, targetPath: '', targetType: ''
 const ctxIngest = computed(() => {
   const { targetPath, targetType } = ctxMenu.value
   const rel = getSourceRel(targetPath)
-  const state = aidocStore.sourceStates[targetPath]
+  const state = lookupSourceState(aidocStore.sourceStates, targetPath)
   const busy = aidocStore.ingesting || aidocStore.syncPreparing || aidocStore.updating
   return targetType === 'file' && rel && state && !busy ? { rel, state } : null
 })
@@ -3538,7 +3539,7 @@ const TreeNode = defineComponent({
             class: 'truncate flex-1',
             style: { fontWeight: isDir ? '600' : '400' }
           }, props.node.name),
-          isDir ? null : h(SourceStateDot, { state: props.sourceStates?.[props.node.path] }),
+          isDir ? null : h(SourceStateDot, { state: lookupSourceState(props.sourceStates, props.node.path) }),
         ])
       )
 

@@ -45,6 +45,7 @@
         <span v-else-if="store.status?.indexStale" class="sync-dot" aria-hidden="true" data-testid="aidoc-sync-dot"></span>
       </AppButton>
     </AppTooltip>
+    <span v-if="showPercent" class="sync-percent" data-testid="aidoc-sync-percent" aria-hidden="true">{{ percent }}%</span>
     <AppTooltip :text="t('aidoc.fullRebuild')">
       <AppButton
         size="icon"
@@ -113,14 +114,18 @@ const feedback = computed(() => {
   return failed ? t('aidoc.extractionFailed', { n: failed }) : ''
 })
 
+const percent = computed(() => store.syncPercent ?? 0)
+const showPercent = computed(() => syncBusy.value || store.ingesting)
+
 const syncLabel = computed(() => t(syncBusy.value ? 'aidoc.updating' : 'aidoc.sync'))
 const syncTooltip = computed(() => {
   const detail = store.updating
     ? (store.progress && t('aidoc.indexProgress', store.progress))
     : syncText.value
+  const percentText = store.updating ? t('aidoc.indexPercent', { percent: percent.value }) : (store.ingesting ? `${percent.value}%` : '')
   const pending = pendingCount.value ? t('aidoc.syncPending', { n: pendingCount.value }) : ''
   const options = syncBusy.value || store.ingesting ? '' : t('aidoc.syncOptionsHint')
-  return [syncLabel.value, detail, pending, feedback.value, options].filter(Boolean).join(' · ')
+  return [syncLabel.value, detail, percentText, pending, feedback.value, options].filter(Boolean).join(' · ')
 })
 
 function openRebuild() {
@@ -146,6 +151,12 @@ onMounted(() => {
   gap: 0.5rem;
 }
 .aidoc-sync { position: relative; }
+.sync-percent {
+  min-width: 2rem;
+  color: var(--text-secondary);
+  font-size: var(--fs-caption);
+  font-variant-numeric: tabular-nums;
+}
 .sync-count {
   position: absolute;
   inset-block-start: -0.25rem;

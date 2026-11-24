@@ -85,6 +85,22 @@ describe('AiDocToolbar', () => {
     wrapper.unmount()
   })
 
+  it('shows the percent next to Sync only while busy', async () => {
+    const wrapper = mount(AiDocToolbar, { global: { stubs: { Teleport: true } } })
+    expect(wrapper.find('[data-testid="aidoc-sync-percent"]').exists()).toBe(false)
+    store.ingesting = true
+    store.syncPercent = 37
+    await nextTick()
+    expect(wrapper.get('[data-testid="aidoc-sync-percent"]').text()).toBe('37%')
+    expect(wrapper.get('[role="status"]').text()).toContain('37%')
+    store.ingesting = false
+    store.updating = true
+    store.syncPercent = 80
+    await nextTick()
+    expect(wrapper.get('[data-testid="aidoc-sync-percent"]').text()).toBe('80%')
+    wrapper.unmount()
+  })
+
   it('offers a visible full rebuild control that still requires confirmation', async () => {
     const wrapper = mount(AiDocToolbar, { global: { stubs: { Teleport: true } } })
     const rebuild = wrapper.get('[data-testid="aidoc-rebuild"]')

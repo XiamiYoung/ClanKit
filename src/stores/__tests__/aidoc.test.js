@@ -248,4 +248,85 @@ describe('AI Doc store', () => {
     expect(store.ingesting).toBe(false)
     expect(api.getWikiPages).not.toHaveBeenCalled()
   })
+
+  describe('syncPercent', () => {
+    async function startIngest(store, count = 3) {
+      store.setRoot('/a')
+      api.updateIndex.mockResolvedValue({ success: true })
+      const sources = Array.from({ length: count }, (_, i) => ({ rel: `kb_source/${i}.md` }))
+      api.getIngestPlan.mockResolvedValue({ success: true, sources, providerReady: true })
+      let finish
+      api.runIngest.mockImplementation(() => new Promise(resolve => { finish = resolve }))
+      await store.runSync()
+      const run = store.confirmIngest()
+      const { requestId } = api.runIngest.mock.calls[0][0]
+      const send = event => ingestProgress({ requestId, total: count, ...event })
+      return { run, send, finish: result => finish(result) }
+    }
+
+    it('follows index progress in the index phase', async () => {
+      const store = useAiDocStore()
+      store.setRoot('/a')
+      expect(store.syncPercent).toBe(0)
+      api.updateIndex.mockResolvedValue({ success: true })
+      const update = store.updateIndex()
+      const { requestId } = api.updateIndex.mock.calls[0][0]
+      progress({ requestId, done: 0, total: 0 })
+      expect(store.syncPercent).toBe(0)
+      progress({ requestId, done: 1, total: 3 })
+      expect(store.syncPercent).toBe(33)
+      progress({ requestId, done: 1, total: 4 })
+      expect(store.syncPercent).toBe(33)
+      progress({ requestId, done: 3, total: 4 })
+      expect(store.syncPercent).toBe(75)
+      await update
+      expect(store.syncPercent).toBe(0)
+    })
+
+    it('estimates ingest progress from finished sources and in-flight actions', async () => {
+      const store = useAiDocStore()
+      const { run, send, finish } = await startIngest(store)
+      expect(store.syncPercent).toBe(0)
+      send({ index: 0, rel: 'a', status: 'start' })
+      send({ index: 0, rel: 'a', status: 'done' })
+      expect(store.syncPercent).toBe(33)
+      send({ index: 1, rel: 'b', status: 'start' })
+      for (let i = 0; i < 4; i++) send({ index: 1, rel: 'b', status: 'start', type: 'action', action: 'read_wiki' })
+      // (1 + 4 / (4 + 4)) / 3 = 50%
+      expect(store.syncPercent).toBe(50)
+      for (let i = 0; i < 200; i++) send({ index: 1, rel: 'b', status: 'start', type: 'action', action: 'edit_wiki' })
+      // The in-flight fraction is capped at 0.9: (1 + 0.9) / 3 = 63%
+      expect(store.syncPercent).toBe(63)
+      send({ index: 1, rel: 'b', status: 'failed' })
+      send({ index: 2, rel: 'c', status: 'start' })
+      // A fresh source never moves the value backwards.
+      expect(store.syncPercent).toBe(66)
+      send({ index: 2, rel: 'c', status: 'done' })
+      expect(store.syncPercent).toBe(99)
+      finish({ success: true, done: [], failed: [], overflow: 0 })
+      await run
+      expect(store.syncPercent).toBe(100)
+    })
+
+    it('never decreases when a new source starts with fewer actions', async () => {
+      const store = useAiDocStore()
+      const { send } = await startIngest(store, 2)
+      send({ index: 0, rel: 'a', status: 'start' })
+      for (let i = 0; i < 36; i++) send({ index: 0, rel: 'a', status: 'start', type: 'action', action: 'x' })
+      const before = store.syncPercent
+      expect(before).toBe(45)
+      send({ index: 0, rel: 'a', status: 'stopped' })
+      send({ index: 0, rel: 'a', status: 'start' })
+      expect(store.syncPercent).toBe(before)
+    })
+
+    it('resets when the root changes', async () => {
+      const store = useAiDocStore()
+      const { send } = await startIngest(store)
+      send({ index: 0, rel: 'a', status: 'done' })
+      expect(store.syncPercent).toBe(33)
+      store.setRoot('/b')
+      expect(store.syncPercent).toBe(0)
+    })
+  })
 })

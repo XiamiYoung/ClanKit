@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
+import { marked } from 'marked'
 import { renderObsidianMarkdown } from '../obsidianMarkdown'
 
 const previewMarkdown = [
@@ -65,5 +66,32 @@ describe('Obsidian Markdown preview', () => {
     const restricted = document.createElement('div')
     restricted.innerHTML = renderObsidianMarkdown(md, { restrictImages: true })
     expect([...restricted.querySelectorAll('img')].map(img => img.getAttribute('src'))).toEqual(['data:image/png;base64,AAAA'])
+  })
+
+  it('blocks CSS and SVG remote-fetch vectors in restricted mode only', () => {
+    const md = [
+      '<div style="background-image:url(https://evil/?q=x)">a</div>',
+      '',
+      '<svg><image href="https://evil/x"></svg>',
+      '',
+      '<img src="https://evil/i.png"> <img src="//evil/j.png"> <img src="data:image/png;base64,AAAA">',
+    ].join('\n')
+    const restricted = renderObsidianMarkdown(md, { restrictImages: true })
+    expect(restricted).not.toContain('evil')
+    expect(restricted).not.toContain('style=')
+    expect(restricted).not.toContain('<svg')
+    expect(restricted).toContain('data:image/png;base64,AAAA')
+    const open = renderObsidianMarkdown(md)
+    expect(open).toContain('background-image')
+    expect(open).toContain('https://evil/x')
+  })
+
+  it('keeps the global marked configured for other views', () => {
+    const math = marked.parse('$x^2$')
+    expect(math).toContain('katex')
+    const foot = marked.parse('text[^1]\n\n[^1]: note')
+    expect(foot).toContain('footnote')
+    expect(marked.parse('# Hello World')).toContain('<h1 id="hello-world">')
+    expect(marked.parse('```js\nconst a = 1\n```')).toContain('hljs')
   })
 })

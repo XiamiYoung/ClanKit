@@ -10,6 +10,14 @@ const MAX_PDF_BYTES = 64 * 1024 * 1024
 const MIN_LIMIT = 1000
 const MAX_LIMIT = 50000
 
+// Text decoded as UTF-8 that carries many U+FFFD is almost certainly another encoding (e.g. GBK).
+function looksMojibake(text) {
+  const sample = text.slice(0, 200000)
+  let bad = 0
+  for (let i = 0; i < sample.length; i++) if (sample.charCodeAt(i) === 0xfffd) bad++
+  return bad > 20 || bad > sample.length * 0.005
+}
+
 function fail(reason, detail) {
   return detail === undefined ? { ok: false, reason } : { ok: false, reason, detail }
 }
@@ -42,6 +50,7 @@ async function loadSourceText(absPath) {
       if (result.error) return fail('extract_failed', result.error)
       result = { ok: true, text: result.text, title: result.title }
     }
+    if (ext !== 'pdf' && looksMojibake(result.text)) return fail('extract_failed', 'File is not valid UTF-8 text')
     if (!result.text.trim()) return fail('empty')
     return result
   } catch (error) {

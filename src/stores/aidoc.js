@@ -38,6 +38,39 @@ export const useAiDocStore = defineStore('aidoc', () => {
   const ingestStopping = ref(false)
   const syncPreparing = ref(false)
   const ingestNothing = ref(false)
+  // Approximate percent bookkeeping; each value only moves forward within a run.
+  const indexPercent = ref(0)
+  const ingestPercent = ref(0)
+  let ingestCompleted = 0
+  let ingestActions = 0
+
+  // Phase 1 shows index progress; phase 2 estimates progress from finished sources plus a
+  // smoothed fraction of the in-flight one. 100 is only shown once the run result exists.
+  const syncPercent = computed(() => {
+    if (ingestResult.value) return 100
+    if (ingesting.value) return ingestPercent.value
+    if (updating.value) return indexPercent.value
+    return 0
+  })
+
+  function bumpIngestPercent(total) {
+    if (!total) return
+    const fraction = Math.min(ingestActions / (ingestActions + 4), 0.9)
+    const raw = Math.floor(((ingestCompleted + fraction) / total) * 100)
+    ingestPercent.value = Math.max(ingestPercent.value, Math.min(raw, 99))
+  }
+
+  function trackIngestEvent(event) {
+    if (event.type === 'action') ingestActions++
+    else if (event.status === 'start') { ingestCompleted = event.index; ingestActions = 0 }
+    else if (event.status === 'done' || event.status === 'failed') { ingestCompleted = event.index + 1; ingestActions = 0 }
+    bumpIngestPercent(event.total)
+  }
+
+  function resetPercent() {
+    indexPercent.value = ingestPercent.value = 0
+    ingestCompleted = ingestActions = 0
+  }
 
   let root = ''
   let generation = 0
@@ -62,6 +95,7 @@ export const useAiDocStore = defineStore('aidoc', () => {
     ingestPlan.value = ingestResult.value = ingestProgress.value = null
     ingestError.value = ingestErrorKey.value = ''
     syncPreparing.value = ingestStopping.value = ingestNothing.value = false
+    resetPercent()
   }
 
   async function read(method, output, { field, options, loading, silent } = {}) {
@@ -115,6 +149,7 @@ export const useAiDocStore = defineStore('aidoc', () => {
     const id = globalThis.crypto.randomUUID()
     requestId.value = id
     progress.value = stats.value = null
+    indexPercent.value = 0
     error.value = errorKey.value = ''
     readErrorOwner = ''
     try {
@@ -122,6 +157,8 @@ export const useAiDocStore = defineStore('aidoc', () => {
       unsubscribe ??= api.onIndexProgress(event => {
         if (event.requestId === requestId.value) {
           progress.value = { done: event.done, total: event.total }
+          const raw = event.total > 0 ? Math.floor((event.done / event.total) * 100) : 0
+          indexPercent.value = Math.max(indexPercent.value, Math.min(raw, 100))
         }
       })
       const result = await api.updateIndex({ root, requestId: id, full })
@@ -182,6 +219,7 @@ export const useAiDocStore = defineStore('aidoc', () => {
       if (event.requestId !== ingestRequestId.value) return
       if (event.type === 'index-error') return
       ingestProgress.value = event
+      trackIngestEvent(event)
     })
   }
 
@@ -198,6 +236,7 @@ export const useAiDocStore = defineStore('aidoc', () => {
     const id = globalThis.crypto.randomUUID()
     ingestRequestId.value = id
     ingestProgress.value = ingestResult.value = null
+    resetPercent()
     ingestError.value = ingestErrorKey.value = ''
     try {
       ensureIngestListener()
@@ -228,6 +267,7 @@ export const useAiDocStore = defineStore('aidoc', () => {
     if (ingesting.value) return
     ingestPlan.value = ingestProgress.value = ingestResult.value = null
     ingestError.value = ingestErrorKey.value = ''
+    resetPercent()
   }
 
   async function stopIngest() {
@@ -256,7 +296,7 @@ export const useAiDocStore = defineStore('aidoc', () => {
     status, graph, progress, updating, error, errorKey, stats,
     sourceStates, wikiPages, currentWikiPage, wikiLoading,
     ingestPlan, ingesting, ingestProgress, ingestResult, ingestError, ingestErrorKey,
-    ingestStopping, syncPreparing, ingestNothing,
+    ingestStopping, syncPreparing, ingestNothing, syncPercent,
     setRoot, refreshStatus, loadGraph, refreshSourceStates, loadWikiPages, openWikiPage,
     updateIndex, runSync, ingestSingle, confirmIngest, cancelIngestPlan, stopIngest, ensureIngestListener, dispose,
   }

@@ -24,7 +24,7 @@
 
     <p v-if="loadingPages" class="wiki-empty" role="status">{{ t('common.loading') }}</p>
     <p v-else-if="!store.wikiPages && errorText" class="wiki-empty" role="alert">{{ errorText }}</p>
-    <div v-else-if="!store.wikiPages?.length" class="wiki-empty">
+    <div v-else-if="!hasContentPages" class="wiki-empty">
       <h3>{{ t('aidoc.wikiEmptyTitle') }}</h3>
       <p>{{ t('aidoc.wikiEmptyHint') }}</p>
     </div>
@@ -116,7 +116,10 @@ const query = ref('')
 const loadingPages = ref(true)
 const page = computed(() => store.currentWikiPage)
 const errorText = computed(() => store.errorKey ? t(store.errorKey) : store.error)
-const home = computed(() => store.wikiPages?.find(item => item.isIndex || item.rel.toLowerCase() === 'wiki/index.md'))
+const isIndexPage = item => item.isIndex || item.rel.toLowerCase() === 'wiki/index.md'
+const home = computed(() => store.wikiPages?.find(isIndexPage))
+// A wiki holding only the scaffold index has nothing to read yet.
+const hasContentPages = computed(() => !!store.wikiPages?.some(item => !isIndexPage(item)))
 let active = true
 
 const TYPE_LABELS = {
@@ -232,7 +235,7 @@ onMounted(async () => {
   await store.loadWikiPages()
   if (!active) return
   loadingPages.value = false
-  selectPage(home.value?.rel || store.wikiPages?.[0]?.rel)
+  if (hasContentPages.value) selectPage(home.value?.rel || store.wikiPages?.[0]?.rel)
 })
 onBeforeUnmount(() => { active = false })
 </script>

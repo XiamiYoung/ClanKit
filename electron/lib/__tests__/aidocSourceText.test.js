@@ -33,6 +33,24 @@ describe('loadSourceText', () => {
     expect(result).toEqual({ ok: true, text, title: 'Title' })
   })
 
+  it('accepts valid UTF-8 Chinese text', async () => {
+    const text = '# \u6807\u9898\n\n\u8fd9\u662f\u6b63\u6587\u3002'
+    const result = await loadSourceText(await write('zh.md', text))
+    expect(result).toEqual({ ok: true, text, title: '\u6807\u9898' })
+  })
+
+  it('rejects GBK-encoded text as not valid UTF-8', async () => {
+    const gbk = Buffer.concat(Array.from({ length: 40 }, () => Buffer.from([0xc4, 0xe3, 0xba, 0xc3, 0xca, 0xc0, 0xbd, 0xe7])))
+    const result = await loadSourceText(await write('gbk.md', gbk))
+    expect(result).toEqual({ ok: false, reason: 'extract_failed', detail: 'File is not valid UTF-8 text' })
+  })
+
+  it('tolerates a couple of stray replacement characters', async () => {
+    const text = 'Hello \uFFFD world \uFFFD ' + 'plain text '.repeat(50)
+    const result = await loadSourceText(await write('stray.txt', text))
+    expect(result.ok).toBe(true)
+  })
+
   it('reads txt in full', async () => {
     const result = await loadSourceText(await write('plain.txt', 'line one\nline two'))
     expect(result).toEqual({ ok: true, text: 'line one\nline two', title: 'plain' })

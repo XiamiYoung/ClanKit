@@ -14,19 +14,28 @@
 
       <div class="ingest-body">
         <section v-if="store.ingesting" class="ingest-running" role="status">
+          <div class="ingest-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"
+            :aria-valuenow="percent" data-testid="aidoc-ingest-progress">
+            <div class="ingest-bar-fill" :style="{ width: percent + '%' }"></div>
+          </div>
           <template v-if="store.ingestProgress?.total">
-            <p>{{ t('aidoc.ingestRunning', { i: store.ingestProgress.index + 1, n: store.ingestProgress.total }) }}</p>
+            <p data-testid="aidoc-ingest-percent">{{ t('aidoc.progressPercent', { percent, i: store.ingestProgress.index + 1, n: store.ingestProgress.total, name: fileName(store.ingestProgress.rel) }) }}</p>
             <p class="ingest-path">{{ store.ingestProgress.rel }}</p>
-            <p v-if="store.ingestProgress.action" class="ingest-detail">{{ store.ingestProgress.action }}</p>
+            <p v-if="store.ingestProgress.action" class="ingest-detail">{{ actionText(store.ingestProgress.action) }}</p>
           </template>
-          <p v-else>{{ t('aidoc.ingestPreparing') }}</p>
+          <p v-else data-testid="aidoc-ingest-percent">{{ percent }}% · {{ t('aidoc.ingestPreparing') }}</p>
         </section>
 
         <template v-else-if="store.ingestResult">
           <div class="ingest-summary" role="status">
+            <div class="ingest-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"
+              :aria-valuenow="percent" data-testid="aidoc-ingest-progress">
+              <div class="ingest-bar-fill" :style="{ width: percent + '%' }"></div>
+            </div>
             <p>{{ t('aidoc.ingestDone', { n: store.ingestResult.done.length }) }}</p>
             <p>{{ t('aidoc.ingestFailed', { n: store.ingestResult.failed.length }) }}</p>
             <p v-if="store.ingestResult.stopped">{{ t('aidoc.ingestStopped') }}</p>
+            <p v-if="store.ingestResult.aborted === 'consecutive_agent_errors'" class="ingest-alert" role="alert">{{ t('aidoc.ingestAbortedAgentErrors') }}</p>
             <p v-if="(store.ingestResult.remaining ?? store.ingestResult.overflow) > 0">{{ t('aidoc.ingestRemaining', { n: store.ingestResult.remaining ?? store.ingestResult.overflow }) }}</p>
           </div>
           <ul v-if="store.ingestResult.failed.length" class="ingest-list">
@@ -36,6 +45,15 @@
               <span v-if="failure.detail" class="ingest-detail">{{ failure.detail }}</span>
             </li>
           </ul>
+          <div v-if="store.ingestResult.warnings?.length" class="ingest-warnings">
+            <p>{{ t('aidoc.ingestWarnings') }}</p>
+            <ul class="ingest-list">
+              <li v-for="(warning, index) in store.ingestResult.warnings" :key="index" class="ingest-failure">
+                <span class="ingest-path">{{ warning.rel }}</span>
+                <span class="ingest-detail">{{ warning.step }}: {{ warning.detail }}</span>
+              </li>
+            </ul>
+          </div>
           <p v-if="store.ingestResult.indexError" class="ingest-alert" role="alert">
             {{ t('aidoc.ingestIndexError') }} {{ store.ingestResult.indexError }}
           </p>
@@ -106,8 +124,19 @@ const reasonKeys = {
   no_pages: 'aidoc.reasonNoPages',
   read_failed: 'aidoc.reasonReadFailed',
   agent_error: 'aidoc.reasonAgentError',
-  record_failed: 'aidoc.reasonRecordFailed'
+  record_failed: 'aidoc.reasonRecordFailed',
+  registry_unreadable: 'aidoc.reasonRegistryUnreadable'
 }
+const actionKeys = {
+  list: 'aidoc.actionList',
+  read_source: 'aidoc.actionReadSource',
+  read_wiki: 'aidoc.actionReadWiki',
+  write_wiki: 'aidoc.actionWriteWiki',
+  edit_wiki: 'aidoc.actionEditWiki'
+}
+const actionText = action => (actionKeys[action] ? t(actionKeys[action]) : action)
+const percent = computed(() => store.syncPercent ?? 0)
+const fileName = rel => String(rel || '').split('/').pop()
 
 const numberFormat = computed(() => new Intl.NumberFormat(locale?.value, { maximumFractionDigits: 1 }))
 function formatSize(bytes) {
@@ -210,6 +239,20 @@ onUnmounted(() => dialog.value?.close())
   border-radius: var(--radius-sm);
 }
 .ingest-alert { color: var(--ingest-danger); }
+.ingest-warnings { display: grid; gap: 0.25rem; }
+.ingest-bar {
+  height: 0.5rem;
+  overflow: hidden;
+  background: var(--ingest-border);
+  border-radius: var(--radius-full);
+}
+.ingest-bar-fill {
+  height: 100%;
+  background: linear-gradient(135deg, #0f0f0f, #1a1a1a, #374151);
+  box-shadow: inset 0 0 0 1px var(--text-muted);
+  border-radius: var(--radius-full);
+  transition: width 0.3s ease-out;
+}
 .ingest-footer {
   justify-content: flex-end;
   border-top: 1px solid var(--ingest-border);
