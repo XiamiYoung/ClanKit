@@ -28,7 +28,7 @@ describe('AiDocToolbar', () => {
   })
 
   it('checks sync state, updates the index and opens the graph', async () => {
-    const wrapper = mount(AiDocToolbar)
+    const wrapper = mount(AiDocToolbar, { global: { stubs: { Teleport: true } } })
     const indicator = wrapper.get('[data-testid="aidoc-sync-dot"]')
     expect(store.refreshStatus).toHaveBeenCalledOnce()
     expect(indicator.classes()).toContain('is-stale')
@@ -37,14 +37,29 @@ describe('AiDocToolbar', () => {
     expect(indicator.classes()).not.toContain('is-stale')
 
     const update = wrapper.get('[data-testid="aidoc-update"]')
+    const graph = wrapper.get('[data-testid="aidoc-open-graph"]')
+    for (const [button, label] of [[update, 'aidoc.updateIndex'], [graph, 'aidoc.graph']]) {
+      expect(button.classes()).toContain('app-btn--icon')
+      expect(button.attributes('aria-label')).toBe(label)
+      expect(button.text()).toBe('')
+    }
+    vi.useFakeTimers()
+    try {
+      await graph.element.parentElement.dispatchEvent(new Event('focusin'))
+      await vi.advanceTimersByTimeAsync(120)
+      expect(wrapper.get('.app-tooltip').text()).toBe('aidoc.graph')
+    } finally {
+      vi.useRealTimers()
+    }
     await update.trigger('click')
     expect(store.updateIndex).toHaveBeenCalledOnce()
     store.updating = true
     store.progress = { done: 2, total: 5 }
     await nextTick()
     expect(update.attributes()).toHaveProperty('disabled')
-    expect(update.text()).toContain('aidoc.updating')
-    expect(update.text()).toContain('2/5')
+    expect(update.attributes('aria-label')).toBe('aidoc.updating')
+    expect(update.text()).toBe('')
+    expect(wrapper.get('[role="status"]').text()).toContain('2/5')
     await wrapper.get('[data-testid="aidoc-open-graph"]').trigger('click')
     expect(wrapper.emitted('open-graph')).toHaveLength(1)
     wrapper.unmount()
