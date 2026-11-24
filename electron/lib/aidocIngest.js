@@ -4,12 +4,12 @@ const fs = require('fs')
 const path = require('path')
 const { scanKnowledgeFiles } = require('./aidocIndex')
 const {
-  readRegistry, writeRegistry, recordIngested, classifySources, removedSources
+  readRegistry, updateRegistry, registryFileKey, recordIngested, classifySources, removedSources
 } = require('./aidocRegistry')
 const { loadSourceText } = require('./aidocSourceText')
 const { sha256File } = require('./aidocFrontmatter')
 const { ensureWikiScaffold, appendLog, ensureIndexCoverage } = require('./aidocWiki')
-const { AiDocWikiTool } = require('../agent/tools/AiDocWikiTool')
+const { AiDocWikiTool, resolveWikiToolPath } = require('../agent/tools/AiDocWikiTool')
 
 const MAX_SOURCES_PER_RUN = 30
 
@@ -37,10 +37,16 @@ async function buildIngestPlan({ root, registry, hashFile = sha256File, only } =
   for (const file of classifySources({ scanned, registry })) {
     if (wanted && !wanted.has(file.rel)) continue
     let state = file.state
-    if (state === 'updated' && (await hashFile(file.abs)) === registry.sources[file.rel]?.hash) {
-      // Same content, only mtime/size drifted: the caller refreshes the record.
-      refreshed.push(file.rel)
-      state = 'ingested'
+    if (state === 'updated') {
+      try {
+        if ((await hashFile(file.abs)) === registry.sources[file.rel]?.hash) {
+          // Same content, only mtime/size drifted: the caller refreshes the record.
+          refreshed.push(file.rel)
+          state = 'ingested'
+        }
+      } catch {
+        // Keep unreadable sources in the plan so ingest can report the failure per source.
+      }
     }
     if (state === 'ingested' && !wanted) continue
     sources.push({ rel: file.rel, abs: file.abs, size: file.size, state })
@@ -60,12 +66,14 @@ async function buildIngestPlan({ root, registry, hashFile = sha256File, only } =
 async function handEditedOf(root, registry, previousPages) {
   const edited = []
   for (const rel of previousPages) {
-    const expected = registry.pages[rel]?.hash
-    if (!expected) continue
+    const target = resolveWikiToolPath(root, rel)
+    if (!target.ok || target.area !== 'wiki' || !target.exists) continue
+    const entry = registry.pages[target.rel] || registry.pages[target.rel.replace(/^wiki\//, '')]
     try {
-      if ((await sha256File(path.join(root, rel))) !== expected) edited.push(rel)
+      const hash = await sha256File(target.abs)
+      if (!entry || entry.handEdited || hash !== entry.hash) edited.push(rel)
     } catch {
-      // A page that no longer exists is simply omitted.
+      // The page is no longer readable.
     }
   }
   return edited
@@ -74,9 +82,13 @@ async function handEditedOf(root, registry, previousPages) {
 async function collectWrittenPages(root, tool) {
   const pages = []
   for (const page of tool.getWrittenPages()) {
+    const target = resolveWikiToolPath(root, page.rel)
+    if (!target.ok || !target.exists) continue
     try {
-      const hash = await sha256File(path.join(root, page.rel))
-      pages.push({ rel: page.rel, hash, type: page.type, title: page.title, sources: page.sources, updated: page.updated })
+      const hash = await sha256File(target.abs)
+      const written = tool.getWrittenPageState(page.rel)
+      const handEdited = written.handEdited || hash !== written.hash
+      pages.push({ ...page, hash, ...(handEdited ? { handEdited } : {}) })
     } catch {
       // The page vanished after the agent wrote it; do not register it.
     }
@@ -93,14 +105,15 @@ function readSchemaText(root) {
 }
 
 async function runIngest({ root, registryFile, sources, runAgent, onProgress, shouldStop, now = () => new Date() }) {
-  if (activeRuns.has(registryFile)) {
+  const key = registryFileKey(registryFile)
+  if (activeRuns.has(key)) {
     throw Object.assign(new Error('An ingest run is already in progress'), { code: 'INGEST_BUSY' })
   }
-  activeRuns.add(registryFile)
+  activeRuns.add(key)
   try {
     return await ingestSequentially({ root, registryFile, sources, runAgent, onProgress, shouldStop, now })
   } finally {
-    activeRuns.delete(registryFile)
+    activeRuns.delete(key)
   }
 }
 
@@ -108,7 +121,10 @@ async function ingestSequentially({ root, registryFile, sources, runAgent, onPro
   ensureWikiScaffold(root)
   const result = { done: [], failed: [], stopped: false }
   const total = sources.length
-  const stopRequested = () => (typeof shouldStop === 'function' ? !!shouldStop() : false)
+  const stopRequested = () => {
+    if (typeof shouldStop === 'function' && shouldStop()) result.stopped = true
+    return result.stopped
+  }
   const emit = payload => {
     try { onProgress?.(payload) } catch { /* a broken progress listener must never break ingest */ }
   }
@@ -116,7 +132,7 @@ async function ingestSequentially({ root, registryFile, sources, runAgent, onPro
   for (let index = 0; index < total; index++) {
     const source = sources[index]
     const { rel } = source
-    if (stopRequested()) { result.stopped = true; break }
+    if (stopRequested()) break
 
     emit({ index, total, rel, status: 'start' })
     const fail = (reason, detail) => {
@@ -124,42 +140,54 @@ async function ingestSequentially({ root, registryFile, sources, runAgent, onPro
       emit({ index, total, rel, status: 'failed' })
     }
 
-    const loaded = await loadSourceText(source.abs)
-    if (!loaded.ok) { fail(loaded.reason, loaded.detail); continue }
-
-    // Snapshot the source before the agent runs so a mid-run edit shows as "updated" next time.
+    // Bind extraction and registry metadata to a single source version.
+    let loaded
     let snapshot
     try {
       const stat = fs.statSync(source.abs)
-      snapshot = { hash: await sha256File(source.abs), mtimeMs: stat.mtimeMs, size: stat.size }
+      if (!stat.isFile()) throw new Error('Source is not a regular file')
+      loaded = await loadSourceText(source.abs)
+      if (stopRequested()) break
+      if (!loaded.ok) { fail(loaded.reason, loaded.detail); continue }
+      const hash = await sha256File(source.abs)
+      const after = fs.statSync(source.abs)
+      if (['mtimeMs', 'ctimeMs', 'size', 'dev', 'ino'].some(key => stat[key] !== after[key])) {
+        throw new Error('Source changed while being read')
+      }
+      snapshot = { hash, mtimeMs: stat.mtimeMs, size: stat.size }
     } catch (error) {
+      if (stopRequested()) break
       fail('read_failed', errorMessage(error)); continue
     }
 
     const registry = await readRegistry(registryFile)
     const previousPages = [...(registry.sources[rel]?.pages || [])]
     const handEditedPages = await handEditedOf(root, registry, previousPages)
-    const tool = new AiDocWikiTool({ root, registry })
+    const tool = new AiDocWikiTool({ root, registry, sourceText: { rel, loaded } })
 
+    if (stopRequested()) break
     try {
       await runAgent({ source, tool, previousPages, handEditedPages, schemaText: readSchemaText(root) })
     } catch (error) {
       if (error?.name === 'AbortError' || stopRequested()) { result.stopped = true; break }
       fail('agent_error', errorMessage(error)); continue
     }
-    if (stopRequested()) { result.stopped = true; break }
+    if (stopRequested()) break
 
     try {
       const pages = await collectWrittenPages(root, tool)
+      if (stopRequested()) break
       if (!pages.length) { fail('no_pages'); continue }
-      // Re-read right before the write so concurrent registry changes are never lost.
-      const latest = await readRegistry(registryFile)
       const stamp = now()
-      await writeRegistry(registryFile, recordIngested(latest, {
-        rel, ...snapshot, ingestedAt: stamp.toISOString(), pages
-      }))
-      await appendLog(root, { date: localDate(stamp), sourceRel: rel, pages: pages.map(p => path.basename(p.rel, '.md')) })
-      await ensureIndexCoverage(root, pages)
+      const committed = await updateRegistry(registryFile, async latest => {
+        if (stopRequested()) return
+        await ensureIndexCoverage(root, pages)
+        if (stopRequested()) return
+        const next = recordIngested(latest, { rel, ...snapshot, ingestedAt: stamp.toISOString(), pages })
+        await appendLog(root, { date: localDate(stamp), sourceRel: rel, pages: pages.map(p => path.basename(p.rel, '.md')) })
+        return next
+      })
+      if (!committed) break
       result.done.push(rel)
       emit({ index, total, rel, status: 'done', pages: pages.map(p => p.rel) })
     } catch (error) {

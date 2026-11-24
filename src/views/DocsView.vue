@@ -134,6 +134,7 @@
               >
                 <component :is="fileTypeIcon(f.name, store.activeFile?.path === f.path ? '#fff' : '#9CA3AF', store.activeFile?.path === f.path)" />
                 <span class="doc-search-item-name">{{ f.name }}</span>
+                <SourceStateDot :state="aidocStore.sourceStates[f.path]" />
                 <span v-if="f.folderName" class="doc-folder-badge">{{ f.folderName }}</span>
               </div>
             </template>
@@ -148,6 +149,7 @@
                 :depth="0"
                 :active-path="store.activeFile?.path"
                 :expanded-folders="store.expandedFolders"
+                :source-states="aidocStore.sourceStates"
                 @select-file="(p, n) => store.openFile(p, n)"
                 @toggle-folder="(p) => store.toggleFolder(p)"
                 @delete-item="handleDeleteItem"
@@ -778,6 +780,17 @@
 
         <!-- Item actions: shown when a specific file or folder is right-clicked -->
         <template v-if="ctxMenu.targetType">
+          <button
+            v-if="ctxIngest"
+            class="ctx-item"
+            data-testid="aidoc-file-ingest"
+            @click="ingestContextFile"
+          >
+            <svg width="14" height="14" class="shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M4 12a8 8 0 0 1 14-5l2 2m0-5v5h-5M20 12a8 8 0 0 1-14 5l-2-2m0 5v-5h5" />
+            </svg>
+            {{ t(ctxIngest.state === 'ingested' ? 'aidoc.reingestFile' : 'aidoc.ingestFile') }}
+          </button>
           <button class="ctx-item" @click="copyPathFromCtx(ctxMenu.targetPath)">
             <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             {{ ctxPathCopied ? t('notes.copied') : t('notes.copyPath') }}
@@ -891,15 +904,11 @@ import XlsxEditor from '../components/notes/XlsxEditor.vue'
 import DocsLoadingOverlay from '../components/notes/DocsLoadingOverlay.vue'
 import AiMagicPanel from '../components/notes/AiMagicPanel.vue'
 import SearchReplaceBar from '../components/notes/SearchReplaceBar.vue'
-import { marked } from 'marked'
-import hljs from 'highlight.js'
-import DOMPurify from 'dompurify'
+import { renderObsidianMarkdown, slugify } from '../utils/obsidianMarkdown'
 import TurndownService from 'turndown'
 import { gfm } from 'turndown-plugin-gfm'
 import mermaid from 'mermaid'
 import 'katex/dist/katex.min.css'
-import markedKatex from 'marked-katex-extension'
-import markedFootnote from 'marked-footnote'
 
 mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose', fontFamily: 'Inter, sans-serif' })
 import { useObsidianStore } from '../stores/obsidian'
@@ -936,6 +945,9 @@ const showGraph = ref(false)
 watch(() => store.vaultPath, path => {
   showGraph.value = false
   aidocStore.setRoot(path)
+}, { immediate: true })
+watch([() => store.vaultPath, () => store.fileTree], ([path]) => {
+  if (path) void aidocStore.refreshSourceStates()
 }, { immediate: true })
 onBeforeUnmount(() => aidocStore.dispose())
 
@@ -1756,6 +1768,26 @@ const imageDataUri = computed(() => {
 
 // ── Context menu state ──
 const ctxMenu = ref({ visible: false, x: 0, y: 0, targetPath: '', targetType: '' })
+const ctxIngest = computed(() => {
+  const { targetPath, targetType } = ctxMenu.value
+  const rel = getSourceRel(targetPath)
+  const state = aidocStore.sourceStates[targetPath]
+  return targetType === 'file' && rel && state ? { rel, state } : null
+})
+
+function getSourceRel(filePath) {
+  if (!store.vaultPath || !filePath) return ''
+  const root = store.vaultPath.replace(/\\/g, '/').replace(/\/+$/, '')
+  const fullPath = filePath.replace(/\\/g, '/')
+  return fullPath.startsWith(root + '/kb_source/') ? fullPath.slice(root.length + 1) : ''
+}
+
+function ingestContextFile() {
+  const rel = ctxIngest.value?.rel
+  closeContextMenu()
+  if (rel) void aidocStore.ingestSingle(rel)
+}
+
 const ctxAction = ref({ visible: false, type: '', parent: '', targetPath: '', x: 0, y: 0 })
 const ctxInputValue = ref('')
 const ctxInputRef = ref(null)
@@ -1948,6 +1980,7 @@ async function saveFile() {
     await store.saveFile()
     saveStatus.value = 'ok'
     void aidocStore.refreshStatus()
+    if (getSourceRel(store.activeFile?.path)) void aidocStore.refreshSourceStates()
   } catch {
     saveStatus.value = 'error'
   } finally {
@@ -2425,17 +2458,6 @@ watch(editorContent, (val) => {
 })
 
 
-// GitHub-style heading slug — lowercase, strip non-word chars, spaces to hyphens.
-// Matches the anchor format used in hand-written Markdown TOCs.
-function slugify(text) {
-  return text
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N} \-_]/gu, '')
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-}
-
 /**
  * Scan markdown content for internal anchor links ([text](#anchor)) and fix
  * any anchors that don't match an actual heading ID. External links are untouched.
@@ -2482,168 +2504,11 @@ function fixTocLinks(md) {
   })
 }
 
-// Markdown rendering — custom renderers for images and headings
-// marked 12.x passes positional args: (href, title, text)
-const renderer = new marked.Renderer()
-renderer.image = function (href, title, text) {
-  // For relative/local paths, store original path in data attributes for async base64 loading
-  if (href && !href.startsWith('http://') && !href.startsWith('https://') && !href.startsWith('data:')) {
-    const fileDir = store.activeFile?.path?.replace(/[/\\][^/\\]+$/, '') || store.vaultPath
-    const absPath = fileDir ? `${fileDir}/${href}` : href
-    return `<img src="" data-relpath="${href}" data-abspath="${absPath}" alt="${text || ''}"${title ? ` title="${title}"` : ''} />`
-  }
-  return `<img src="${href}" alt="${text || ''}"${title ? ` title="${title}"` : ''} />`
-}
-renderer.heading = function (text, level) {
-  const id = slugify(text.replace(/<[^>]+>/g, ''))
-  return `<h${level} id="${id}">${text}</h${level}>\n`
-}
-// Code renderer: intercept ```mermaid``` blocks; otherwise delegate to highlight.js when language is known.
-renderer.code = function (code, infostring) {
-  const lang = (infostring || '').trim().split(/\s+/)[0]
-  if (lang === 'mermaid') {
-    return `<pre class="mermaid">${_escapeHtml(code)}</pre>`
-  }
-  if (lang && hljs.getLanguage(lang)) {
-    try {
-      const out = hljs.highlight(code, { language: lang }).value
-      return `<pre><code class="hljs language-${lang}">${out}</code></pre>`
-    } catch {}
-  }
-  return `<pre><code>${_escapeHtml(code)}</code></pre>`
-}
-marked.use({ gfm: true, breaks: true, renderer })
-// strict:'ignore' silences KaTeX warnings about CJK chars / en-dashes / fullwidth
-// punctuation when content inside `$…$` isn't actually math (very common in
-// Chinese docs where `$` shows up as a literal). nonStandard already tolerates
-// these tokens; without strict:'ignore' KaTeX still floods the console.
-marked.use(markedKatex({ throwOnError: false, nonStandard: true, strict: 'ignore' }))
-marked.use(markedFootnote())
-
-function _escapeHtml(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-}
-function _escapeAttr(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
-
-// Strip leading YAML frontmatter and parse simple key:value lines.
-// Returns { meta: {key: value|array} | null, body: stripped markdown }.
-function _extractFrontmatter(md) {
-  const m = md.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/)
-  if (!m) return { meta: null, body: md }
-  const meta = {}
-  for (const line of m[1].split(/\r?\n/)) {
-    const km = line.match(/^([a-zA-Z0-9_-]+)\s*:\s*(.*)$/)
-    if (!km) continue
-    let v = km[2].trim()
-    if (/^\[.*\]$/.test(v)) {
-      v = v.slice(1, -1).split(',').map(s => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean)
-    } else if (/^["'].*["']$/.test(v)) {
-      v = v.slice(1, -1)
-    }
-    meta[km[1]] = v
-  }
-  return { meta, body: md.slice(m[0].length) }
-}
-
-function _renderProperties(meta) {
-  if (!meta || Object.keys(meta).length === 0) return ''
-  const rows = Object.entries(meta).map(([k, v]) => {
-    let val
-    if (Array.isArray(v)) {
-      val = v.map(x => `<span class="prop-tag">${_escapeHtml(String(x))}</span>`).join('')
-    } else {
-      val = `<span class="prop-value">${_escapeHtml(String(v))}</span>`
-    }
-    return `<div class="prop-row"><div class="prop-key">${_escapeHtml(k)}</div><div class="prop-val">${val}</div></div>`
-  }).join('')
-  return `<div class="doc-properties">${rows}</div>\n\n`
-}
-
-// Convert Obsidian-only inline syntax: [[wikilinks]] and ==highlights==.
-// Skips content inside inline code spans (`...`).
-function _transformInline(text) {
-  // Split on inline code so we don't transform inside backticks.
-  const parts = text.split(/(`[^`\n]*`)/)
-  return parts.map((part, i) => {
-    if (i % 2 === 1) return part // odd parts = code spans, leave alone
-    let s = part
-    // [[Page#section|alias]] / [[Page|alias]] / [[Page]]
-    s = s.replace(/\[\[([^\]\n|#^]+)(?:#([^\]\n|]*))?(?:\^[^\]\n|]*)?(?:\|([^\]\n]+))?\]\]/g,
-      (_, target, section, alias) => {
-        const t = (alias ? target.replace(/\\$/, '') : target).trim()
-        const display = alias?.trim() || t
-        const sec = section ? ` data-section="${_escapeAttr(section.trim())}"` : ''
-        return `<a class="wikilink" data-target="${_escapeAttr(t)}"${sec} href="#">${_escapeHtml(display)}</a>`
-      })
-    // ==highlight==
-    s = s.replace(/==([^=\n]+)==/g, '<mark>$1</mark>')
-    return s
-  }).join('')
-}
-
-// Obsidian callout: > [!type] Title \n > body...
-// Recognized types: note tip info abstract todo success warning failure danger error question example quote cite bug.
-// Emits pre-rendered HTML so marked passes through unchanged.
-function _preprocessObsidian(md) {
-  const lines = md.split(/\r?\n/)
-  const out = []
-  let inFence = false
-  let i = 0
-  while (i < lines.length) {
-    const line = lines[i]
-    if (/^```/.test(line) || /^~~~/.test(line)) {
-      inFence = !inFence
-      out.push(line); i++; continue
-    }
-    if (inFence) { out.push(line); i++; continue }
-    const calloutMatch = line.match(/^>\s*\[!([\w-]+)\][+-]?\s*(.*)$/)
-    if (calloutMatch) {
-      const type = calloutMatch[1].toLowerCase()
-      const rawTitle = calloutMatch[2].trim()
-      const title = rawTitle || (type.charAt(0).toUpperCase() + type.slice(1))
-      const bodyLines = []
-      i++
-      while (i < lines.length && /^>/.test(lines[i])) {
-        bodyLines.push(lines[i].replace(/^>\s?/, ''))
-        i++
-      }
-      const innerMd = _transformInline(bodyLines.join('\n'))
-      const innerHtml = marked.parse(innerMd)
-      out.push(`<div class="callout callout-${_escapeAttr(type)}" data-callout="${_escapeAttr(type)}">`)
-      out.push(`<div class="callout-title"><span class="callout-icon"></span>${_transformInline(_escapeHtml(title))}</div>`)
-      out.push(`<div class="callout-body">${innerHtml}</div>`)
-      out.push(`</div>`)
-      out.push('')
-      continue
-    }
-    out.push(_transformInline(line))
-    i++
-  }
-  return out.join('\n')
-}
-
-function renderToHtml(md) {
-  if (!md) return ''
-  try {
-    const { meta, body } = _extractFrontmatter(md)
-    const propsHtml = _renderProperties(meta)
-    const processed = _preprocessObsidian(body)
-    const raw = propsHtml + marked.parse(processed)
-    return DOMPurify.sanitize(raw, {
-      ALLOW_UNKNOWN_PROTOCOLS: true,
-      USE_PROFILES: { html: true, svg: true, svgFilters: true, mathMl: true },
-      ADD_ATTR: ['data-relpath', 'data-abspath', 'data-target', 'data-section', 'data-callout', 'style'],
-    })
-  } catch { return '' }
-}
-
 // Refresh the formatted HTML from the current markdown source.
 // Renders markdown to HTML, then asynchronously loads local images as data URLs.
 async function refreshFormattedHtml() {
-  // renderToHtml() already sanitizes via DOMPurify
-  const safeHtml = renderToHtml(editorContent.value)
+  const localImageBasePath = store.activeFile?.path?.replace(/[/\\][^/\\]+$/, '') || store.vaultPath || ''
+  const safeHtml = renderObsidianMarkdown(editorContent.value, { localImageBasePath })
   formattedHtml.value = safeHtml
   await nextTick()
   // v-html may silently skip updates on contenteditable divs that have been
@@ -3496,6 +3361,24 @@ function _docHoverGradient(pathOrIdx) {
   return DOC_HOVER_GRADIENTS[Math.abs(hash) % DOC_HOVER_GRADIENTS.length]
 }
 
+const SourceStateDot = defineComponent({
+  name: 'SourceStateDot',
+  props: { state: String },
+  setup(props) {
+    const { t } = useI18n()
+    return () => {
+      if (props.state !== 'new' && props.state !== 'updated') return null
+      const label = t(props.state === 'new' ? 'aidoc.stateNew' : 'aidoc.stateUpdated')
+      return h('span', {
+        class: ['aidoc-source-state', { 'aidoc-source-state--updated': props.state === 'updated' }],
+        role: 'img',
+        'aria-label': label,
+        title: label,
+      })
+    }
+  },
+})
+
 // ── TreeNode: recursive file tree component ──
 const TreeNode = defineComponent({
   name: 'TreeNode',
@@ -3504,6 +3387,7 @@ const TreeNode = defineComponent({
     depth: Number,
     activePath: String,
     expandedFolders: Object,
+    sourceStates: Object,
     index: { type: Number, default: 0 },
   },
   emits: ['select-file', 'toggle-folder', 'delete-item', 'move-item', 'copy-files', 'context-menu'],
@@ -3640,6 +3524,7 @@ const TreeNode = defineComponent({
             class: 'truncate flex-1',
             style: { fontWeight: isDir ? '600' : '400' }
           }, props.node.name),
+          isDir ? null : h(SourceStateDot, { state: props.sourceStates?.[props.node.path] }),
         ])
       )
 
@@ -3655,6 +3540,7 @@ const TreeNode = defineComponent({
               depth: props.depth + 1,
               activePath: props.activePath,
               expandedFolders: props.expandedFolders,
+              sourceStates: props.sourceStates,
               'onSelect-file': (p, n) => emit('select-file', p, n),
               'onToggle-folder': (p) => emit('toggle-folder', p),
               'onDelete-item': (p) => emit('delete-item', p),
@@ -4205,6 +4091,17 @@ defineExpose({ docTreeCollapsed })
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.aidoc-source-state {
+  flex-shrink: 0;
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-full);
+  background: var(--accent);
+}
+.aidoc-source-state--updated {
+  background: transparent;
 }
 .doc-folder-badge {
   flex-shrink: 0;

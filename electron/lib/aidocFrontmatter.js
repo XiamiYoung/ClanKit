@@ -87,4 +87,4 @@ function sha256File(absPath) {
   })
 }
 
-module.exports = { parseFrontmatter, validateWikiFrontmatter, sha256Text, sha256File }
+module.exports = { WIKI_TYPES, parseFrontmatter, validateWikiFrontmatter, sha256Text, sha256File }

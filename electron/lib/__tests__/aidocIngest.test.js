@@ -64,15 +64,21 @@ describe('runIngest', () => {
     for (const n of ['a summary', 'b summary', 'Shared Concept']) expect(index).toContain(`[[${n}]]`)
   })
 
-  it('fails an unreadable/scanned pdf without recording and continues', async () => {
-    const pdf = src('scan.pdf', 'not really a pdf')
+  it('fails a scanned PDF with scanned_pdf without recording and continues', async () => {
+    const pdf = src('scan.pdf', 'stub')
     const b = src('b.md')
     const agent = okAgent()
-    const result = await run([pdf, b], agent)
-    expect(result.done).toEqual([b.rel])
-    expect(result.failed).toHaveLength(1)
-    expect(result.failed[0].rel).toBe(pdf.rel)
-    expect(typeof result.failed[0].reason).toBe('string')
+    // Stub the CommonJS PDF parser to simulate a scanned document with minimal extracted text.
+    const key = require.resolve('pdf-parse')
+    const real = require(key)
+    require.cache[key].exports = async () => ({ text: 'Hi', numpages: 3 })
+    try {
+      expect(await run([pdf, b], agent)).toEqual({
+        done: [b.rel], failed: [{ rel: pdf.rel, reason: 'scanned_pdf' }], stopped: false
+      })
+    } finally {
+      require.cache[key].exports = real
+    }
     expect(agent).toHaveBeenCalledTimes(1)
     expect(Object.keys((await readRegistry(registryFile)).sources)).toEqual([b.rel])
   })
@@ -89,6 +95,41 @@ describe('runIngest', () => {
     expect(result.done).toEqual([b.rel])
     expect(fs.existsSync(path.join(root, 'wiki', 'Partial.md'))).toBe(true)
     expect(Object.keys((await readRegistry(registryFile)).sources)).toEqual([b.rel])
+  })
+
+  it('reports read_failed when a planned source disappears and continues', async () => {
+    const a = src('a.md'), b = src('b.md')
+    fs.rmSync(a.abs)
+    const agent = okAgent()
+    const result = await run([a, b], agent)
+    expect(result).toEqual({
+      done: [b.rel], failed: [{ rel: a.rel, reason: 'read_failed', detail: expect.stringContaining('ENOENT') }], stopped: false
+    })
+    expect(agent).toHaveBeenCalledTimes(1)
+    expect(Object.keys((await readRegistry(registryFile)).sources)).toEqual([b.rel])
+  })
+
+  it('reports record_failed when index coverage fails and leaves the source retryable', async () => {
+    const a = src('a.md'), b = src('b.md')
+    const indexPath = path.join(root, 'wiki', 'index.md')
+    let index
+    const result = await run([a, b], async ({ source, tool }) => {
+      if (source.rel === a.rel) {
+        index = fs.readFileSync(indexPath)
+        fs.rmSync(indexPath)
+        fs.mkdirSync(indexPath)
+      } else {
+        fs.rmdirSync(indexPath)
+        fs.writeFileSync(indexPath, index)
+      }
+      await write(tool, path.basename(source.rel, '.md'), source.rel)
+    })
+    expect(result).toEqual({
+      done: [b.rel], failed: [{ rel: a.rel, reason: 'record_failed', detail: expect.any(String) }], stopped: false
+    })
+    expect(Object.keys((await readRegistry(registryFile)).sources)).toEqual([b.rel])
+    expect(wikiRead('a.md')).toContain('Body of a.')
+    expect(wikiRead('log.md')).not.toContain(a.rel)
   })
 
   it('fails with no_pages when the agent writes nothing', async () => {
@@ -120,14 +161,25 @@ describe('runIngest', () => {
 
   it('records the first source and stops before the second when stop is requested between them', async () => {
     const a = src('a.md'), b = src('b.md')
-    let checks = 0
-    // Calls: before a (1), after a's runAgent (2), before b (3).
-    const shouldStop = () => ++checks >= 3
+    let stop = false
+    const onProgress = ({ status }) => { if (status === 'done') stop = true }
     const agent = okAgent()
-    const result = await run([a, b], agent, { shouldStop })
+    const result = await run([a, b], agent, { shouldStop: () => stop, onProgress })
     expect(result).toEqual({ done: [a.rel], failed: [], stopped: true })
     expect(agent).toHaveBeenCalledTimes(1)
     expect(Object.keys((await readRegistry(registryFile)).sources)).toEqual([a.rel])
+  })
+
+  it('honors a stop requested while preparing a source before starting the agent', async () => {
+    const a = src('a.md')
+    const agent = okAgent()
+    let stop = false
+    const result = await run([a], agent, {
+      shouldStop: () => stop,
+      onProgress: ({ status }) => { if (status === 'start') stop = true }
+    })
+    expect(result).toEqual({ done: [], failed: [], stopped: true })
+    expect(agent).not.toHaveBeenCalled()
   })
 
   it('treats an AbortError as stopped, not failed, and does not record', async () => {
@@ -172,12 +224,35 @@ describe('runIngest', () => {
     expect((await readRegistry(registryFile)).sources[a.rel].hash).toBe(await sha256File(a.abs))
   })
 
+  it('keeps a hand-edited page protected after an agent minimally edits it', async () => {
+    const a = src('a.md')
+    await run([a], okAgent())
+    const title = 'a summary'
+    const rel = `wiki/${title}.md`
+    fs.writeFileSync(path.join(root, rel), pageText(title, [a.rel], 'USER EDIT'))
+    await run([a], async ({ tool }) => {
+      const edit = await tool.execute('c', { operation: 'edit_wiki', path: rel, oldText: 'Body of a summary.', newText: 'Revised summary.' })
+      expect(edit.details.userEdited).toBe(true)
+    })
+    const registered = (await readRegistry(registryFile)).pages[rel]
+    expect(registered.hash).toBe(await sha256File(path.join(root, rel)))
+    expect(registered.handEdited).toBe(true)
+    await run([a], async ({ tool, handEditedPages }) => {
+      expect(handEditedPages).toEqual([rel])
+      expect((await write(tool, title, a.rel)).isError).toBe(true)
+    })
+    expect(wikiRead(`${title}.md`)).toContain('Revised summary. USER EDIT')
+  })
+
   it('records pre-run hash/mtime/size so a mid-run edit shows as updated', async () => {
-    const a = src('a.md', 'original source text here. '.repeat(5))
+    const original = 'original source text here. '.repeat(5)
+    const a = src('a.md', original)
     const before = await sha256File(a.abs)
     await run([a], async ({ source, tool }) => {
       await write(tool, 'p', source.rel)
       fs.writeFileSync(a.abs, 'changed during the run, and longer. '.repeat(9))
+      const result = await tool.execute('c', { operation: 'read_source', path: source.rel })
+      expect(result.content[0].text).toContain(original)
     })
     const reg = await readRegistry(registryFile)
     expect(reg.sources[a.rel].hash).toBe(before)
@@ -203,9 +278,12 @@ describe('runIngest', () => {
     let release
     const gate = new Promise(r => { release = r })
     const first = run([a], async ({ source, tool }) => { await gate; await write(tool, 'p', source.rel) })
-    await new Promise(r => setTimeout(r, 30))
-    await expect(run([a], okAgent())).rejects.toMatchObject({ code: 'INGEST_BUSY' })
-    release()
+    try {
+      const alias = path.dirname(registryFile) + path.sep + '.' + path.sep + path.basename(registryFile)
+      await expect(run([a], okAgent(), { registryFile: alias })).rejects.toMatchObject({ code: 'INGEST_BUSY' })
+    } finally {
+      release()
+    }
     await first
     await expect(run([a], okAgent())).resolves.toMatchObject({ stopped: false })
   })
@@ -248,6 +326,15 @@ describe('buildIngestPlan', () => {
     const plan = await buildIngestPlan({ root, registry })
     expect(plan.refreshed).toEqual([a.rel])
     expect(plan.sources.map(s => [s.rel, s.state])).toEqual([[b.rel, 'updated']])
+  })
+
+  it('keeps an unreadable updated source in the plan', async () => {
+    const a = src('a.md')
+    const registry = recordIngested(emptyReg(), entry(a.rel))
+    const hashFile = vi.fn().mockRejectedValue(new Error('unreadable'))
+    const plan = await buildIngestPlan({ root, registry, hashFile })
+    expect(plan.refreshed).toEqual([])
+    expect(plan.sources.map(s => [s.rel, s.state])).toEqual([[a.rel, 'updated']])
   })
 
   it('caps at MAX_SOURCES_PER_RUN and reports overflow', async () => {

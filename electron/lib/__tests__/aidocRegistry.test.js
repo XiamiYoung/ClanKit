@@ -6,7 +6,7 @@ import path from 'path'
 
 const require = createRequire(import.meta.url)
 const {
-  registryPathFor, readRegistry, writeRegistry, recordIngested, classifySources, removedSources
+  registryPathFor, readRegistry, writeRegistry, updateRegistry, recordIngested, classifySources, removedSources
 } = require('../aidocRegistry')
 const { readIngestedSources } = require('../aidocGraph')
 const { rootHash } = require('../aidocIndex')
@@ -114,6 +114,41 @@ describe('writeRegistry', () => {
     } finally { spy.mockRestore() }
     expect(calls).toBe(6)
     expect(await fs.readdir(dir)).toEqual([])
+  })
+})
+
+describe('updateRegistry', () => {
+  it('serializes overlapping read-modify-write updates across path aliases', async () => {
+    const dir = await tmp()
+    const file = path.join(dir, 'r.json')
+    const alias = dir + path.sep + '.' + path.sep + 'r.json'
+    let start, release
+    const started = new Promise(resolve => { start = resolve })
+    const gate = new Promise(resolve => { release = resolve })
+    const first = updateRegistry(file, async registry => {
+      start()
+      await gate
+      return recordIngested(registry, entry('kb_source/a.md', []))
+    })
+    await started
+    const second = updateRegistry(alias, registry => recordIngested(registry, entry('kb_source/b.md', [])))
+    release()
+    await Promise.all([first, second])
+    expect(Object.keys((await readRegistry(file)).sources)).toEqual(['kb_source/a.md', 'kb_source/b.md'])
+    expect(await fs.readdir(dir)).toEqual(['r.json'])
+  })
+
+  it('preserves an unreadable registry and allows an update after it is repaired', async () => {
+    const dir = await tmp()
+    const file = path.join(dir, 'r.json')
+    const bad = '{truncated'
+    await fs.writeFile(file, bad)
+    const update = vi.fn(registry => recordIngested(registry, entry('kb_source/a.md', [])))
+    await expect(updateRegistry(file, update)).rejects.toThrow()
+    expect(update).not.toHaveBeenCalled()
+    expect(await fs.readFile(file, 'utf8')).toBe(bad)
+    await writeRegistry(file, empty())
+    await expect(updateRegistry(file, update)).resolves.toMatchObject({ sources: { 'kb_source/a.md': { hash: 'sh' } } })
   })
 })
 

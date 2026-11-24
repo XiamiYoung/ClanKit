@@ -8,6 +8,7 @@ const fs   = require('fs')
 const path = require('path')
 const { logger } = require('../logger')
 const { AIDOC_FOLDERS, resolveAiDocRoot } = require('../lib/aidocLayout')
+const { buildWikiOverview } = require('../lib/aidocOverview')
 
 // ── Memory Helpers ───────────────────────────────────────────────────────────
 // Sections preserved when truncating large memory blobs. After the 2026-05-03
@@ -847,6 +848,15 @@ Loading a skill is cheap (returns a markdown guide); skipping it when relevant c
   // aiDocEnabled absent => on (IM bridge / scheduler / utility flows keep AI Doc guidance)
   const aiDocOn      = config.aiDocEnabled !== false
   const aidocPath    = resolveAiDocRoot({ ...config, dataPath })
+  let wikiOverview = ''
+  if (aiDocOn && _isProductivity) {
+    try {
+      const overview = buildWikiOverview({ dataDir: config.dataPath, root: aidocPath })
+      if (overview) wikiOverview = `\n${overview.text}\n\n`
+    } catch {
+      // Registry failures must not interrupt prompt construction.
+    }
+  }
   const artifactPath = config.artifactPath || path.join(dataPath, 'artifact')
   const productivityWorkingPath = _isProductivity ? (config.chatWorkingPath || null) : null
   const skillsPath = config.skillsPath || path.join(dataPath, 'skills')
@@ -899,7 +909,7 @@ The AI Doc folder has three sub-folders:
   - ${AIDOC_FOLDERS.GENERAL}/ — ordinary documents and documents generated in chats. This is where you write readable documents.
   - ${AIDOC_FOLDERS.KB_SOURCE}/ — knowledge-base source files the user drops in. Read-only for agents: never write, edit, move, or delete anything here.
   - ${AIDOC_FOLDERS.WIKI}/ — AI-maintained knowledge pages. Do NOT write here from normal chats.
-All readable documents live under ${aidocPath}/${AIDOC_FOLDERS.GENERAL} — Markdown (.md), Word (.docx), PDF (.pdf), PowerPoint (.pptx), plain text (.txt), Excel (.xlsx/.csv), HTML (.html), and similar human-readable formats. When the user asks you to create a document, report, note, summary, or any readable file, ALWAYS write it into ${aidocPath}/${AIDOC_FOLDERS.GENERAL} (or a subfolder of it).
+${wikiOverview}All readable documents live under ${aidocPath}/${AIDOC_FOLDERS.GENERAL} — Markdown (.md), Word (.docx), PDF (.pdf), PowerPoint (.pptx), plain text (.txt), Excel (.xlsx/.csv), HTML (.html), and similar human-readable formats. When the user asks you to create a document, report, note, summary, or any readable file, ALWAYS write it into ${aidocPath}/${AIDOC_FOLDERS.GENERAL} (or a subfolder of it).
 
 ` : ''}ARTIFACT PATH (${aiDocOn ? 'for non-document output only' : 'for all generated files'}): ${artifactPath}
 ${aiDocOn ? 'This is for generated files that are NOT readable documents: exports, temp files, raw data dumps, generated code snippets, binary output. Do NOT put .md, .docx, .pdf, .pptx, .txt, .html or other readable documents here.' : 'This is where ALL generated files go, documents included: reports, notes, summaries, exports, temp files, raw data dumps, generated code snippets, binary output.'} Create subdirectories as needed (e.g. ${artifactPath}/exports/). The directory is auto-created on first write.

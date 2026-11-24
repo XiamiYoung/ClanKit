@@ -20,7 +20,7 @@ function isScannableName(name) {
   return !/[:*?"<>|]|[. ]$|^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(name)
 }
 
-async function scanKnowledgeFiles(root) {
+async function scanKnowledgeFiles(root, { folders = KNOWLEDGE_FOLDERS } = {}) {
   const files = []
   if (!root) return files
 
@@ -56,7 +56,9 @@ async function scanKnowledgeFiles(root) {
     }
   }
 
-  for (const folder of KNOWLEDGE_FOLDERS) await visit(path.resolve(root, folder), folder)
+  for (const folder of KNOWLEDGE_FOLDERS) {
+    if (folders.includes(folder)) await visit(path.resolve(root, folder), folder)
+  }
   return files
 }
 

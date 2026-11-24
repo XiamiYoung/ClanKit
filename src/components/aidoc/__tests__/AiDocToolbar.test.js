@@ -23,24 +23,25 @@ describe('AiDocToolbar', () => {
       progress: null,
       refreshStatus: vi.fn(),
       updateIndex: vi.fn(),
+      runSync: vi.fn(),
     })
     useAiDocStore.mockReturnValue(store)
   })
 
-  it('puts Graph before Rebuild index and only badges a stale index', async () => {
+  it('puts Wiki and Graph before Sync and badges pending changes', async () => {
     const wrapper = mount(AiDocToolbar, { global: { stubs: { Teleport: true } } })
     expect(store.refreshStatus).toHaveBeenCalledOnce()
-    const rebuild = wrapper.get('[data-testid="aidoc-rebuild-index"]')
+    const rebuild = wrapper.get('[data-testid="aidoc-sync"]')
     const graph = wrapper.get('[data-testid="aidoc-open-graph"]')
     expect(wrapper.findAll('button').map(button => button.attributes('data-testid')))
-      .toEqual(['aidoc-open-graph', 'aidoc-rebuild-index'])
+      .toEqual(['aidoc-open-wiki', 'aidoc-open-graph', 'aidoc-sync'])
     expect(rebuild.get('[data-testid="aidoc-sync-dot"]').exists()).toBe(true)
     expect(wrapper.get('[role="status"]').text()).toContain('aidoc.wikiNeedsSync')
     store.status.indexStale = false
     await nextTick()
     expect(rebuild.find('[data-testid="aidoc-sync-dot"]').exists()).toBe(false)
 
-    for (const [button, label] of [[graph, 'aidoc.graph'], [rebuild, 'aidoc.fullRebuild']]) {
+    for (const [button, label] of [[graph, 'aidoc.graph'], [rebuild, 'aidoc.sync']]) {
       expect(button.classes()).toContain('app-btn--icon')
       expect(button.attributes('aria-label')).toBe(label)
       expect(button.text()).toBe('')
@@ -53,6 +54,14 @@ describe('AiDocToolbar', () => {
     } finally {
       vi.useRealTimers()
     }
+    store.status.ingestAvailable = true
+    store.status.pending = { new: 2, updated: 1 }
+    await nextTick()
+    expect(rebuild.find('[data-testid="aidoc-sync-dot"]').exists()).toBe(true)
+    await rebuild.trigger('click')
+    expect(store.runSync).toHaveBeenCalledOnce()
+    await wrapper.get('[data-testid="aidoc-open-wiki"]').trigger('click')
+    expect(wrapper.emitted('open-wiki')).toHaveLength(1)
     store.updating = true
     store.progress = { done: 2, total: 5 }
     await nextTick()
@@ -67,7 +76,7 @@ describe('AiDocToolbar', () => {
 
   it('only starts a full rebuild after confirmation', async () => {
     const wrapper = mount(AiDocToolbar, { global: { stubs: { Teleport: true } } })
-    await wrapper.get('[data-testid="aidoc-rebuild-index"]').trigger('click')
+    await wrapper.get('[data-testid="aidoc-sync"]').trigger('contextmenu')
     expect(store.updateIndex).not.toHaveBeenCalled()
     await wrapper.get('.confirm-action-btn').trigger('click')
     expect(store.updateIndex).toHaveBeenCalledExactlyOnceWith({ full: true })

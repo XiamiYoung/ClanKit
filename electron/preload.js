@@ -197,6 +197,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getGraph: (options) => ipcRenderer.invoke('aidoc:graph-data', options),
     getSyncStatus: (options) => ipcRenderer.invoke('aidoc:sync-status', options),
     resolveLink: (options) => ipcRenderer.invoke('aidoc:resolve-link', options),
+    getIngestPlan: (options) => ipcRenderer.invoke('aidoc:ingest-plan', options),
+    runIngest: (options) => ipcRenderer.invoke('aidoc:ingest-run', options),
+    stopIngest: (options) => ipcRenderer.invoke('aidoc:ingest-stop', options),
+    getSourceStates: (options) => ipcRenderer.invoke('aidoc:source-states', options),
+    getWikiPages: (options) => ipcRenderer.invoke('aidoc:wiki-pages', options),
+    getWikiPage: (options) => ipcRenderer.invoke('aidoc:wiki-page', options),
+    onIngestProgress: (cb) => {
+      const listener = (_, progress) => cb(progress)
+      ipcRenderer.on('aidoc:ingest-progress', listener)
+      return () => ipcRenderer.removeListener('aidoc:ingest-progress', listener)
+    },
     onIndexProgress: (cb) => {
       const listener = (_, progress) => cb(progress)
       ipcRenderer.on('aidoc:index-progress', listener)

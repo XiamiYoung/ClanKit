@@ -65,14 +65,15 @@ vi.mock('../../stores/chats', () => ({
 vi.mock('../../i18n/useI18n', () => ({
   useI18n: () => ({ t: (key) => key, locale: ref('en') }),
 }))
-vi.mock('marked', () => {
+vi.mock('marked', async (importOriginal) => {
+  const actual = await importOriginal()
   const Renderer = vi.fn()
   Renderer.prototype.link = vi.fn()
   const marked = vi.fn((s) => s)
   marked.use = vi.fn()
   marked.parse = vi.fn((s) => s)
   marked.Renderer = Renderer
-  return { marked }
+  return { ...actual, marked }
 })
 vi.mock('highlight.js', () => ({ default: { highlightElement: vi.fn() } }))
 vi.mock('dompurify', () => ({ default: { sanitize: (s) => s } }))
@@ -100,12 +101,45 @@ vi.stubGlobal('window', {
 })
 
 import DocsView from '../DocsView.vue'
+import { useAiDocStore } from '../../stores/aidoc'
+
+const sourceTreeRoot = 'C:\\Vault'
+const sourceTreeDir = sourceTreeRoot + '\\kb_source'
+const sourceTreeFiles = [
+  { path: sourceTreeDir + '\\draft.md', name: 'draft.md', type: 'file' },
+  { path: sourceTreeDir + '\\revised.md', name: 'revised.md', type: 'file' },
+  { path: sourceTreeDir + '\\done.md', name: 'done.md', type: 'file' },
+  { path: sourceTreeDir + '\\image.svg', name: 'image.svg', type: 'file' },
+  { path: sourceTreeRoot + '\\general\\extra.md', name: 'extra.md', type: 'file' },
+]
+
+function mountSourceTree() {
+  mockObsidianStore.vaultPath = sourceTreeRoot
+  mockObsidianStore.fileTree = [
+    { path: sourceTreeDir, name: 'kb_source', type: 'dir', children: sourceTreeFiles.slice(0, 4) },
+    sourceTreeFiles[4],
+  ]
+  mockObsidianStore.expandedFolders = { [sourceTreeDir]: true }
+  window.electronAPI.aidoc = {
+    getSourceStates: vi.fn(async () => ({
+      success: true,
+      states: Object.fromEntries(['new', 'updated', 'ingested'].map((state, index) => [sourceTreeFiles[index].path, state])),
+    })),
+  }
+  return shallowMount(DocsView, {
+    global: {
+      stubs: { Teleport: true, TreeNode: false, SourceStateDot: false },
+      directives: { tooltip: {} },
+    },
+  })
+}
 
 describe('DocsView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     mockObsidianStore.vaultPath = ''
     mockObsidianStore.fileTree = []
+    mockObsidianStore.expandedFolders = {}
     mockObsidianStore.activeFile = null
     focusEnterWithSpy.mockClear()
     mockObsidianStore.openFile.mockClear()
@@ -134,6 +168,44 @@ describe('DocsView', () => {
     mockObsidianStore.fileTree = []
     const wrapper = shallowMount(DocsView)
     expect(wrapper.find('.doc-tree-panel').exists()).toBe(true)
+  })
+
+  it('shows source status on new and updated files in the tree and search results', async () => {
+    const wrapper = mountSourceTree()
+    await flushPromises()
+    expect(window.electronAPI.aidoc.getSourceStates).toHaveBeenCalledWith({ root: sourceTreeRoot })
+    expect(wrapper.findAll('.aidoc-source-state').map(dot => dot.attributes('title'))).toEqual([
+      'aidoc.stateNew',
+      'aidoc.stateUpdated',
+    ])
+    await wrapper.get('input.doc-filter-input').setValue('draft')
+    expect(wrapper.get('.doc-search-item .aidoc-source-state').attributes('title')).toBe('aidoc.stateNew')
+    wrapper.unmount()
+  })
+
+  it('offers organizing only for supported sources and scopes the action to the selected file', async () => {
+    const ingestSingle = vi.spyOn(useAiDocStore(), 'ingestSingle').mockResolvedValue()
+    const wrapper = mountSourceTree()
+    await flushPromises()
+    const rightClick = async name => {
+      const row = wrapper.findAll('.doc-tree-panel .cursor-pointer').find(row => row.text() === name)
+      row.element.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))
+      await wrapper.vm.$nextTick()
+    }
+
+    await rightClick('draft.md')
+    const organize = wrapper.get('[data-testid="aidoc-file-ingest"]')
+    expect(organize.text()).toBe('aidoc.ingestFile')
+    organize.element.click()
+    await wrapper.vm.$nextTick()
+    expect(ingestSingle).toHaveBeenCalledWith('kb_source/draft.md')
+    await rightClick('done.md')
+    expect(wrapper.get('[data-testid="aidoc-file-ingest"]').text()).toBe('aidoc.reingestFile')
+    await rightClick('image.svg')
+    expect(wrapper.find('[data-testid="aidoc-file-ingest"]').exists()).toBe(false)
+    await rightClick('extra.md')
+    expect(wrapper.find('[data-testid="aidoc-file-ingest"]').exists()).toBe(false)
+    wrapper.unmount()
   })
 
   it('opens a graph document and returns to the editor', async () => {

@@ -6,6 +6,7 @@ import { useAiDocStore } from '../aidoc'
 describe('AI Doc store', () => {
   let api
   let progress
+  let ingestProgress
   let unsubscribe
 
   beforeEach(() => {
@@ -15,6 +16,16 @@ describe('AI Doc store', () => {
       getGraph: vi.fn(async () => ({ nodes: [] })),
       getSyncStatus: vi.fn(async () => ({ indexStale: false })),
       updateIndex: vi.fn(),
+      getIngestPlan: vi.fn(),
+      runIngest: vi.fn(),
+      stopIngest: vi.fn(async () => ({ success: true })),
+      getSourceStates: vi.fn(async () => ({ success: true, states: { '/a/kb_source/a.md': 'new' } })),
+      getWikiPages: vi.fn(async () => ({ success: true, pages: [{ rel: 'wiki/index.md' }] })),
+      getWikiPage: vi.fn(async ({ rel }) => ({ success: true, page: { rel, body: '# Wiki' } })),
+      onIngestProgress: vi.fn(listener => {
+        ingestProgress = listener
+        return vi.fn()
+      }),
       onIndexProgress: vi.fn(listener => {
         progress = listener
         return unsubscribe
@@ -88,4 +99,65 @@ describe('AI Doc store', () => {
     expect(store.error).toBe('')
     expect(store.updating).toBe(false)
   })
+
+  it('updates the index before requesting a plan and shows no confirmation for an empty plan', async () => {
+    const store = useAiDocStore()
+    store.setRoot('/a')
+    api.updateIndex.mockResolvedValue({ success: true, stats: {} })
+    api.getIngestPlan.mockResolvedValue({ success: true, sources: [], providerReady: true })
+    await store.runSync()
+    expect(api.updateIndex.mock.invocationCallOrder[0]).toBeLessThan(api.getIngestPlan.mock.invocationCallOrder[0])
+    expect(api.getIngestPlan).toHaveBeenCalledWith({ root: '/a', rels: undefined, force: false })
+    expect(store.ingestPlan).toBeNull()
+    expect(store.ingestNothing).toBe(true)
+  })
+
+  it('confirms only the selected source, tracks progress, stops and refreshes stores', async () => {
+    const store = useAiDocStore()
+    store.setRoot('/a')
+    const rel = 'kb_source/a.md'
+    api.updateIndex.mockResolvedValue({ success: true, stats: {} })
+    api.getIngestPlan.mockResolvedValue({ success: true, sources: [{ rel, size: 1, state: 'ingested' }], overflow: 1, providerReady: true })
+    await store.ingestSingle(rel)
+    expect(api.getIngestPlan).toHaveBeenCalledWith({ root: '/a', rels: [rel], force: true })
+    expect(store.ingestPlan.sources.map(item => item.rel)).toEqual([rel])
+    let finish
+    api.runIngest.mockImplementation(() => new Promise(resolve => { finish = resolve }))
+    const run = store.confirmIngest()
+    const opts = api.runIngest.mock.calls[0][0]
+    expect(opts).toMatchObject({ root: '/a', rels: [rel], force: true })
+    ingestProgress({ requestId: 'wrong', index: 5 })
+    expect(store.ingestProgress).toBeNull()
+    ingestProgress({ requestId: opts.requestId, index: 0, total: 1, rel, action: 'read_source' })
+    expect(store.ingestProgress.rel).toBe(rel)
+    await store.stopIngest()
+    expect(api.stopIngest).toHaveBeenCalledWith({ root: '/a' })
+    expect(store.ingestStopping).toBe(true)
+    finish({ success: true, done: [], failed: [], stopped: true, overflow: 0 })
+    await run
+    expect(store.ingesting).toBe(false)
+    expect(store.ingestStopping).toBe(false)
+    expect(store.ingestResult).toMatchObject({ stopped: true, remaining: 2 })
+    expect(api.getGraph).toHaveBeenCalledTimes(2)
+    expect(store.sourceStates['/a/kb_source/a.md']).toBe('new')
+    expect(store.wikiPages).toEqual([{ rel: 'wiki/index.md' }])
+    await store.openWikiPage('wiki/index.md')
+    expect(store.currentWikiPage).toMatchObject({ rel: 'wiki/index.md', body: '# Wiki' })
+  })
+
+  it('displays a localized busy error and keeps the confirmation available', async () => {
+    const store = useAiDocStore()
+    store.setRoot('/a')
+    api.updateIndex.mockResolvedValue({ success: true })
+    api.getIngestPlan.mockResolvedValue({ success: true, sources: [{ rel: 'kb_source/a.md' }], providerReady: true })
+    api.runIngest.mockResolvedValue({ success: false, code: 'busy' })
+    await store.runSync()
+    await store.confirmIngest()
+    expect(store.ingestErrorKey).toBe('aidoc.ingestBusy')
+    expect(store.ingesting).toBe(false)
+    expect(store.ingestPlan).not.toBeNull()
+    store.cancelIngestPlan()
+    expect(store.ingestPlan).toBeNull()
+  })
+
 })

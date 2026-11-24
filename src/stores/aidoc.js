@@ -1,92 +1,225 @@
+
 import { computed, ref, shallowRef } from 'vue'
 import { defineStore } from 'pinia'
+
+const ERROR_KEYS = {
+  rootChanged: 'aidoc.rootChanged',
+  rootUnavailable: 'aidoc.rootUnavailable',
+  providerMissing: 'aidoc.providerMissing',
+  busy: 'aidoc.ingestBusy',
+}
+
+function describeError(result, message, key) {
+  message.value = result.error || ''
+  key.value = message.value ? '' : (ERROR_KEYS[result.code] || 'aidoc.requestFailed')
+}
 
 export const useAiDocStore = defineStore('aidoc', () => {
   const status = shallowRef(null)
   const graph = shallowRef(null)
+  const sourceStates = shallowRef({})
+  const wikiPages = shallowRef(null)
+  const currentWikiPage = shallowRef(null)
+  const wikiLoading = ref(false)
+
   const progress = ref(null)
   const error = ref('')
   const errorKey = ref('')
   const stats = shallowRef(null)
   const requestId = ref(null)
   const updating = computed(() => requestId.value !== null)
+
+  const ingestPlan = shallowRef(null)
+  const ingestProgress = shallowRef(null)
+  const ingestResult = shallowRef(null)
+  const ingestError = ref('')
+  const ingestErrorKey = ref('')
+  const ingestRequestId = ref(null)
+  const ingesting = computed(() => ingestRequestId.value !== null)
+  const ingestStopping = ref(false)
+  const syncPreparing = ref(false)
+  const ingestNothing = ref(false)
+
   let root = ''
   let generation = 0
-  let graphSequence = 0
-  let statusSequence = 0
+  const sequences = new Map()
   let unsubscribe
+  let unsubscribeIngest
 
   function setRoot(value = '') {
     if (root === value) return
     root = value
     generation++
     status.value = graph.value = progress.value = stats.value = null
-    requestId.value = null
+    wikiPages.value = currentWikiPage.value = null
+    wikiLoading.value = false
+    sourceStates.value = {}
+    requestId.value = ingestRequestId.value = null
     error.value = errorKey.value = ''
+    ingestPlan.value = ingestResult.value = ingestProgress.value = null
+    ingestError.value = ingestErrorKey.value = ''
+    syncPreparing.value = ingestStopping.value = ingestNothing.value = false
   }
 
-  function setError(result) {
-    error.value = result.error || ''
-    if (error.value) errorKey.value = ''
-    else if (result.code === 'rootChanged') errorKey.value = 'aidoc.rootChanged'
-    else if (result.code === 'rootUnavailable') errorKey.value = 'aidoc.rootUnavailable'
-    else errorKey.value = 'aidoc.requestFailed'
-  }
-
-  async function read(method, latest, isLatest, output) {
+  async function read(method, output, { field, options, loading } = {}) {
     const api = window.electronAPI?.aidoc
-    if (!api) return
+    if (typeof api?.[method] !== 'function') return
     const current = generation
+    const latest = (sequences.get(method) || 0) + 1
+    sequences.set(method, latest)
+    const isCurrent = () => current === generation && sequences.get(method) === latest
+    if (loading) loading.value = true
     try {
-      const result = await api[method]({ root })
-      if (current !== generation || !isLatest(latest)) return
-      if (result.success === false) setError(result)
-      else output.value = result
+      const result = await api[method]({ ...options, root })
+      if (!isCurrent()) return
+      if (result.success === false) describeError(result, error, errorKey)
+      else output.value = field ? result[field] : result
     } catch (err) {
-      if (current === generation && isLatest(latest)) setError({ error: err.message })
+      if (isCurrent()) describeError({ error: err.message }, error, errorKey)
+    } finally {
+      if (loading && isCurrent()) loading.value = false
     }
   }
 
-  function refreshStatus() {
-    return read('getSyncStatus', ++statusSequence, id => id === statusSequence, status)
-  }
-
-  function loadGraph() {
-    return read('getGraph', ++graphSequence, id => id === graphSequence, graph)
-  }
+  const refreshStatus = () => read('getSyncStatus', status)
+  const loadGraph = () => read('getGraph', graph)
+  const refreshSourceStates = () => read('getSourceStates', sourceStates, { field: 'states' })
+  const loadWikiPages = () => read('getWikiPages', wikiPages, { field: 'pages' })
+  const openWikiPage = rel => read('getWikiPage', currentWikiPage, {
+    field: 'page', options: { rel }, loading: wikiLoading,
+  })
 
   async function updateIndex({ full = false } = {}) {
     const api = window.electronAPI?.aidoc
-    if (!api) return
-    unsubscribe ??= api.onIndexProgress(event => {
-      if (event.requestId === requestId.value) {
-        progress.value = { done: event.done, total: event.total }
-      }
-    })
+    if (!api) return false
     const id = globalThis.crypto.randomUUID()
     requestId.value = id
     progress.value = stats.value = null
     error.value = errorKey.value = ''
     try {
+      unsubscribe ??= api.onIndexProgress(event => {
+        if (event.requestId === requestId.value) {
+          progress.value = { done: event.done, total: event.total }
+        }
+      })
       const result = await api.updateIndex({ root, requestId: id, full })
-      if (id !== requestId.value) return
+      if (id !== requestId.value) return false
       if (!result.success) {
-        setError(result)
-        return
+        describeError(result, error, errorKey)
+        return false
       }
       stats.value = result.stats
-      await Promise.all([loadGraph(), refreshStatus()])
+      await Promise.all([loadGraph(), refreshStatus(), refreshSourceStates()])
+      return id === requestId.value
     } catch (err) {
-      if (id === requestId.value) setError({ error: err.message })
+      if (id === requestId.value) describeError({ error: err.message }, error, errorKey)
+      return false
     } finally {
       if (id === requestId.value) requestId.value = null
     }
   }
 
-  function dispose() {
-    unsubscribe?.()
-    unsubscribe = undefined
+  async function runSync({ rels, force = false } = {}) {
+    const api = window.electronAPI?.aidoc
+    if (!api?.getIngestPlan || syncPreparing.value || updating.value || ingesting.value) return
+    const current = generation
+    syncPreparing.value = true
+    ingestNothing.value = false
+    ingestError.value = ingestErrorKey.value = ''
+    ingestPlan.value = ingestResult.value = null
+    try {
+      if (!(await updateIndex()) || current !== generation) return
+      const result = await api.getIngestPlan({ root, rels, force })
+      if (current !== generation) return
+      if (!result.success) {
+        describeError(result, ingestError, ingestErrorKey)
+        return
+      }
+      if (result.sources.length) ingestPlan.value = { ...result, force }
+      else ingestNothing.value = true
+      await Promise.all([refreshStatus(), refreshSourceStates()])
+    } catch (err) {
+      if (current === generation) describeError({ error: err.message }, ingestError, ingestErrorKey)
+    } finally {
+      if (current === generation) syncPreparing.value = false
+    }
   }
 
-  return { status, graph, updating, progress, error, errorKey, stats, setRoot, refreshStatus, loadGraph, updateIndex, dispose }
+  function ingestSingle(rel) {
+    return runSync({ rels: [rel], force: true })
+  }
+
+  async function confirmIngest() {
+    const api = window.electronAPI?.aidoc
+    const plan = ingestPlan.value
+    if (!api?.runIngest || ingesting.value || !plan?.providerReady || !plan.sources.length) return
+    const id = globalThis.crypto.randomUUID()
+    ingestRequestId.value = id
+    ingestProgress.value = ingestResult.value = null
+    ingestError.value = ingestErrorKey.value = ''
+    try {
+      unsubscribeIngest ??= api.onIngestProgress(event => {
+        if (event.requestId !== ingestRequestId.value) return
+        if (event.type === 'index-error') return
+        ingestProgress.value = event
+      })
+      const result = await api.runIngest({
+        root, requestId: id, force: plan.force, rels: plan.sources.map(source => source.rel),
+      })
+      if (id !== ingestRequestId.value) return
+      if (!result.success) {
+        describeError(result, ingestError, ingestErrorKey)
+        return
+      }
+      const overflow = Math.max(result.overflow || 0, plan.overflow || 0)
+      const remaining = Math.max(0, plan.sources.length - result.done.length - result.failed.length) + overflow
+      ingestResult.value = { ...result, overflow, remaining }
+      await Promise.all([loadGraph(), loadWikiPages(), refreshStatus(), refreshSourceStates()])
+    } catch (err) {
+      if (id === ingestRequestId.value) describeError({ error: err.message }, ingestError, ingestErrorKey)
+    } finally {
+      if (id === ingestRequestId.value) {
+        ingestRequestId.value = null
+        ingestStopping.value = false
+      }
+    }
+  }
+
+  function cancelIngestPlan() {
+    if (ingesting.value) return
+    ingestPlan.value = ingestProgress.value = ingestResult.value = null
+    ingestError.value = ingestErrorKey.value = ''
+  }
+
+  async function stopIngest() {
+    if (!ingesting.value || ingestStopping.value) return
+    const id = ingestRequestId.value
+    ingestStopping.value = true
+    try {
+      const result = await window.electronAPI.aidoc.stopIngest({ root })
+      if (id !== ingestRequestId.value || result.success) return
+      describeError(result, ingestError, ingestErrorKey)
+      ingestStopping.value = false
+    } catch (err) {
+      if (id === ingestRequestId.value) {
+        describeError({ error: err.message }, ingestError, ingestErrorKey)
+        ingestStopping.value = false
+      }
+    }
+  }
+
+  function dispose() {
+    unsubscribe?.()
+    unsubscribeIngest?.()
+    unsubscribe = unsubscribeIngest = undefined
+  }
+
+  return {
+    status, graph, progress, updating, error, errorKey, stats,
+    sourceStates, wikiPages, currentWikiPage, wikiLoading,
+    ingestPlan, ingesting, ingestProgress, ingestResult, ingestError, ingestErrorKey,
+    ingestStopping, syncPreparing, ingestNothing,
+    setRoot, refreshStatus, loadGraph, refreshSourceStates, loadWikiPages, openWikiPage,
+    updateIndex, runSync, ingestSingle, confirmIngest, cancelIngestPlan, stopIngest, dispose,
+  }
 })

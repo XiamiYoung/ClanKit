@@ -119,7 +119,7 @@ function humanSize(bytes) {
 }
 
 class AiDocWikiTool extends BaseTool {
-  constructor({ root, registry } = {}) {
+  constructor({ root, registry, sourceText } = {}) {
     super(
       'aidoc_wiki',
       'Read source documents (kb_source/) and read or maintain wiki pages (wiki/) of the AI Doc knowledge base. Access is confined to those two folders.',
@@ -127,6 +127,7 @@ class AiDocWikiTool extends BaseTool {
     )
     this.root = root
     this.registry = registry || { version: 1, sources: {}, pages: {} }
+    this.sourceText = sourceText
     this._touched = new Set()
     this._pages = new Map()
     // Hash of the last content this tool wrote per page, so its own writes never count as user edits.
@@ -138,6 +139,10 @@ class AiDocWikiTool extends BaseTool {
   /** Pages written or edited during this run (index.md, log.md and SCHEMA.md excluded). */
   getWrittenPages() {
     return [...this._pages.values()].map(p => ({ ...p, sources: [...p.sources] }))
+  }
+
+  getWrittenPageState(rel) {
+    return { hash: this._lastHash.get(rel), handEdited: this._userEdited.has(rel) }
   }
 
   /** Every file written or edited during this run, including index.md. */
@@ -258,7 +263,8 @@ class AiDocWikiTool extends BaseTool {
     const target = resolveWikiToolPath(this.root, relPath)
     if (!target.ok) return this._err(target.error)
     if (target.area !== 'kb_source') return this._err('read_source requires a path starting with kb_source/')
-    if (!target.exists || !fs.statSync(target.abs).isFile()) return this._err(`File not found: ${target.rel}`)
+    const cached = this.sourceText?.rel === target.rel ? this.sourceText.loaded : null
+    if (!cached && (!target.exists || !fs.statSync(target.abs).isFile())) return this._err(`File not found: ${target.rel}`)
 
     const nums = {}
     for (const [name, value] of [['offset', offset], ['limit', limit]]) {
@@ -268,7 +274,7 @@ class AiDocWikiTool extends BaseTool {
       nums[name] = n
     }
 
-    const loaded = await loadSourceText(target.abs)
+    const loaded = cached || await loadSourceText(target.abs)
     if (!loaded.ok) {
       const base = SOURCE_FAILURES[loaded.reason] || loaded.reason
       return this._err(this._clean(loaded.detail ? `${base}: ${loaded.detail}` : base), { reason: loaded.reason })
@@ -306,7 +312,7 @@ class AiDocWikiTool extends BaseTool {
     const pages = this.registry?.pages || {}
     const entry = pages[rel] || pages[rel.replace(/^wiki\//, '')]
     const expected = this._lastHash.get(rel) || (entry && entry.hash)
-    if (expected && expected === sha256Text(current)) return false
+    if (!entry?.handEdited && expected && expected === sha256Text(current)) return false
     this._userEdited.set(rel, current.length)
     return true
   }
@@ -339,8 +345,7 @@ class AiDocWikiTool extends BaseTool {
       throw error
     }
     this._touched.add(target.rel)
-    // Only the agent's own clean pages are remembered; protected pages never become "clean" again.
-    if (!this._userEdited.has(target.rel)) this._lastHash.set(target.rel, sha256Text(content))
+    this._lastHash.set(target.rel, sha256Text(content))
     if (meta) this._pages.set(target.rel, meta)
     return null
   }
@@ -428,7 +433,8 @@ class AiDocWikiTool extends BaseTool {
     const pages = this.registry?.pages || {}
     // target.rel is the canonical on-disk spelling, so case/alias variants hit the same registry entry.
     const entry = pages[target.rel] || pages[target.rel.replace(/^wiki\//, '')]
-    const edited = !!(entry && entry.hash && entry.hash !== sha256Text(content))
+    const expected = this._lastHash.get(target.rel) || entry?.hash
+    const edited = this._userEdited.has(target.rel) || !!(entry?.handEdited || (expected && expected !== sha256Text(content)))
     return this._ok(edited ? `${USER_EDIT_NOTE}\n${content}` : content, { userEdited: edited })
   }
 }

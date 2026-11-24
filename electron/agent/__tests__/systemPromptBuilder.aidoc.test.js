@@ -4,6 +4,7 @@ import fs from 'fs'
 import os from 'os'
 
 const { buildSystemPrompt } = require('../systemPromptBuilder')
+const { registryPathFor, writeRegistry } = require('../../lib/aidocRegistry')
 
 const baseAgent = {
   systemAgentId: 'a1',
@@ -90,5 +91,30 @@ describe('systemPromptBuilder AI Doc gating', () => {
     const a = build(baseConfig)
     const b = build({ ...baseConfig, mode: 'chat' })
     expect(b).toBe(a)
+  })
+
+  it('injects wiki recall only in AI Doc-enabled productivity mode after the folder list', async () => {
+    const registryFile = registryPathFor(baseConfig.dataPath, docRoot)
+    const productivity = { ...baseConfig, mode: 'productivity' }
+    const baseline = build(productivity)
+    try {
+      await writeRegistry(registryFile, { version: 1, sources: {}, pages: {
+        'wiki/source.md': { hash: 'x', type: 'summary', updated: '2026-11-04' }
+      } })
+      const on = build({ ...productivity, aiDocEnabled: true })
+      expect(on).toContain('KNOWLEDGE BASE WIKI OVERVIEW')
+      expect(on).toContain(`${docRoot.replace(/\\/g, '/')}/wiki/index.md`)
+      expect(on.indexOf('KNOWLEDGE BASE WIKI OVERVIEW')).toBeGreaterThan(on.indexOf('AI-maintained knowledge pages'))
+      expect(on.indexOf('KNOWLEDGE BASE WIKI OVERVIEW')).toBeLessThan(on.indexOf('All readable documents live under'))
+      expect(build(productivity)).toBe(on)
+      expect(build({ ...productivity, aiDocEnabled: false })).not.toContain('wiki/index.md')
+      expect(build({ ...baseConfig, mode: 'chat', aiDocEnabled: true })).not.toContain('wiki/index.md')
+      expect(build(baseConfig)).not.toContain('wiki/index.md')
+
+      await writeRegistry(registryFile, { version: 1, sources: {}, pages: {} })
+      expect(build(productivity)).toBe(baseline)
+    } finally {
+      fs.rmSync(registryFile, { force: true })
+    }
   })
 })
