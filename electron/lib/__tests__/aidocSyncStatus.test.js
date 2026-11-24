@@ -15,7 +15,7 @@ function status(scanned = [], files = {}, ingested = {}) {
 describe('AI Doc sync status', () => {
   it('reports a fresh empty index for an empty scan', () => {
     expect(status()).toEqual({
-      indexStale: false, staleCount: 0, pending: { new: 0, updated: 0, removed: 0 }, total: 0,
+      indexStale: false, staleCount: 0, failedCount: 0, pending: { new: 0, updated: 0, removed: 0 }, total: 0,
     })
   })
 
@@ -27,9 +27,15 @@ describe('AI Doc sync status', () => {
     expect(status([a], { [a.rel]: { ...a, size: a.size + 1 } }).staleCount).toBe(1)
   })
 
-  it('signals a cached extraction error once even if its metadata also changed', () => {
-    expect(status([a], { [a.rel]: { ...a, error: 'error' } }).indexStale).toBe(true)
-    expect(status([a], { [a.rel]: { ...a, error: 'error', size: 99 } }).staleCount).toBe(1)
+  it('reports extraction errors separately from changed file metadata', () => {
+    const failed = { ...a, error: 'Encrypted Word document' }
+    expect(status([a], { [a.rel]: failed })).toMatchObject({
+      indexStale: false, staleCount: 0, failedCount: 1,
+    })
+    expect(status([a], { [a.rel]: { ...failed, size: 99 } })).toMatchObject({
+      indexStale: true, staleCount: 1, failedCount: 1,
+    })
+    expect(status([], { [a.rel]: failed }).failedCount).toBe(0)
   })
 
   it('counts only eligible sources and handles older records without mtime', () => {

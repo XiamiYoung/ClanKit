@@ -5,6 +5,7 @@ const path = require('path')
 const { AIDOC_FOLDERS } = require('./aidocLayout')
 const { rootHash } = require('./aidocIndex')
 const { createLinkResolver } = require('./aidocLinkResolver')
+const { isImageWikiTarget } = require('./aidocLinkParser')
 
 async function readIngestedSources(dataDir, root) {
   try {
@@ -52,6 +53,7 @@ function buildGraph({ files, ingested }) {
   for (const { rel, links: targets } of files) {
     if (!nodes.has(rel)) continue
     for (const target of targets) {
+      if (isImageWikiTarget(target)) continue
       const match = resolve(rel, target)
       if (match.kind === 'resolved' && nodes.has(match.rel)) {
         addLink(rel, match.rel)

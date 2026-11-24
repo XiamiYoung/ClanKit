@@ -78,7 +78,16 @@ function drawNode(node, context, scale) {
   context.save()
   context.globalAlpha = visible ? 1 : 0.19
   context.beginPath()
-  context.arc(node.x, node.y, size, 0, Math.PI * 2)
+  if (node.kind === 'ambiguous') {
+    const { x, y } = node
+    context.moveTo(x, y - size)
+    context.lineTo(x + size, y)
+    context.lineTo(x, y + size)
+    context.lineTo(x - size, y)
+    context.closePath()
+  } else {
+    context.arc(node.x, node.y, size, 0, Math.PI * 2)
+  }
   context.fillStyle = fill
   if (visible && isDocument) {
     context.shadowColor = fill

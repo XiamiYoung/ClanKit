@@ -1,42 +1,5 @@
 <template>
   <div class="aidoc-toolbar">
-    <AppTooltip :text="updateTooltip">
-      <AppButton
-        class="aidoc-index-update"
-        size="icon"
-        data-testid="aidoc-update"
-        :aria-label="updateLabel"
-        :loading="store.updating"
-        @click="store.updateIndex()"
-      >
-        <svg v-if="!store.updating" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path d="M20 7v5h-5M4 17v-5h5" />
-          <path d="M6 7a7 7 0 0 1 11.6-1L20 12M4 12l2.4 6A7 7 0 0 0 18 17" />
-        </svg>
-        <span
-          v-if="store.status && !store.updating"
-          class="sync-dot"
-          :class="{ 'is-stale': store.status.indexStale }"
-          aria-hidden="true"
-          data-testid="aidoc-sync-dot"
-        ></span>
-      </AppButton>
-    </AppTooltip>
-    <AppTooltip :text="t('aidoc.indexOptions')">
-      <AppButton
-        size="icon"
-        data-testid="aidoc-index-options"
-        :aria-label="t('aidoc.indexOptions')"
-        aria-haspopup="dialog"
-        :aria-expanded="showOptions"
-        :disabled="store.updating"
-        @click="showOptions = true"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path d="m6 9 6 6 6-6" />
-        </svg>
-      </AppButton>
-    </AppTooltip>
     <AppTooltip :text="t('aidoc.graph')">
       <AppButton
         size="icon"
@@ -52,16 +15,34 @@
         </svg>
       </AppButton>
     </AppTooltip>
-    <span class="sr-only" :role="store.error ? 'alert' : 'status'">{{ feedback || updateTooltip }}</span>
+    <AppTooltip :text="rebuildTooltip">
+      <AppButton
+        class="aidoc-index-rebuild"
+        size="icon"
+        data-testid="aidoc-rebuild-index"
+        :aria-label="rebuildLabel"
+        :loading="store.updating"
+        aria-haspopup="dialog"
+        :aria-expanded="showRebuild"
+        @click="showRebuild = true"
+      >
+        <svg v-if="!store.updating" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M20 7v5h-5M4 17v-5h5" />
+          <path d="M6 7a7 7 0 0 1 11.6-1L20 12M4 12l2.4 6A7 7 0 0 0 18 17" />
+        </svg>
+        <span v-if="store.status?.indexStale" class="sync-dot" aria-hidden="true" data-testid="aidoc-sync-dot"></span>
+      </AppButton>
+    </AppTooltip>
+    <span class="sr-only" :role="errorText ? 'alert' : 'status'">{{ feedback || rebuildTooltip }}</span>
 
     <ConfirmModal
-      v-if="showOptions"
+      v-if="showRebuild"
       :visible="true"
-      :title="t('aidoc.indexOptions')"
+      :title="t('aidoc.fullRebuild')"
       :message="t('aidoc.fullRebuildHint')"
       :confirm-text="t('aidoc.fullRebuild')"
       confirm-class="primary"
-      @close="showOptions = false"
+      @close="showRebuild = false"
       @confirm="rebuildIndex"
     />
   </div>
@@ -78,27 +59,31 @@ import ConfirmModal from '../common/ConfirmModal.vue'
 defineEmits(['open-graph'])
 const { t } = useI18n()
 const store = useAiDocStore()
-const showOptions = ref(false)
+const showRebuild = ref(false)
 const syncText = computed(() => {
   const status = store.status
   if (!status) return t('aidoc.statusUnknown')
-  return status.indexStale ? t('aidoc.syncStale', { n: status.staleCount }) : t('aidoc.syncOk')
+  return status.indexStale ? t('aidoc.wikiNeedsSync') : t('aidoc.syncOk')
 })
+const errorText = computed(() => store.errorKey ? t(store.errorKey) : store.error)
 const feedback = computed(() => {
-  if (store.error) return `${t('aidoc.indexFailed')} ${store.error}`
-  return store.stats && !store.updating ? t('aidoc.indexDone', store.stats) : ''
+  if (errorText.value) return `${t('aidoc.indexFailed')} ${errorText.value}`
+  if (store.updating) return ''
+  if (store.stats) return t('aidoc.indexDone', store.stats)
+  const failed = store.status?.failedCount
+  return failed ? t('aidoc.extractionFailed', { n: failed }) : ''
 })
 
-const updateLabel = computed(() => t(store.updating ? 'aidoc.updating' : 'aidoc.updateIndex'))
-const updateTooltip = computed(() => {
+const rebuildLabel = computed(() => t(store.updating ? 'aidoc.updating' : 'aidoc.fullRebuild'))
+const rebuildTooltip = computed(() => {
   const detail = store.updating
     ? (store.progress && t('aidoc.indexProgress', store.progress))
     : syncText.value
-  return [updateLabel.value, detail, feedback.value].filter(Boolean).join(' ? ')
+  return [rebuildLabel.value, detail, feedback.value].filter(Boolean).join(' ? ')
 })
 
 function rebuildIndex() {
-  showOptions.value = false
+  showRebuild.value = false
   store.updateIndex({ full: true })
 }
 
@@ -107,11 +92,12 @@ onMounted(() => store.refreshStatus())
 
 <style scoped>
 .aidoc-toolbar {
+  --aidoc-stale-badge: #ef4444;
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
-.aidoc-index-update { position: relative; }
+.aidoc-index-rebuild { position: relative; }
 .sync-dot {
   position: absolute;
   inset-block-start: 0.25rem;
@@ -119,7 +105,6 @@ onMounted(() => store.refreshStatus())
   width: 0.3125rem;
   height: 0.3125rem;
   border-radius: var(--radius-full);
-  background: var(--text-muted);
+  background: var(--aidoc-stale-badge);
 }
-.sync-dot.is-stale { background: var(--accent); }
 </style>

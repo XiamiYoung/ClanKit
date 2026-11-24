@@ -26,7 +26,6 @@ describe('AiDocGraphPanel', () => {
       status: { indexStale: true, staleCount: 3, ingestAvailable: false, pending: { new: 2, updated: 1, removed: 1 } },
       loadGraph: vi.fn(),
       refreshStatus: vi.fn(),
-      updateIndex: vi.fn(),
     })
     useAiDocStore.mockReturnValue(store)
   })
@@ -42,21 +41,23 @@ describe('AiDocGraphPanel', () => {
     wrapper.unmount()
   })
 
-  it('reports stale status, runs updates and handles graph navigation', async () => {
+  it('reports stale status and uses an icon-only back button', async () => {
     const wrapper = mount(AiDocGraphPanel)
     expect(wrapper.text()).toContain('aidoc.syncStale 3')
     expect(wrapper.text()).not.toContain('aidoc.syncPending')
     store.status.ingestAvailable = true
     await nextTick()
     expect(wrapper.text()).toContain('aidoc.syncPending 4')
-    await wrapper.get('[data-testid="aidoc-graph-update"]').trigger('click')
-    expect(store.updateIndex).toHaveBeenCalledOnce()
     const graph = wrapper.getComponent({ name: 'AiDocGraph' })
     graph.vm.$emit('select', unresolved)
     expect(wrapper.emitted('open-file')).toBeUndefined()
     graph.vm.$emit('select', doc)
     expect(wrapper.emitted('open-file')).toEqual([[{ path: doc.path, name: doc.name }]])
-    await wrapper.get('[data-testid="aidoc-graph-back"]').trigger('click')
+    const back = wrapper.get('[data-testid="aidoc-graph-back"]')
+    expect(back.classes()).toContain('app-btn--icon')
+    expect(back.attributes('aria-label')).toBe('aidoc.back')
+    expect(back.text()).toBe('')
+    await back.trigger('click')
     expect(wrapper.emitted('close')).toHaveLength(1)
     wrapper.unmount()
   })

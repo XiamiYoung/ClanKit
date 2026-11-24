@@ -2,6 +2,12 @@
 
 const CODE_SPAN = /(?<!`)(`+)(?!`)[\s\S]*?(?<!`)\1(?!`)/g
 
+const IMAGE_TARGET = /\.(?:apng|avif|bmp|gif|heic|heif|ico|jpe?g|png|svg|tiff?|webp)$/i
+
+function isImageWikiTarget(target) {
+  return IMAGE_TARGET.test(target.trim())
+}
+
 function extractWikiLinks(text) {
   let fence = ''
   const visible = text.split(/\r?\n/).map(line => {
@@ -21,11 +27,11 @@ function extractWikiLinks(text) {
   const links = new Set()
   for (const paragraph of visible.split(/\n[ \t]*\n/)) {
     for (const match of paragraph.replace(CODE_SPAN, ' ').matchAll(/\[\[([^\[\]\r\n]+)\]\]/g)) {
-      const target = match[1].split(/[|#]/, 1)[0].trim()
-      if (target) links.add(target)
+      const target = match[1].split(/\\?\||#/, 1)[0].trim()
+      if (target && !isImageWikiTarget(target)) links.add(target)
     }
   }
   return [...links]
 }
 
-module.exports = { extractWikiLinks }
+module.exports = { extractWikiLinks, isImageWikiTarget }

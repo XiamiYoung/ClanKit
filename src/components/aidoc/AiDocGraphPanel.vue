@@ -2,12 +2,13 @@
   <section class="aidoc-graph-panel" :aria-label="t('aidoc.graph')">
     <header class="graph-header">
       <div class="graph-controls">
-        <AppButton size="compact" data-testid="aidoc-graph-back" @click="$emit('close')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <path d="m15 18-6-6 6-6" />
-          </svg>
-          {{ t('aidoc.back') }}
-        </AppButton>
+        <AppTooltip :text="t('aidoc.back')">
+          <AppButton size="icon" data-testid="aidoc-graph-back" :aria-label="t('aidoc.back')" @click="$emit('close')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="m15 18-6-6 6-6" />
+            </svg>
+          </AppButton>
+        </AppTooltip>
         <h2>{{ t('aidoc.graph') }}</h2>
         <div class="graph-search">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -25,18 +26,6 @@
           <input v-model="hideOrphans" type="checkbox" data-testid="aidoc-hide-orphans" />
           {{ t('aidoc.hideOrphans') }}
         </label>
-        <AppButton
-          class="graph-update"
-          size="compact"
-          data-testid="aidoc-graph-update"
-          :loading="store.updating"
-          @click="store.updateIndex()"
-        >
-          {{ store.updating ? t('aidoc.updating') : t('aidoc.updateIndex') }}
-          <span v-if="store.updating && store.progress">
-            {{ t('aidoc.indexProgress', store.progress) }}
-          </span>
-        </AppButton>
       </div>
 
       <div class="graph-meta">
@@ -65,11 +54,14 @@
           </span>
         </div>
       </div>
-      <p v-if="store.error" class="graph-feedback" role="alert">
-        <strong>{{ t('aidoc.indexFailed') }}</strong> {{ store.error }}
+      <p v-if="errorText" class="graph-feedback" role="alert">
+        <strong>{{ t('aidoc.indexFailed') }}</strong> {{ errorText }}
       </p>
       <p v-else-if="store.stats && !store.updating" class="graph-feedback" role="status">
         {{ t('aidoc.indexDone', store.stats) }}
+      </p>
+      <p v-else-if="store.status?.failedCount && !store.updating" class="graph-feedback" role="status">
+        {{ t('aidoc.extractionFailed', { n: store.status.failedCount }) }}
       </p>
     </header>
 
@@ -99,7 +91,7 @@
             <span class="legend-dot"></span>{{ t('aidoc.unresolvedNode') }}
           </li>
           <li v-if="hasAmbiguous">
-            <span class="legend-dot"></span>{{ t('aidoc.ambiguousNode') }}
+            <span class="legend-dot legend-dot--ambiguous"></span>{{ t('aidoc.ambiguousNode') }}
           </li>
         </ul>
       </aside>
@@ -113,11 +105,13 @@ import { useI18n } from '../../i18n/useI18n'
 import { useAiDocStore } from '../../stores/aidoc'
 import { filterGraph } from '../../utils/aidocGraphFilter'
 import AppButton from '../common/AppButton.vue'
+import AppTooltip from '../common/AppTooltip.vue'
 import AiDocGraph from './AiDocGraph.vue'
 
 const emit = defineEmits(['close', 'open-file'])
 const { t } = useI18n()
 const store = useAiDocStore()
+const errorText = computed(() => store.errorKey ? t(store.errorKey) : store.error)
 const graph = computed(() => store.graph)
 const query = ref('')
 const hideOrphans = ref(false)
@@ -195,7 +189,6 @@ onMounted(() => {
   font-size: var(--fs-subtitle);
   font-weight: 700;
 }
-.graph-update { margin-inline-start: auto; }
 .graph-search {
   flex: 1 1 9rem;
   max-width: 20rem;
@@ -257,7 +250,8 @@ onMounted(() => {
   border-radius: var(--radius-full);
   background: var(--graph-placeholder);
 }
-.sync-dot.is-stale { background: var(--accent); }
+.sync-dot.is-stale { background: var(--graph-error); }
+.legend-dot--ambiguous { border-radius: 0; transform: rotate(45deg); }
 .graph-feedback { margin: 0; color: var(--graph-muted); overflow-wrap: anywhere; }
 .graph-feedback[role='alert'] { color: var(--graph-error); }
 .graph-stage {

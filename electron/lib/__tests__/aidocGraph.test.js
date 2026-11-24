@@ -52,6 +52,13 @@ describe('AI Doc graph', () => {
     expect(nodes[3]).not.toHaveProperty('path')
   })
 
+  it('omits image placeholders from previously saved index entries', () => {
+    const files = [file('wiki/a.md', ['assets/photo.PNG', 'missing'])]
+    const graph = buildGraph({ files, ingested: {} })
+    expect(graph.nodes.map(node => node.id)).toEqual(['wiki/a.md', '?missing'])
+    expect(graph.links).toEqual([{ source: 'wiki/a.md', target: '?missing' }])
+  })
+
   it('connects the source to an ambiguous placeholder and the placeholder to each visible candidate', () => {
     const files = [
       file('wiki/index.md', ['a']),
