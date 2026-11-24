@@ -138,11 +138,11 @@ describe('DocsView', () => {
 
   it('opens a graph document and returns to the editor', async () => {
     mockObsidianStore.vaultPath = '/some/vault'
-    const wrapper = shallowMount(DocsView)
+    const wrapper = shallowMount(DocsView, { global: { stubs: { Teleport: true } } })
     wrapper.findComponent({ name: 'AiDocToolbar' }).vm.$emit('open-graph')
     await wrapper.vm.$nextTick()
     const graph = wrapper.findComponent({ name: 'AiDocGraphPanel' })
-    expect(graph.element.parentElement).toBe(wrapper.get('.docs-display-panel').element)
+    expect(graph.props('anchor')).toBe(wrapper.get('.docs-display-panel').element)
     graph.vm.$emit('open-file', { path: '/some/vault/wiki/note.md', name: 'note.md' })
     await wrapper.vm.$nextTick()
     expect(mockObsidianStore.openFile).toHaveBeenCalledWith('/some/vault/wiki/note.md', 'note.md')

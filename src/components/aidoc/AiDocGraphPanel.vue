@@ -1,8 +1,7 @@
 <template>
   <section
-    ref="panel"
     class="aidoc-graph-panel"
-    :style="panelPosition"
+    :style="panelStyle"
     :aria-label="t('aidoc.graph')"
     @mousedown.stop
     @mouseup.stop
@@ -10,11 +9,11 @@
     <div class="graph-titlebar">
       <div
         class="graph-drag-handle"
-        :class="{ 'is-dragging': dragging }"
+        :class="{ 'is-dragging': interaction === 'move' }"
         tabindex="0"
         :aria-description="t('aidoc.moveGraph')"
-        @pointerdown="startDrag"
-        @keydown="moveWithKeys"
+        @pointerdown="startDrag($event, 'move')"
+        @keydown="adjustWithKeys($event, 'move')"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
           <path d="M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01" />
@@ -117,6 +116,20 @@
         </ul>
       </aside>
     </div>
+    <AppTooltip class="graph-resize-handle" :text="t('aidoc.resizeGraph')">
+      <AppButton
+        class="graph-resize-button"
+        size="icon"
+        variant="ghost"
+        :aria-label="t('aidoc.resizeGraph')"
+        @pointerdown="startDrag($event, 'resize')"
+        @keydown="adjustWithKeys($event, 'resize')"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="m5 19 14-14m-7 14 7-7" />
+        </svg>
+      </AppButton>
+    </AppTooltip>
   </section>
 </template>
 
@@ -129,6 +142,7 @@ import AppButton from '../common/AppButton.vue'
 import AppTooltip from '../common/AppTooltip.vue'
 import AiDocGraph from './AiDocGraph.vue'
 
+const props = defineProps({ anchor: { type: Object, default: null } })
 const emit = defineEmits(['close', 'open-file'])
 const { t } = useI18n()
 const store = useAiDocStore()
@@ -138,29 +152,55 @@ const query = ref('')
 const hideOrphans = ref(false)
 const hiddenExts = ref([])
 
-const panel = ref(null)
-const position = ref({ x: 0, y: 0 })
-const dragging = ref(false)
+const GUTTER = 16
+const MIN_WIDTH = 360
+const MIN_HEIGHT = 260
+const KEY_STEP = 16
+const frame = ref(null)
+const interaction = ref(null)
 let drag = null
-let resizeObserver
-const panelPosition = computed(() => ({
-  left: position.value.x + 'px',
-  top: position.value.y + 'px',
-}))
+const panelStyle = computed(() => {
+  if (!frame.value) return null
+  const { x, y, width, height } = frame.value
+  return { left: x + 'px', top: y + 'px', width: width + 'px', height: height + 'px' }
+})
 
-function movePanel(x, y) {
-  const host = panel.value.parentElement
-  if (!host) return
-  const maxX = Math.max(0, host.clientWidth - panel.value.offsetWidth)
-  const maxY = Math.max(0, host.clientHeight - panel.value.offsetHeight)
-  position.value = { x: Math.max(0, Math.min(x, maxX)), y: Math.max(0, Math.min(y, maxY)) }
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max)
 }
 
-function startDrag(event) {
-  if (event.button !== 0 || drag) return
-  drag = { id: event.pointerId, x: event.clientX - position.value.x, y: event.clientY - position.value.y }
+function fitFrame({ x, y, width, height }) {
+  const w = window.innerWidth
+  const h = window.innerHeight
+  width = clamp(width, MIN_WIDTH, w)
+  height = clamp(height, MIN_HEIGHT, h)
+  frame.value = { x: clamp(x, 0, w - width), y: clamp(y, 0, h - height), width, height }
+}
+
+function fitViewport() {
+  fitFrame(frame.value)
+}
+
+function resizeFrom({ x, y, width, height }, dx, dy) {
+  const availableWidth = window.innerWidth - x
+  const availableHeight = window.innerHeight - y
+  fitFrame({
+    x, y,
+    width: clamp(width + dx, MIN_WIDTH, availableWidth),
+    height: clamp(height + dy, MIN_HEIGHT, availableHeight),
+  })
+}
+
+function adjustFrame(initial, dx, dy, mode) {
+  if (mode === 'resize') resizeFrom(initial, dx, dy)
+  else fitFrame({ ...initial, x: initial.x + dx, y: initial.y + dy })
+}
+
+function startDrag(event, mode) {
+  if (event.button !== 0 || drag || !frame.value) return
+  drag = { id: event.pointerId, x: event.clientX, y: event.clientY, frame: frame.value, mode }
   event.currentTarget.setPointerCapture(event.pointerId)
-  dragging.value = true
+  interaction.value = mode
   window.addEventListener('pointermove', moveDrag, true)
   window.addEventListener('pointerup', stopDrag, true)
   window.addEventListener('pointercancel', stopDrag, true)
@@ -168,7 +208,9 @@ function startDrag(event) {
 }
 
 function moveDrag(event) {
-  if (drag?.id === event.pointerId) movePanel(event.clientX - drag.x, event.clientY - drag.y)
+  if (drag?.id === event.pointerId) {
+    adjustFrame(drag.frame, event.clientX - drag.x, event.clientY - drag.y, drag.mode)
+  }
 }
 
 function stopDrag(event) {
@@ -178,20 +220,19 @@ function stopDrag(event) {
 function clearDrag() {
   if (!drag) return
   drag = null
-  dragging.value = false
+  interaction.value = null
   window.removeEventListener('pointermove', moveDrag, true)
   window.removeEventListener('pointerup', stopDrag, true)
   window.removeEventListener('pointercancel', stopDrag, true)
   window.removeEventListener('blur', clearDrag)
 }
 
-function moveWithKeys(event) {
-  const step = 16
-  const directions = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }
+function adjustWithKeys(event, mode) {
+  const directions = { ArrowLeft: [-KEY_STEP, 0], ArrowRight: [KEY_STEP, 0], ArrowUp: [0, -KEY_STEP], ArrowDown: [0, KEY_STEP] }
   const direction = directions[event.key]
-  if (!Array.isArray(direction)) return
+  if (!frame.value || !Array.isArray(direction)) return
   event.preventDefault()
-  movePanel(position.value.x + direction[0], position.value.y + direction[1])
+  adjustFrame(frame.value, direction[0], direction[1], mode)
 }
 
 const extensions = computed(() => [...new Set(
@@ -224,18 +265,18 @@ function openFile(node) {
 }
 
 onMounted(() => {
-  const host = panel.value.parentElement
-  if (host) {
-    movePanel((host.clientWidth - panel.value.offsetWidth) / 2, (host.clientHeight - panel.value.offsetHeight) / 2)
-    resizeObserver = new ResizeObserver(() => movePanel(position.value.x, position.value.y))
-    resizeObserver.observe(host)
-  }
+  const area = props.anchor?.getBoundingClientRect()
+    ?? { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight }
+  const width = clamp(area.width - 2 * GUTTER, MIN_WIDTH, window.innerWidth)
+  const height = clamp(area.height - 2 * GUTTER, MIN_HEIGHT, window.innerHeight)
+  fitFrame({ x: area.left + (area.width - width) / 2, y: area.top + (area.height - height) / 2, width, height })
+  window.addEventListener('resize', fitViewport)
   store.loadGraph()
   store.refreshStatus()
 })
 onBeforeUnmount(() => {
   clearDrag()
-  resizeObserver?.disconnect()
+  window.removeEventListener('resize', fitViewport)
 })
 </script>
 
@@ -248,12 +289,11 @@ onBeforeUnmount(() => {
   --graph-placeholder: #687281;
   --graph-error: #b91c1c;
   --graph-grid: #d5dce5;
-  position: absolute;
-  z-index: 70;
+  position: fixed;
+  z-index: 100;
+  -webkit-app-region: no-drag;
   display: flex;
   flex-direction: column;
-  width: min(42rem, calc(100% - 1.25rem));
-  height: min(30rem, calc(100% - 1.25rem));
   min-width: 0;
   min-height: 0;
   box-sizing: border-box;
@@ -409,6 +449,12 @@ onBeforeUnmount(() => {
 .graph-legend ul { list-style: none; padding: 0; margin: 0; color: var(--graph-muted); }
 .graph-legend li { display: flex; align-items: center; gap: 0.375rem; overflow-wrap: anywhere; }
 .graph-legend li + li { margin-top: 0.25rem; }
+.graph-resize-handle {
+  position: absolute;
+  right: 0.25rem;
+  bottom: 0.25rem;
+}
+.graph-resize-button { cursor: nwse-resize; touch-action: none; }
 @media (prefers-reduced-motion: reduce) {
   .graph-stage::before { transition: none; }
 }

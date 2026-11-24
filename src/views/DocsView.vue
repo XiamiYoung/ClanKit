@@ -156,8 +156,10 @@
         </div>
 
         <!-- ── RIGHT: Editor / Preview Panel ── -->
-        <div class="docs-display-panel flex-1 flex flex-col overflow-hidden" style="background:#fff;position:relative;" @mouseup="onEditorMouseUp" @mousedown="onEditorMouseDown">
-          <AiDocGraphPanel v-if="showGraph" @close="showGraph = false" @open-file="openGraphFile" />
+        <div ref="documentDisplay" class="docs-display-panel flex-1 flex flex-col overflow-hidden" style="background:#fff;position:relative;" @mouseup="onEditorMouseUp" @mousedown="onEditorMouseDown">
+          <Teleport to="body">
+            <AiDocGraphPanel v-if="showGraph" :anchor="documentDisplay" @close="showGraph = false" @open-file="openGraphFile" />
+          </Teleport>
           <!-- Hamburger toggle tab -->
           <button
             ref="hamburgerBtnRef"
@@ -929,6 +931,7 @@ const props = defineProps({ isEmbedded: { type: Boolean, default: false } })
 
 const store = useObsidianStore()
 const aidocStore = useAiDocStore()
+const documentDisplay = ref(null)
 const showGraph = ref(false)
 watch(() => store.vaultPath, path => {
   showGraph.value = false

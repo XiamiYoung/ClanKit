@@ -277,7 +277,7 @@ ShellTool.execute(toolCallId, params, signal, onUpdate)
 - All spacing uses `rem` not `px` (exceptions: `1px` borders, SVG attributes, scrollbar width)
 - Modals are **true modals** — never close on backdrop click, always use `<Teleport to="body">`
 - Page action buttons must use `<AppButton size="compact">`, not custom CSS classes
-- AI Doc icon controls use `<AppButton size="icon">` with a 14 by 14 SVG, a tooltip, and an accessible name. Keep visible text off the buttons, including Close in the graph. In the document toolbar, place Graph before Rebuild index. Use a single rebuild entry with a red badge only while the wiki index is stale. Show the graph as a white floating overlay within the document display panel. Drag it by the title bar within that panel and close it from the top right.
+- AI Doc icon controls use `<AppButton size="icon">` with a 14 by 14 SVG, a tooltip, and an accessible name. Keep visible text off the buttons, including Close in the graph. In the document toolbar, place Graph before Rebuild index. Use a single rebuild entry with a red badge only while the wiki index is stale. Open the white graph overlay at nearly the size of the document display panel, with a small inset. Let it move and resize across the application viewport. Drag by the title bar, resize from the lower right, and close from the top right.
 
 ---
 

@@ -62,34 +62,36 @@ describe('AiDocGraphPanel', () => {
     wrapper.unmount()
   })
 
-  it('keeps the overlay inside its host when dragged', async () => {
-    const host = document.createElement('div')
-    document.body.append(host)
-    const wrapper = mount(AiDocGraphPanel, { attachTo: host })
+  it('uses the document for initial size and the viewport for movement and resizing', async () => {
+    const anchor = document.createElement('div')
+    vi.spyOn(anchor, 'getBoundingClientRect').mockReturnValue({ left: 240, top: 120, width: 600, height: 480 })
+    const wrapper = mount(AiDocGraphPanel, { attachTo: document.body, props: { anchor } })
     try {
-      Object.defineProperties(wrapper.element.parentElement, {
-        clientWidth: { value: 600 },
-        clientHeight: { value: 480 },
-      })
-      Object.defineProperties(wrapper.element, {
-        offsetWidth: { value: 400 },
-        offsetHeight: { value: 300 },
-      })
+      await nextTick()
+      const { style } = wrapper.element
+      expect([style.left, style.top, style.width, style.height]).toEqual(['256px', '136px', '568px', '448px'])
       const handle = wrapper.get('.graph-drag-handle')
       handle.element.setPointerCapture = vi.fn()
-      await handle.trigger('pointerdown', { button: 0, pointerId: 7, clientX: 200, clientY: 160 })
-      await handle.trigger('pointermove', { pointerId: 7, clientX: 900, clientY: -100 })
-      expect(handle.element.setPointerCapture).toHaveBeenCalledWith(7)
-      expect(wrapper.element.style.left).toBe('200px')
-      expect(wrapper.element.style.top).toBe('0px')
-      await handle.trigger('pointerup', { pointerId: 7 })
+      await handle.trigger('pointerdown', { button: 0, pointerId: 7, clientX: 300, clientY: 160 })
       await handle.trigger('pointermove', { pointerId: 7, clientX: 0, clientY: 0 })
-      expect(wrapper.element.style.left).toBe('200px')
-      await handle.trigger('keydown', { key: 'ArrowLeft' })
-      expect(wrapper.element.style.left).toBe('184px')
+      expect(handle.element.setPointerCapture).toHaveBeenCalledWith(7)
+      expect([style.left, style.top]).toEqual(['0px', '0px'])
+      await handle.trigger('pointerup', { pointerId: 7 })
+      await handle.trigger('pointermove', { pointerId: 7, clientX: 500, clientY: 500 })
+      expect([style.left, style.top]).toEqual(['0px', '0px'])
+
+      const resize = wrapper.get('.graph-resize-button')
+      resize.element.setPointerCapture = vi.fn()
+      await resize.trigger('pointerdown', { button: 0, pointerId: 8, clientX: 560, clientY: 440 })
+      await resize.trigger('pointermove', { pointerId: 8, clientX: 2000, clientY: 2000 })
+      expect([style.width, style.height]).toEqual([window.innerWidth + 'px', window.innerHeight + 'px'])
+      await resize.trigger('pointerup', { pointerId: 8 })
+      await resize.trigger('keydown', { key: 'ArrowLeft' })
+      expect(style.width).toBe(window.innerWidth - 16 + 'px')
+      await handle.trigger('keydown', { key: 'ArrowRight' })
+      expect(style.left).toBe('16px')
     } finally {
       wrapper.unmount()
-      host.remove()
     }
   })
 
