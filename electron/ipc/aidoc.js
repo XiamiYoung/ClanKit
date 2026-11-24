@@ -16,17 +16,69 @@ const { normalizeLoopConfig, validateLoopConfig, injectCachedModelMaxOutputToken
 const { withIsolatedAgentLoop } = require('../agent/runIsolatedAgentLoop')
 const { listWikiPages, readWikiPage } = require('../lib/aidocWikiReader')
 
-function ingestLoopConfig(config, paths, root) {
+const MAX_MODEL_ID_LENGTH = 200
+const MAX_MODELS_PER_PROVIDER = 200
+
+function isUsableProvider(provider) {
+  return Boolean(provider?.id && provider.baseURL?.trim()
+    && (provider.apiKey?.trim() || provider.type === 'ollama'))
+}
+
+function usableProviders(config) {
+  return (Array.isArray(config.providers) ? config.providers : []).filter(isUsableProvider)
+}
+
+function defaultProviderOf(config) {
   const providers = Array.isArray(config.providers) ? config.providers : []
-  const provider = providers.find(item => item?.id === config.defaultProvider)
+  if (!config.defaultProvider) return undefined
+  return providers.find(item => item?.id === config.defaultProvider)
     || providers.find(item => item?.type === config.defaultProvider)
-  if (!config.defaultProvider || !provider?.model?.trim() || !provider.baseURL?.trim()
-    || (!provider.apiKey?.trim() && provider.type !== 'ollama')) return null
+}
+
+// Ordered, deduplicated model ids a provider is known to offer. Never includes credentials.
+function providerModelIds(provider, config, modelCache) {
+  const ids = [provider.model]
+  if (provider.modelSettings && typeof provider.modelSettings === 'object') ids.push(...Object.keys(provider.modelSettings))
+  const cached = modelCache?.[provider.id]?.models
+  if (Array.isArray(cached)) ids.push(...cached.map(entry => entry?.id))
+  const utility = config.utilityModel
+  if (utility?.model && (utility.provider === provider.id || utility.provider === provider.type)) ids.push(utility.model)
+  const seen = new Set()
+  for (const id of ids) {
+    if (typeof id === 'string' && id.trim() && id.length <= MAX_MODEL_ID_LENGTH) seen.add(id.trim())
+  }
+  return [...seen].slice(0, MAX_MODELS_PER_PROVIDER)
+}
+
+function selectedIngestModel(config) {
+  const remembered = config.aidocIngestModel
+  const rememberedProvider = usableProviders(config).find(item => item.id === remembered?.providerId)
+  if (rememberedProvider && typeof remembered.model === 'string' && remembered.model.trim()) {
+    return { providerId: rememberedProvider.id, model: remembered.model.trim() }
+  }
+  const provider = defaultProviderOf(config)
+  return isUsableProvider(provider)
+    ? { providerId: provider.id, model: provider.model?.trim() || '' }
+    : { providerId: '', model: '' }
+}
+
+function ingestLoopConfig(config, paths, root, { providerId, model } = {}) {
+  let provider
+  let modelId
+  if (providerId === undefined && model === undefined) {
+    provider = defaultProviderOf(config)
+    modelId = provider?.model?.trim()
+  } else {
+    provider = (Array.isArray(config.providers) ? config.providers : []).find(item => item?.id === providerId)
+    modelId = typeof model === 'string' ? model.trim() : ''
+    if (modelId.length > MAX_MODEL_ID_LENGTH) return null
+  }
+  if (!modelId || !isUsableProvider(provider)) return null
 
   const loopConfig = {
-    providers: [provider],
-    provider: { id: provider.id, type: provider.type, model: provider.model },
-    customModel: provider.model,
+    providers: [{ ...provider, model: modelId }],
+    provider: { id: provider.id, type: provider.type, model: modelId },
+    customModel: modelId,
     dataPath: paths.DATA_DIR,
     memoryDir: paths.MEMORY_DIR,
     agentArtifactsDir: paths.AGENT_ARTIFACTS_DIR,
@@ -224,21 +276,44 @@ function registerHandlers(ipcMain, ds, { runAgent = runIngestAgent } = {}) {
     }
     const plan = await buildIngestPlan({ root, registry, only, includeIngested: options.force === true })
     await refreshRegistryMetadata(root, file, plan.refreshed)
-    const providerReady = Boolean(ingestLoopConfig(config, paths, root))
+    const selected = selectedIngestModel(config)
+    const providerReady = Boolean(ingestLoopConfig(config, paths, root, selected))
+    // The model cache is optional; a missing or corrupt file just means fewer suggestions.
+    const modelCache = paths.PROVIDER_MODELS_FILE ? await ds.readJSONAsync(paths.PROVIDER_MODELS_FILE, {}) : {}
     return {
       sources: plan.sources.map(({ rel, size, state }) => ({ rel, size, state })),
       removed: plan.removed,
       overflow: plan.overflow,
       providerReady,
       providerError: providerReady ? undefined : 'providerMissing',
+      providers: usableProviders(config).map(provider => ({
+        id: provider.id, name: provider.name || provider.id, type: provider.type,
+        models: providerModelIds(provider, config, modelCache),
+      })),
+      selected,
     }
   })
 
+  // Re-read the config so only this field changes, then write it the way other modules do.
+  async function rememberIngestModel(paths, choice) {
+    const fresh = await ds.readJSONAsync(paths.CONFIG_FILE, {})
+    await ds.writeJSONAtomic(paths.CONFIG_FILE, { ...fresh, aidocIngestModel: choice })
+  }
+
   handle('ingest-run', async ({ root, dataDir, config, paths, cacheFile, options, event }) => {
     if (activeIngest) return { success: false, code: 'busy' }
-    const loopConfig = ingestLoopConfig(config, paths, root)
-    if (!loopConfig) return { success: false, code: 'providerMissing' }
+    const hasChoice = options.providerId !== undefined || options.model !== undefined
+    const choice = hasChoice
+      ? { providerId: options.providerId, model: typeof options.model === 'string' ? options.model.trim() : options.model }
+      : selectedIngestModel(config)
+    const loopConfig = ingestLoopConfig(config, paths, root, choice)
+    if (!loopConfig) return { success: false, code: hasChoice ? 'invalid_model' : 'providerMissing' }
     injectCachedModelMaxOutputTokens(loopConfig, ds)
+    if (hasChoice) {
+      try {
+        await rememberIngestModel(paths, { providerId: choice.providerId, model: choice.model })
+      } catch { /* A failed preference write must not block the run. */ }
+    }
     const only = readSelection(options)
     const owner = event.sender
     const active = { owner, cacheFile, loop: null, stopRequested: false }

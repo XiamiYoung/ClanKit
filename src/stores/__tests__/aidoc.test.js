@@ -145,6 +145,39 @@ describe('AI Doc store', () => {
     expect(store.currentWikiPage).toMatchObject({ rel: 'wiki/index.md', body: '# Wiki' })
   })
 
+  it('preselects the planned model, keeps an in-session choice and passes it to the run', async () => {
+    const store = useAiDocStore()
+    store.setRoot('/a')
+    const plan = {
+      success: true, sources: [{ rel: 'kb_source/a.md' }], providerReady: true,
+      providers: [{ id: 'p1', name: 'P1', models: ['m1', 'm2'] }, { id: 'p2', name: 'P2', models: ['n1'] }],
+      selected: { providerId: 'p1', model: 'm1' },
+    }
+    api.updateIndex.mockResolvedValue({ success: true })
+    api.getIngestPlan.mockResolvedValue(plan)
+    await store.runSync()
+    expect(store.ingestModel).toEqual({ providerId: 'p1', model: 'm1' })
+    store.ingestModel = { providerId: 'p2', model: 'custom-id' }
+    await store.runSync()
+    expect(store.ingestModel).toEqual({ providerId: 'p2', model: 'custom-id' })
+    api.runIngest.mockResolvedValue({ success: true, done: [], failed: [], overflow: 0 })
+    await store.confirmIngest()
+    expect(api.runIngest.mock.calls[0][0]).toMatchObject({ providerId: 'p2', model: 'custom-id' })
+    store.setRoot('/b')
+    expect(store.ingestModel).toEqual({ providerId: 'p2', model: 'custom-id' })
+  })
+
+  it('maps an invalid_model response to a translation key', async () => {
+    const store = useAiDocStore()
+    store.setRoot('/a')
+    api.updateIndex.mockResolvedValue({ success: true })
+    api.getIngestPlan.mockResolvedValue({ success: true, sources: [{ rel: 'kb_source/a.md' }], providerReady: true })
+    api.runIngest.mockResolvedValue({ success: false, code: 'invalid_model' })
+    await store.runSync()
+    await store.confirmIngest()
+    expect(store.ingestErrorKey).toBe('aidoc.ingestInvalidModel')
+  })
+
   it('displays a localized busy error and keeps the confirmation available', async () => {
     const store = useAiDocStore()
     store.setRoot('/a')

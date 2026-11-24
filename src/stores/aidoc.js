@@ -6,6 +6,7 @@ const ERROR_KEYS = {
   rootUnavailable: 'aidoc.rootUnavailable',
   providerMissing: 'aidoc.providerMissing',
   busy: 'aidoc.ingestBusy',
+  invalid_model: 'aidoc.ingestInvalidModel',
 }
 
 function describeError(result, message, key) {
@@ -38,6 +39,8 @@ export const useAiDocStore = defineStore('aidoc', () => {
   const ingestStopping = ref(false)
   const syncPreparing = ref(false)
   const ingestNothing = ref(false)
+  // Provider and model chosen for organizing. Global, so setRoot does not reset it.
+  const ingestModel = ref({ providerId: '', model: '' })
   // Approximate percent bookkeeping; each value only moves forward within a run.
   const indexPercent = ref(0)
   const ingestPercent = ref(0)
@@ -198,8 +201,12 @@ export const useAiDocStore = defineStore('aidoc', () => {
         describeError(result, ingestError, ingestErrorKey)
         return
       }
-      if (result.sources.length) ingestPlan.value = { ...result, force }
-      else ingestNothing.value = true
+      if (result.sources.length) {
+        ingestPlan.value = { ...result, force }
+        // Keep an in-session choice while its provider is still offered; otherwise use the remembered one.
+        const kept = result.providers?.some(provider => provider.id === ingestModel.value.providerId)
+        if (!kept && result.selected) ingestModel.value = { ...result.selected }
+      } else ingestNothing.value = true
       await Promise.all([refreshStatus(), refreshSourceStates()])
     } catch (err) {
       if (current === generation) describeError({ error: err.message }, ingestError, ingestErrorKey)
@@ -244,6 +251,7 @@ export const useAiDocStore = defineStore('aidoc', () => {
       ensureIngestListener()
       const result = await api.runIngest({
         root, requestId: id, force: plan.force, rels: plan.sources.map(source => source.rel),
+        ...(plan.providers?.length ? { providerId: ingestModel.value.providerId, model: ingestModel.value.model } : {}),
       })
       if (id !== ingestRequestId.value) return
       if (!result.success) {
@@ -298,7 +306,7 @@ export const useAiDocStore = defineStore('aidoc', () => {
     status, graph, progress, updating, error, errorKey, stats,
     sourceStates, wikiPages, currentWikiPage, wikiLoading,
     ingestPlan, ingesting, ingestProgress, ingestResult, ingestError, ingestErrorKey,
-    ingestStopping, syncPreparing, ingestNothing, syncPercent,
+    ingestStopping, syncPreparing, ingestNothing, syncPercent, ingestModel,
     setRoot, refreshStatus, loadGraph, refreshSourceStates, loadWikiPages, openWikiPage,
     updateIndex, runSync, ingestSingle, confirmIngest, cancelIngestPlan, stopIngest, ensureIngestListener, dispose,
   }

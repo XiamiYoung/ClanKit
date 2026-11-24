@@ -274,3 +274,95 @@ it('stops a running ingest and frees the busy flag when the owning window is des
   runAgent.mockImplementation(writeNote)
   await expect(invoke('ingest-run')).resolves.toMatchObject({ success: true, done: ['kb_source/note.md'] })
 })
+
+describe('ingest model selection', () => {
+  function modelConfig(extra = {}) {
+    return {
+      defaultProvider: 'qwen',
+      utilityModel: { provider: 'qwen', model: 'utility-flash' },
+      providers: [
+        { id: 'qwen', type: 'qwen', name: 'Qwen', apiKey: 'secret-qwen', baseURL: 'https://qwen.example.test', model: 'stale-max', modelSettings: { 'flash-a': {}, 'stale-max': {} } },
+        { id: 'local', type: 'ollama', name: 'Local', baseURL: 'http://local.example.test', model: 'llama' },
+        { id: 'nokey', type: 'custom', baseURL: 'https://nokey.example.test', model: 'x' },
+      ],
+      ...extra,
+    }
+  }
+
+  // Cache shape on disk: { [providerId]: { type, models: [{ id, ... }], updatedAt } }.
+  const modelCache = { qwen: { type: 'qwen', updatedAt: 'now', models: [{ id: 'flash-a' }, { id: 'cached-b' }, {}] } }
+
+  async function modelFixture(runAgent, config = modelConfig(), cache = modelCache) {
+    let dataDir
+    const writes = []
+    let stored = null
+    const fixture = await ingestFixture(runAgent, config, {
+      paths: () => ({ DATA_DIR: dataDir, CONFIG_FILE: 'config.json', PROVIDER_MODELS_FILE: 'provider-models.json' }),
+      readJSONAsync: async file => {
+        if (file === 'provider-models.json') return cache
+        return { DoCPath: fixture.root, ...config, ...(stored ? { aidocIngestModel: stored } : {}) }
+      },
+      writeJSONAtomic: async (file, data) => { writes.push({ file, data }); stored = data.aidocIngestModel },
+    })
+    dataDir = fixture.dataDir
+    return { ...fixture, writes }
+  }
+
+  it('lists usable providers without secrets and unions their models in stable order', async () => {
+    const { invoke } = await modelFixture(vi.fn())
+    const plan = await invoke('ingest-plan')
+    expect(plan.providers.map(provider => provider.id)).toEqual(['qwen', 'local'])
+    expect(plan.providers[0].models).toEqual(['stale-max', 'flash-a', 'cached-b', 'utility-flash'])
+    expect(plan.providers[1].models).toEqual(['llama'])
+    expect(JSON.stringify(plan)).not.toContain('secret-qwen')
+    expect(plan.providers[0]).not.toHaveProperty('apiKey')
+    expect(plan.selected).toEqual({ providerId: 'qwen', model: 'stale-max' })
+    expect(plan.providerReady).toBe(true)
+  })
+
+  it('tolerates a missing or malformed model cache', async () => {
+    for (const cache of [{}, null, ['junk'], { qwen: { models: 'nope' } }]) {
+      const { invoke } = await modelFixture(vi.fn(), modelConfig(), cache)
+      const plan = await invoke('ingest-plan')
+      expect(plan.providers[0].models).toEqual(['stale-max', 'flash-a', 'utility-flash'])
+    }
+  })
+
+  it('prefers the remembered choice and falls back when its provider disappeared', async () => {
+    const remembered = await modelFixture(vi.fn(), modelConfig({ aidocIngestModel: { providerId: 'local', model: 'llama3' } }))
+    await expect(remembered.invoke('ingest-plan')).resolves.toMatchObject({ selected: { providerId: 'local', model: 'llama3' } })
+    const gone = await modelFixture(vi.fn(), modelConfig({ aidocIngestModel: { providerId: 'removed', model: 'm' } }))
+    await expect(gone.invoke('ingest-plan')).resolves.toMatchObject({ selected: { providerId: 'qwen', model: 'stale-max' } })
+    const unusable = await modelFixture(vi.fn(), modelConfig({ aidocIngestModel: { providerId: 'nokey', model: 'x' } }))
+    await expect(unusable.invoke('ingest-plan')).resolves.toMatchObject({ selected: { providerId: 'qwen' } })
+  })
+
+  it('runs with the chosen provider and model and remembers the choice', async () => {
+    const runAgent = vi.fn(async () => {})
+    const { invoke, writes } = await modelFixture(runAgent)
+    await expect(invoke('ingest-run', { providerId: 'local', model: '  llama3  ' })).resolves.toMatchObject({ success: true })
+    const { loopConfig } = runAgent.mock.calls[0][0]
+    expect(loopConfig.customModel).toBe('llama3')
+    expect(loopConfig.providers.map(provider => provider.id)).toEqual(['local'])
+    expect(loopConfig.provider).toMatchObject({ id: 'local', model: 'llama3' })
+    expect(writes).toHaveLength(1)
+    expect(writes[0].data.aidocIngestModel).toEqual({ providerId: 'local', model: 'llama3' })
+    expect(writes[0].data.providers).toHaveLength(3)
+    await expect(invoke('ingest-plan')).resolves.toMatchObject({ selected: { providerId: 'local', model: 'llama3' } })
+  })
+
+  it('rejects an invalid provider or model before writing anything', async () => {
+    const runAgent = vi.fn()
+    const { root, invoke, writes } = await modelFixture(runAgent)
+    for (const choice of [
+      { providerId: 'missing', model: 'm' }, { providerId: 'nokey', model: 'x' },
+      { providerId: 'qwen', model: '   ' }, { providerId: 'qwen', model: 'm'.repeat(201) },
+      { providerId: 'qwen', model: 42 }, { providerId: 'qwen' },
+    ]) {
+      await expect(invoke('ingest-run', choice)).resolves.toMatchObject({ success: false, code: 'invalid_model' })
+    }
+    expect(writes).toEqual([])
+    expect(runAgent).not.toHaveBeenCalled()
+    await expect(fs.access(path.join(root, 'wiki'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+})

@@ -163,6 +163,79 @@ describe('AiDocIngestModal', () => {
     expect(alert.textContent).toContain('disk full')
   })
 
+  describe('model selection', () => {
+    beforeEach(() => {
+      store.ingestPlan.providers = [
+        { id: 'p1', name: 'Provider One', models: ['m1', 'm2'] },
+        { id: 'p2', name: 'Provider Two', models: ['n1', 'n2'] },
+      ]
+      store.ingestPlan.selected = { providerId: 'p1', model: 'm2' }
+      store.ingestModel = { providerId: 'p1', model: 'm2' }
+      store.runSync = vi.fn()
+    })
+
+    it('renders a provider select and a model input with suggestions, preselected', () => {
+      const dialog = open()
+      const select = dialog.querySelector('[data-testid="aidoc-ingest-provider"]')
+      const input = dialog.querySelector('[data-testid="aidoc-ingest-model"]')
+      expect(select.value).toBe('p1')
+      expect([...select.options].map(option => option.textContent)).toEqual(['Provider One', 'Provider Two'])
+      expect(input.value).toBe('m2')
+      const options = [...dialog.querySelectorAll(`datalist#${input.getAttribute('list')} option`)]
+      expect(options.map(option => option.value)).toEqual(['m1', 'm2'])
+      expect(dialog.textContent).toContain('aidoc.ingestModelHint')
+    })
+
+    it('resets the model on provider change unless it is the remembered provider', async () => {
+      const dialog = open()
+      const select = dialog.querySelector('[data-testid="aidoc-ingest-provider"]')
+      select.value = 'p2'
+      select.dispatchEvent(new Event('change'))
+      await nextTick()
+      expect(store.ingestModel).toEqual({ providerId: 'p2', model: 'n1' })
+      select.value = 'p1'
+      select.dispatchEvent(new Event('change'))
+      await nextTick()
+      expect(store.ingestModel).toEqual({ providerId: 'p1', model: 'm2' })
+    })
+
+    it('accepts a typed model and disables the controls while ingesting', async () => {
+      const dialog = open()
+      const input = dialog.querySelector('[data-testid="aidoc-ingest-model"]')
+      input.value = 'brand-new'
+      input.dispatchEvent(new Event('input'))
+      expect(store.ingestModel.model).toBe('brand-new')
+      store.ingesting = true
+      await nextTick()
+      expect(input.disabled).toBe(true)
+      expect(dialog.querySelector('[data-testid="aidoc-ingest-provider"]').disabled).toBe(true)
+    })
+
+    it('disables start when the model is empty', async () => {
+      store.ingestModel.model = ' '
+      const dialog = open()
+      expect(dialog.querySelector('[data-testid="aidoc-ingest-start"]').disabled).toBe(true)
+    })
+
+    it('shows the model hint and keeps the controls enabled with a retry after a model 404', () => {
+      store.ingestResult = {
+        done: [], remaining: 1, failed: [{ rel: 'kb_source/a.md', reason: 'agent_error', detail: '404 Model not exist.' }],
+      }
+      const dialog = open()
+      expect(dialog.querySelector('[data-testid="aidoc-ingest-model-hint"]').textContent).toContain('aidoc.ingestModelErrorHint')
+      expect(dialog.querySelector('[data-testid="aidoc-ingest-model"]').disabled).toBe(false)
+      dialog.querySelector('[data-testid="aidoc-ingest-retry"]').click()
+      expect(store.runSync).toHaveBeenCalledOnce()
+    })
+
+    it('shows no model hint for unrelated failures', () => {
+      store.ingestResult = { done: [], remaining: 0, failed: [{ rel: 'kb_source/a.md', reason: 'agent_error', detail: 'timeout' }] }
+      const dialog = open()
+      expect(dialog.querySelector('[data-testid="aidoc-ingest-model-hint"]')).toBeNull()
+      expect(dialog.querySelector('[data-testid="aidoc-ingest-model"]')).toBeNull()
+    })
+  })
+
   it('does not dismiss on a backdrop click or Escape while ingesting', () => {
     store.ingesting = true
     const dialog = open()

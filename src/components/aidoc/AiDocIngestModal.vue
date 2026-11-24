@@ -13,6 +13,26 @@
       </header>
 
       <div class="ingest-body">
+        <div v-if="showModelControls" class="ingest-model">
+          <label class="ingest-field">
+            <span class="ingest-detail">{{ t('aidoc.ingestProviderLabel') }}</span>
+            <select class="ingest-input" data-testid="aidoc-ingest-provider" :value="store.ingestModel.providerId"
+              :disabled="store.ingesting" @change="changeProvider($event.target.value)">
+              <option v-for="provider in store.ingestPlan.providers" :key="provider.id" :value="provider.id">{{ provider.name }}</option>
+            </select>
+          </label>
+          <label class="ingest-field">
+            <span class="ingest-detail">{{ t('aidoc.ingestModelLabel') }}</span>
+            <input class="ingest-input" data-testid="aidoc-ingest-model" type="text" list="aidoc-ingest-models"
+              maxlength="200" autocomplete="off" spellcheck="false" :value="store.ingestModel.model"
+              :disabled="store.ingesting" @input="store.ingestModel.model = $event.target.value">
+            <datalist id="aidoc-ingest-models">
+              <option v-for="model in providerModels" :key="model" :value="model" />
+            </datalist>
+          </label>
+          <p class="ingest-detail ingest-model-hint">{{ t('aidoc.ingestModelHint') }}</p>
+        </div>
+
         <section v-if="store.ingesting" class="ingest-running" role="status">
           <div class="ingest-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"
             :aria-valuenow="percent" data-testid="aidoc-ingest-progress">
@@ -37,6 +57,7 @@
             <p v-if="store.ingestResult.stopped">{{ t('aidoc.ingestStopped') }}</p>
             <p v-if="store.ingestResult.aborted === 'consecutive_agent_errors'" class="ingest-alert" role="alert">{{ t('aidoc.ingestAbortedAgentErrors') }}</p>
             <p v-if="(store.ingestResult.remaining ?? store.ingestResult.overflow) > 0">{{ t('aidoc.ingestRemaining', { n: store.ingestResult.remaining ?? store.ingestResult.overflow }) }}</p>
+            <p v-if="modelErrorHint" class="ingest-alert" role="alert" data-testid="aidoc-ingest-model-hint">{{ t('aidoc.ingestModelErrorHint') }}</p>
           </div>
           <ul v-if="store.ingestResult.failed.length" class="ingest-list">
             <li v-for="failure in store.ingestResult.failed" :key="failure.rel" class="ingest-failure">
@@ -71,7 +92,7 @@
           <p v-if="store.ingestPlan.overflow" class="ingest-detail">
             {{ t('aidoc.ingestOverflow', { n: store.ingestPlan.overflow }) }}
           </p>
-          <p v-if="!store.ingestPlan.providerReady" class="ingest-alert" role="alert">{{ providerMessage }}</p>
+          <p v-if="!store.ingestPlan.providerReady && !hasModelChoice" class="ingest-alert" role="alert">{{ providerMessage }}</p>
         </template>
 
         <p v-if="store.ingestErrorKey || store.ingestError" class="ingest-alert" role="alert">
@@ -90,8 +111,12 @@
             {{ t(confirming ? 'common.cancel' : 'common.close') }}
           </AppButton>
           <AppButton v-if="confirming" size="modal" type="button" data-testid="aidoc-ingest-start"
-            :disabled="!store.ingestPlan.providerReady" @click="store.confirmIngest()">
+            :disabled="!canStart" @click="store.confirmIngest()">
             {{ t('aidoc.ingestStart') }}
+          </AppButton>
+          <AppButton v-else-if="modelErrorHint && hasModelChoice" size="modal" type="button" data-testid="aidoc-ingest-retry"
+            :disabled="!selectionComplete || store.syncPreparing" @click="retry">
+            {{ t('aidoc.ingestRetry') }}
           </AppButton>
         </template>
       </footer>
@@ -114,6 +139,33 @@ const providerMessage = computed(() => {
   const error = store.ingestPlan?.providerError
   return error && error !== 'providerMissing' ? error : t('aidoc.providerMissing')
 })
+
+const hasModelChoice = computed(() => Boolean(store.ingestPlan?.providers?.length && store.ingestModel))
+const showModelControls = computed(() => hasModelChoice.value && (confirming.value || store.ingesting || modelErrorHint.value))
+const providerModels = computed(() => store.ingestPlan?.providers?.find(provider => provider.id === store.ingestModel?.providerId)?.models || [])
+const selectionComplete = computed(() => Boolean(store.ingestModel?.providerId && store.ingestModel.model?.trim()))
+const canStart = computed(() => (hasModelChoice.value ? selectionComplete.value : store.ingestPlan?.providerReady))
+// A model that the provider rejects fails every source the same way, so point the user at the picker.
+const modelErrorHint = computed(() => {
+  const result = store.ingestResult
+  return Boolean(result && (result.aborted === 'consecutive_agent_errors'
+    || result.failed?.some(failure => /model.*(not exist|not found)|404/i.test(failure.detail || ''))))
+})
+
+function changeProvider(providerId) {
+  const remembered = store.ingestPlan.selected
+  const models = store.ingestPlan.providers.find(provider => provider.id === providerId)?.models || []
+  store.ingestModel = {
+    providerId,
+    model: remembered?.providerId === providerId && remembered.model ? remembered.model : (models[0] || ''),
+  }
+}
+
+// Reopens the plan with the model controls so the user can run again with another model.
+function retry() {
+  const plan = store.ingestPlan
+  store.runSync({ force: plan.force, rels: plan.force ? plan.sources.map(source => source.rel) : undefined })
+}
 
 const stateKeys = { new: 'aidoc.stateNew', updated: 'aidoc.stateUpdated', ingested: 'aidoc.stateIngested' }
 const reasonKeys = {
@@ -206,6 +258,36 @@ onUnmounted(() => dialog.value?.close())
   gap: 0.75rem;
   overflow: auto;
   padding: 1rem;
+}
+.ingest-model {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+  gap: 0.5rem 0.75rem;
+}
+.ingest-field {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+.ingest-input {
+  width: 100%;
+  min-width: 0;
+  padding: 0.375rem 0.5rem;
+  color: var(--ingest-title);
+  background: var(--ingest-footer);
+  border: 1px solid var(--ingest-border);
+  border-radius: var(--radius-sm);
+  font: inherit;
+}
+.ingest-input:focus-visible {
+  outline: 0.125rem solid var(--text-muted);
+  outline-offset: 0.0625rem;
+}
+.ingest-input:disabled { opacity: 0.6; }
+.ingest-model-hint {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: var(--fs-caption);
 }
 .ingest-list {
   margin: 0;
