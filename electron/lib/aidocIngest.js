@@ -4,7 +4,7 @@ const fs = require('fs')
 const path = require('path')
 const { scanKnowledgeFiles } = require('./aidocIndex')
 const {
-  readRegistry, updateRegistry, registryFileKey, recordIngested, classifySources, removedSources
+  readRegistryStrict, updateRegistry, registryFileKey, recordIngested, classifySources, removedSources
 } = require('./aidocRegistry')
 const { loadSourceText } = require('./aidocSourceText')
 const { sha256File } = require('./aidocFrontmatter')
@@ -28,7 +28,9 @@ function errorMessage(error) {
   return error?.message || String(error)
 }
 
-async function buildIngestPlan({ root, registry, hashFile = sha256File, only } = {}) {
+// includeIngested: with `only`, also list already-ingested files (state 'ingested') so callers can force a re-run.
+// The filter runs before the per-run cap so skipped files never consume cap slots.
+async function buildIngestPlan({ root, registry, hashFile = sha256File, only, includeIngested = true } = {}) {
   const scanned = await scanKnowledgeFiles(root)
   const wanted = Array.isArray(only) ? new Set(only) : null
   const refreshed = []
@@ -48,7 +50,7 @@ async function buildIngestPlan({ root, registry, hashFile = sha256File, only } =
         // Keep unreadable sources in the plan so ingest can report the failure per source.
       }
     }
-    if (state === 'ingested' && !wanted) continue
+    if (state === 'ingested' && !(wanted && includeIngested)) continue
     sources.push({ rel: file.rel, abs: file.abs, size: file.size, state })
   }
 
@@ -87,6 +89,7 @@ async function collectWrittenPages(root, tool) {
     try {
       const hash = await sha256File(target.abs)
       const written = tool.getWrittenPageState(page.rel)
+      // Only detected user edits are persisted; unregistered pages are protected during the run but not flagged.
       const handEdited = written.handEdited || hash !== written.hash
       pages.push({ ...page, hash, ...(handEdited ? { handEdited } : {}) })
     } catch {
@@ -118,6 +121,12 @@ async function runIngest({ root, registryFile, sources, runAgent, onProgress, sh
 }
 
 async function ingestSequentially({ root, registryFile, sources, runAgent, onProgress, shouldStop, now }) {
+  // Fail fast: a corrupt, unreadable or future-version registry must never be treated as empty.
+  try {
+    await readRegistryStrict(registryFile)
+  } catch (error) {
+    throw Object.assign(new Error(`Ingest registry is unreadable: ${errorMessage(error)}`), { code: 'registry_unreadable' })
+  }
   ensureWikiScaffold(root)
   const result = { done: [], failed: [], stopped: false }
   const total = sources.length
@@ -139,6 +148,8 @@ async function ingestSequentially({ root, registryFile, sources, runAgent, onPro
       result.failed.push(detail === undefined ? { rel, reason } : { rel, reason, detail })
       emit({ index, total, rel, status: 'failed' })
     }
+    // Terminal event for a source whose start was announced but which was neither recorded nor failed.
+    const halt = () => emit({ index, total, rel, status: 'stopped' })
 
     // Bind extraction and registry metadata to a single source version.
     let loaded
@@ -147,7 +158,7 @@ async function ingestSequentially({ root, registryFile, sources, runAgent, onPro
       const stat = fs.statSync(source.abs)
       if (!stat.isFile()) throw new Error('Source is not a regular file')
       loaded = await loadSourceText(source.abs)
-      if (stopRequested()) break
+      if (stopRequested()) { halt(); break }
       if (!loaded.ok) { fail(loaded.reason, loaded.detail); continue }
       const hash = await sha256File(source.abs)
       const after = fs.statSync(source.abs)
@@ -156,43 +167,66 @@ async function ingestSequentially({ root, registryFile, sources, runAgent, onPro
       }
       snapshot = { hash, mtimeMs: stat.mtimeMs, size: stat.size }
     } catch (error) {
-      if (stopRequested()) break
+      if (stopRequested()) { halt(); break }
       fail('read_failed', errorMessage(error)); continue
     }
 
-    const registry = await readRegistry(registryFile)
+    let registry
+    try {
+      registry = await readRegistryStrict(registryFile)
+    } catch (error) {
+      fail('registry_unreadable', errorMessage(error)); break
+    }
     const previousPages = [...(registry.sources[rel]?.pages || [])]
     const handEditedPages = await handEditedOf(root, registry, previousPages)
     const tool = new AiDocWikiTool({ root, registry, sourceText: { rel, loaded } })
 
-    if (stopRequested()) break
+    if (stopRequested()) { halt(); break }
     try {
       await runAgent({ source, tool, previousPages, handEditedPages, schemaText: readSchemaText(root) })
     } catch (error) {
-      if (error?.name === 'AbortError' || stopRequested()) { result.stopped = true; break }
+      if (error?.name === 'AbortError' || stopRequested()) { result.stopped = true; halt(); break }
       fail('agent_error', errorMessage(error)); continue
     }
-    if (stopRequested()) break
+    if (stopRequested()) { halt(); break }
 
+    let pages
+    let stamp
     try {
-      const pages = await collectWrittenPages(root, tool)
-      if (stopRequested()) break
+      pages = await collectWrittenPages(root, tool)
+      if (stopRequested()) { halt(); break }
       if (!pages.length) { fail('no_pages'); continue }
-      const stamp = now()
+      stamp = now()
+      // The registry write is the commit point; nothing else may run inside it.
       const committed = await updateRegistry(registryFile, async latest => {
         if (stopRequested()) return
-        await ensureIndexCoverage(root, pages)
-        if (stopRequested()) return
-        const next = recordIngested(latest, { rel, ...snapshot, ingestedAt: stamp.toISOString(), pages })
-        await appendLog(root, { date: localDate(stamp), sourceRel: rel, pages: pages.map(p => path.basename(p.rel, '.md')) })
-        return next
+        // Union with earlier pages of this source that still exist, so a partial re-ingest does not forget them.
+        const keepPages = (latest.sources[rel]?.pages || []).filter(pageRel => {
+          const target = resolveWikiToolPath(root, pageRel)
+          return target.ok && target.area === 'wiki' && target.exists
+        })
+        return recordIngested(latest, { rel, ...snapshot, ingestedAt: stamp.toISOString(), pages, keepPages })
       })
-      if (!committed) break
-      result.done.push(rel)
-      emit({ index, total, rel, status: 'done', pages: pages.map(p => p.rel) })
+      if (!committed) { halt(); break }
     } catch (error) {
-      fail('record_failed', errorMessage(error))
+      fail('record_failed', errorMessage(error)); continue
     }
+
+    // Best-effort follow-ups after the commit: the source stays done and failures are reported as warnings.
+    const warnings = []
+    try {
+      await ensureIndexCoverage(root, pages)
+    } catch (error) {
+      warnings.push({ rel, step: 'index', detail: errorMessage(error) })
+    }
+    try {
+      await appendLog(root, { date: localDate(stamp), sourceRel: rel, pages: pages.map(p => path.basename(p.rel, '.md')) })
+    } catch (error) {
+      warnings.push({ rel, step: 'log', detail: errorMessage(error) })
+    }
+    result.done.push(rel)
+    if (warnings.length) (result.warnings ||= []).push(...warnings)
+    emit({ index, total, rel, status: 'done', pages: pages.map(p => p.rel), ...(warnings.length ? { warnings } : {}) })
   }
   return result
 }

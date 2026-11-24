@@ -64,22 +64,14 @@ const {
   normalizeLoopConfig: _normalizeLoopConfig,
   validateLoopConfig: _validateLoopConfig,
   buildHeuristicSequentialDispatch: _buildHeuristicSequentialDispatch,
+  injectCachedModelMaxOutputTokens: _injectCachedModelMaxOutputTokensShared,
 } = require('./agentRuntimeUtils')
 const { withIsolatedAgentLoop } = require('../agent/runIsolatedAgentLoop')
 
 
 // Inject API-cached max_output_tokens from provider-models.json into loopConfig
 function _injectCachedModelMaxOutputTokens(loopConfig) {
-  try {
-    const modelCache = ds.readJSON(ds.paths().PROVIDER_MODELS_FILE, {})
-    const map = {}
-    for (const entry of Object.values(modelCache)) {
-      for (const m of (entry.models || [])) {
-        if (m.id && m.max_output_tokens) map[m.id] = m.max_output_tokens
-      }
-    }
-    if (Object.keys(map).length > 0) loopConfig._cachedModelMaxOutputTokens = map
-  } catch (_) { /* non-critical — fallback chain handles missing data */ }
+  _injectCachedModelMaxOutputTokensShared(loopConfig, ds)
 }
 
 // --- IPC: Agent Loop ---------------------------------------------------------

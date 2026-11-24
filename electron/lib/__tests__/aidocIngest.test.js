@@ -57,6 +57,11 @@ describe('runIngest', () => {
       expect(rec.type).toBe('concept')
     }
     expect(reg.sources[a.rel].hash).toBe(await sha256File(a.abs))
+    // The second source's write to the shared page succeeded and is reflected in the registry.
+    expect([...reg.sources[b.rel].pages].sort()).toEqual(['wiki/Shared Concept.md', 'wiki/b summary.md'])
+    expect(wikiRead('Shared Concept.md')).toContain(`sources: [${b.rel}]`)
+    expect(reg.pages['wiki/Shared Concept.md'].hash).toBe(sha256Text(wikiRead('Shared Concept.md')))
+    expect(reg.pages['wiki/Shared Concept.md'].handEdited).toBeUndefined()
     const log = wikiRead('log.md')
     expect(log).toContain('## [2026-11-24] ingest | kb_source/a.md')
     expect(log).toContain('## [2026-11-24] ingest | kb_source/b.md')
@@ -109,10 +114,11 @@ describe('runIngest', () => {
     expect(Object.keys((await readRegistry(registryFile)).sources)).toEqual([b.rel])
   })
 
-  it('reports record_failed when index coverage fails and leaves the source retryable', async () => {
+  it('keeps the source done and reports a warning when index coverage fails after the registry write', async () => {
     const a = src('a.md'), b = src('b.md')
     const indexPath = path.join(root, 'wiki', 'index.md')
     let index
+    const events = []
     const result = await run([a, b], async ({ source, tool }) => {
       if (source.rel === a.rel) {
         index = fs.readFileSync(indexPath)
@@ -123,13 +129,98 @@ describe('runIngest', () => {
         fs.writeFileSync(indexPath, index)
       }
       await write(tool, path.basename(source.rel, '.md'), source.rel)
-    })
+    }, { onProgress: e => events.push(e) })
     expect(result).toEqual({
-      done: [b.rel], failed: [{ rel: a.rel, reason: 'record_failed', detail: expect.any(String) }], stopped: false
+      done: [a.rel, b.rel], failed: [], stopped: false,
+      warnings: [{ rel: a.rel, step: 'index', detail: expect.any(String) }]
     })
-    expect(Object.keys((await readRegistry(registryFile)).sources)).toEqual([b.rel])
+    const reg = await readRegistry(registryFile)
+    expect(Object.keys(reg.sources).sort()).toEqual([a.rel, b.rel])
+    expect(reg.sources[a.rel].pages).toEqual(['wiki/a.md'])
+    expect(wikiRead('log.md')).toContain(a.rel)
+    expect(events.find(e => e.rel === a.rel && e.status === 'done').warnings).toEqual(result.warnings)
+    expect(events.find(e => e.rel === b.rel && e.status === 'done').warnings).toBeUndefined()
+  })
+
+  it('keeps the source done and reports a warning when the log cannot be appended', async () => {
+    const a = src('a.md')
+    const result = await run([a], async ({ source, tool }) => {
+      fs.rmSync(path.join(root, 'wiki', 'log.md'), { force: true })
+      fs.mkdirSync(path.join(root, 'wiki', 'log.md'))
+      await write(tool, 'a', source.rel)
+    })
+    expect(result.done).toEqual([a.rel])
+    expect(result.failed).toEqual([])
+    expect(result.warnings).toEqual([{ rel: a.rel, step: 'log', detail: expect.any(String) }])
+    const reg = await readRegistry(registryFile)
+    expect(reg.sources[a.rel].pages).toEqual(['wiki/a.md'])
+    expect(wikiRead('index.md')).toContain('[[a]]')
+  })
+
+  it('fails with record_failed and writes no log entry when the registry write fails', async () => {
+    const a = src('a.md')
+    const result = await run([a], async ({ source, tool }) => {
+      await write(tool, 'a', source.rel)
+      fs.mkdirSync(registryFile, { recursive: true })
+    })
+    expect(result).toEqual({ done: [], failed: [{ rel: a.rel, reason: 'record_failed', detail: expect.any(String) }], stopped: false })
     expect(wikiRead('a.md')).toContain('Body of a.')
-    expect(wikiRead('log.md')).not.toContain(a.rel)
+    const logFile = path.join(root, 'wiki', 'log.md')
+    expect(fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '').not.toContain(a.rel)
+  })
+
+  it('unions previous source pages that still exist and rewrites registry pages only for pages written now', async () => {
+    const a = src('a.md')
+    await run([a], async ({ source, tool }) => { await write(tool, 'p1', source.rel); await write(tool, 'p2', source.rel) })
+    const first = await readRegistry(registryFile)
+    fs.writeFileSync(a.abs, 'a changed source text. '.repeat(8))
+    await run([a], async ({ source, tool }) => { await write(tool, 'p1', source.rel, 'v2') })
+    const reg = await readRegistry(registryFile)
+    expect(reg.sources[a.rel].pages).toEqual(['wiki/p1.md', 'wiki/p2.md'])
+    expect(reg.pages['wiki/p2.md']).toEqual(first.pages['wiki/p2.md'])
+    expect(reg.pages['wiki/p1.md'].hash).toBe(sha256Text(wikiRead('p1.md')))
+    expect(reg.pages['wiki/p1.md'].hash).not.toBe(first.pages['wiki/p1.md'].hash)
+
+    fs.rmSync(path.join(root, 'wiki', 'p2.md'))
+    fs.writeFileSync(a.abs, 'a third source text. '.repeat(9))
+    await run([a], async ({ source, tool }) => { await write(tool, 'p1', source.rel, 'v3') })
+    expect((await readRegistry(registryFile)).sources[a.rel].pages).toEqual(['wiki/p1.md'])
+  })
+
+  it('rejects with registry_unreadable and never runs the agent when the registry is corrupt', async () => {
+    const a = src('a.md')
+    fs.mkdirSync(path.dirname(registryFile), { recursive: true })
+    fs.writeFileSync(registryFile, '{ not json')
+    const agent = okAgent()
+    await expect(run([a], agent)).rejects.toMatchObject({ code: 'registry_unreadable' })
+    expect(agent).not.toHaveBeenCalled()
+    expect(fs.existsSync(path.join(root, 'wiki', 'a summary.md'))).toBe(false)
+    expect(fs.readFileSync(registryFile, 'utf8')).toBe('{ not json')
+    // A future registry version is equally unreadable, and the lock is released afterwards.
+    fs.writeFileSync(registryFile, JSON.stringify({ version: 99, sources: {}, pages: {} }))
+    await expect(run([a], agent)).rejects.toMatchObject({ code: 'registry_unreadable' })
+    expect(agent).not.toHaveBeenCalled()
+  })
+
+  it('does not persist handEdited for an unregistered page the agent created in an earlier failed run', async () => {
+    const a = src('a.md')
+    // Run 1: the agent writes a page, then fails before anything is registered.
+    await run([a], async ({ source, tool }) => { await write(tool, 'orphan', source.rel); throw new Error('boom') })
+    expect(Object.keys((await readRegistry(registryFile)).pages)).toEqual([])
+    // Run 2: the unregistered page is protected from write_wiki but may be minimally edited.
+    await run([a], async ({ source, tool }) => {
+      expect((await write(tool, 'orphan', source.rel, 'rewrite')).isError).toBe(true)
+      const edit = await tool.execute('c', { operation: 'edit_wiki', path: 'wiki/orphan.md', oldText: 'Body of orphan.', newText: 'Revised orphan.' })
+      expect(edit.isError).toBeFalsy()
+      await write(tool, 'extra', source.rel)
+    })
+    const reg = await readRegistry(registryFile)
+    expect(reg.pages['wiki/orphan.md'].hash).toBe(sha256Text(wikiRead('orphan.md')))
+    expect(reg.pages['wiki/orphan.md'].handEdited).toBeUndefined()
+    // Run 3: now registered and unchanged, so the agent may overwrite it.
+    await run([a], async ({ source, tool }) => {
+      expect((await write(tool, 'orphan', source.rel, 'rewrite')).isError).toBeFalsy()
+    })
   })
 
   it('fails with no_pages when the agent writes nothing', async () => {
@@ -180,6 +271,22 @@ describe('runIngest', () => {
     })
     expect(result).toEqual({ done: [], failed: [], stopped: true })
     expect(agent).not.toHaveBeenCalled()
+  })
+
+  it('emits a terminal stopped event for the in-flight source', async () => {
+    const a = src('a.md')
+    const events = []
+    let stop = false
+    await run([a], async ({ source, tool }) => { await write(tool, 'p', source.rel); stop = true }, {
+      shouldStop: () => stop, onProgress: e => events.push(e)
+    })
+    expect(events).toEqual([
+      { index: 0, total: 1, rel: a.rel, status: 'start' },
+      { index: 0, total: 1, rel: a.rel, status: 'stopped' }
+    ])
+    const aborted = []
+    await run([a], async () => { throw Object.assign(new Error('x'), { name: 'AbortError' }) }, { onProgress: e => aborted.push(e.status) })
+    expect(aborted).toEqual(['start', 'stopped'])
   })
 
   it('treats an AbortError as stopped, not failed, and does not record', async () => {
@@ -343,6 +450,25 @@ describe('buildIngestPlan', () => {
     const plan = await buildIngestPlan({ root, registry: emptyReg() })
     expect(plan.sources).toHaveLength(30)
     expect(plan.overflow).toBe(3)
+  })
+
+  it('applies the ingested filter before the cap so ingested files take no slots', async () => {
+    const rels = []
+    let registry = emptyReg()
+    for (let i = 0; i < 31; i++) {
+      const f = src(`f${String(i).padStart(2, '0')}.md`)
+      const st = fs.statSync(f.abs)
+      registry = recordIngested(registry, entry(f.rel, { mtimeMs: st.mtimeMs, size: st.size }))
+      rels.push(f.rel)
+    }
+    const fresh = src('zz-new.md')
+    rels.push(fresh.rel)
+    const plan = await buildIngestPlan({ root, registry, only: rels, includeIngested: false })
+    expect(plan.sources.map(s => [s.rel, s.state])).toEqual([[fresh.rel, 'new']])
+    expect(plan.overflow).toBe(0)
+    const forced = await buildIngestPlan({ root, registry, only: rels })
+    expect(forced.sources).toHaveLength(30)
+    expect(forced.overflow).toBe(2)
   })
 
   it('reports registry sources missing on disk as removed', async () => {

@@ -246,7 +246,22 @@ function buildHeuristicSequentialDispatch(message, agents) {
   }
 }
 
+// Inject API-cached max_output_tokens from provider-models.json into loopConfig
+function injectCachedModelMaxOutputTokens(loopConfig, dataStore = ds) {
+  try {
+    const modelCache = dataStore.readJSON(dataStore.paths().PROVIDER_MODELS_FILE, {})
+    const map = {}
+    for (const entry of Object.values(modelCache)) {
+      for (const m of (entry.models || [])) {
+        if (m.id && m.max_output_tokens) map[m.id] = m.max_output_tokens
+      }
+    }
+    if (Object.keys(map).length > 0) loopConfig._cachedModelMaxOutputTokens = map
+  } catch (_) { /* non-critical — fallback chain handles missing data */ }
+}
+
 module.exports = {
+  injectCachedModelMaxOutputTokens,
   detectModelProviderType,
   resolveProviderCreds,
   isProviderActive,

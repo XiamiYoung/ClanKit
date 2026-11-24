@@ -123,14 +123,16 @@ async function updateRegistry(file, update) {
   }
 }
 
-function recordIngested(registry, { rel, hash, mtimeMs, size, ingestedAt, pages }) {
+// keepPages: previously recorded page rels to union into the source's page list (caller vets existence).
+// They only extend sources[rel].pages; registry.pages entries are written solely for `pages`.
+function recordIngested(registry, { rel, hash, mtimeMs, size, ingestedAt, pages, keepPages = [] }) {
   const next = {
     version: VERSION,
     sources: { ...registry.sources },
     pages: { ...registry.pages }
   }
   for (const { rel: pageRel, ...rest } of pages) next.pages[pageRel] = { ...rest }
-  next.sources[rel] = { hash, mtimeMs, size, ingestedAt, pages: pages.map(p => p.rel) }
+  next.sources[rel] = { hash, mtimeMs, size, ingestedAt, pages: [...new Set([...keepPages, ...pages.map(p => p.rel)])] }
   return next
 }
 
@@ -152,5 +154,5 @@ function removedSources({ scanned, registry }) {
 }
 
 module.exports = {
-  registryPathFor, registryFileKey, readRegistry, readRegistrySync, writeRegistry, updateRegistry, recordIngested, classifySources, removedSources
+  registryPathFor, registryFileKey, readRegistry, readRegistryStrict: readRegistryForUpdate, readRegistrySync, writeRegistry, updateRegistry, recordIngested, classifySources, removedSources
 }

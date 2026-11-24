@@ -7,6 +7,7 @@ import path from 'path'
 const require = createRequire(import.meta.url)
 const { registerHandlers } = require('../aidoc')
 const { cachePathFor } = require('../../lib/aidocIndex')
+const { registryPathFor } = require('../../lib/aidocRegistry')
 
 const dirs = []
 afterEach(async () => {
@@ -77,7 +78,7 @@ function configuredProvider() {
   ] }
 }
 
-async function ingestFixture(runAgent, config = configuredProvider()) {
+async function ingestFixture(runAgent, config = configuredProvider(), extraDs = {}) {
   const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aidoc-ingest-ipc-'))
   dirs.push(dataDir)
   const root = path.join(dataDir, 'vault')
@@ -88,10 +89,11 @@ async function ingestFixture(runAgent, config = configuredProvider()) {
   registerHandlers({ handle: (key, handler) => handlers.set(key, handler) }, {
     paths: () => ({ DATA_DIR: dataDir, CONFIG_FILE: 'config.json' }),
     readJSONAsync: async () => ({ DoCPath: root, ...config }),
+    ...extraDs,
   }, { runAgent })
   const sender = { send: vi.fn(), isDestroyed: () => false }
   const invoke = (channel, options = {}, owner = sender) => handlers.get('aidoc:' + channel)({ sender: owner }, { root, ...options })
-  return { root, source, sender, invoke }
+  return { root, dataDir, source, sender, invoke }
 }
 
 it('requires a configured main provider before ingest can write anything', async () => {
@@ -163,4 +165,112 @@ it('allows only one run and a stop from the original renderer and root', async (
   await expect(invoke('ingest-stop')).resolves.toMatchObject({ success: true })
   await expect(work).resolves.toMatchObject({ success: true, stopped: true, done: [] })
   expect(stop).toHaveBeenCalledOnce()
+})
+
+const noteContent = ['---', 'type: summary', 'title: note', 'sources:', '  - kb_source/note.md', 'updated: 2026-11-24', '---', '', 'A wiki note.'].join('\n')
+const writeNote = async ({ tool }) => {
+  await tool.execute('write', { operation: 'write_wiki', path: 'wiki/note.md', content: noteContent })
+}
+
+it('returns registry_unreadable without running the agent when the registry is corrupt', async () => {
+  const runAgent = vi.fn()
+  const { root, dataDir, invoke } = await ingestFixture(runAgent)
+  const registryFile = registryPathFor(dataDir, root)
+  await fs.mkdir(path.dirname(registryFile), { recursive: true })
+  await fs.writeFile(registryFile, '{ broken')
+  await expect(invoke('ingest-plan')).resolves.toMatchObject({ success: false, code: 'registry_unreadable' })
+  await expect(invoke('ingest-run')).resolves.toMatchObject({ success: false, code: 'registry_unreadable' })
+  expect(runAgent).not.toHaveBeenCalled()
+  await expect(fs.access(path.join(root, 'wiki'))).rejects.toMatchObject({ code: 'ENOENT' })
+  expect(await fs.readFile(registryFile, 'utf8')).toBe('{ broken')
+  // The busy flag is not left behind: a repaired registry runs normally.
+  await fs.rm(registryFile)
+  await expect(invoke('ingest-run')).resolves.toMatchObject({ success: true })
+})
+
+it('refreshes mtime and size for same-hash files on ingest-plan without listing them', async () => {
+  const { root, dataDir, source, invoke } = await ingestFixture(writeNote)
+  await expect(invoke('ingest-run')).resolves.toMatchObject({ success: true, done: ['kb_source/note.md'] })
+  const registryFile = registryPathFor(dataDir, root)
+  const before = JSON.parse(await fs.readFile(registryFile, 'utf8')).sources['kb_source/note.md']
+  const later = new Date(Date.now() + 60_000)
+  await fs.utimes(source, later, later)
+  await expect(invoke('source-states')).resolves.toMatchObject({ states: { [source]: 'updated' } })
+  await expect(invoke('ingest-plan')).resolves.toMatchObject({ success: true, sources: [] })
+  const after = JSON.parse(await fs.readFile(registryFile, 'utf8')).sources['kb_source/note.md']
+  const stat = await fs.stat(source)
+  expect(after.mtimeMs).toBe(stat.mtimeMs)
+  expect(after.mtimeMs).not.toBe(before.mtimeMs)
+  expect(after.size).toBe(stat.size)
+  expect(after.hash).toBe(before.hash)
+  await expect(invoke('source-states')).resolves.toMatchObject({ states: { [source]: 'ingested' } })
+})
+
+it('re-runs an already ingested source only with force, and never a path outside the plan', async () => {
+  const runAgent = vi.fn(writeNote)
+  const { root, invoke } = await ingestFixture(runAgent)
+  await fs.mkdir(path.join(root, 'general'), { recursive: true })
+  await fs.writeFile(path.join(root, 'general', 'x.md'), 'private')
+  await invoke('ingest-run')
+  expect(runAgent).toHaveBeenCalledTimes(1)
+  await expect(invoke('ingest-run', { rels: ['kb_source/note.md'] })).resolves.toMatchObject({ success: true, done: [], failed: [] })
+  expect(runAgent).toHaveBeenCalledTimes(1)
+  await expect(invoke('ingest-run', { rels: ['kb_source/note.md'], force: true })).resolves.toMatchObject({
+    success: true, done: ['kb_source/note.md'],
+  })
+  expect(runAgent).toHaveBeenCalledTimes(2)
+  for (const rel of ['kb_source/../general/x.md', 'general/x.md', '../outside.md']) {
+    await expect(invoke('ingest-run', { rels: [rel], force: true })).resolves.toMatchObject({ success: true, done: [], failed: [] })
+    await expect(invoke('ingest-plan', { rels: [rel], force: true })).resolves.toMatchObject({ success: true, sources: [] })
+  }
+  expect(runAgent).toHaveBeenCalledTimes(2)
+})
+
+it('keeps the ingest result and reports indexError when the reindex fails afterwards', async () => {
+  const { root, dataDir, sender, invoke } = await ingestFixture(writeNote)
+  const cacheFile = cachePathFor(dataDir, root)
+  await fs.mkdir(cacheFile, { recursive: true })
+  const result = await invoke('ingest-run', { requestId: 'idx' })
+  expect(result).toMatchObject({ success: true, done: ['kb_source/note.md'], failed: [], stopped: false })
+  expect(typeof result.indexError).toBe('string')
+  expect(sender.send).toHaveBeenCalledWith('aidoc:ingest-progress', expect.objectContaining({ requestId: 'idx', type: 'index-error' }))
+})
+
+it('injects cached model max output tokens into the ingest loop config', async () => {
+  let seen
+  const runAgent = vi.fn(async ({ loopConfig }) => { seen = loopConfig; throw new Error('stop here') })
+  const { invoke } = await ingestFixture(runAgent, configuredProvider(), {
+    readJSON: () => ({ p: { models: [{ id: 'main-model', max_output_tokens: 4321 }, { id: 'no-limit' }] } }),
+  })
+  await invoke('ingest-run')
+  expect(seen._cachedModelMaxOutputTokens).toEqual({ 'main-model': 4321 })
+})
+
+it('stops a running ingest and frees the busy flag when the owning window is destroyed', async () => {
+  let release
+  let taskEntered
+  const entered = new Promise(resolve => { taskEntered = resolve })
+  const stop = vi.fn(() => release())
+  const runAgent = vi.fn(({ active }) => {
+    active.loop = { stop }
+    taskEntered()
+    return new Promise(resolve => { release = resolve })
+  })
+  const { invoke } = await ingestFixture(runAgent)
+  const listeners = {}
+  const owner = {
+    isDestroyed: () => false,
+    send: vi.fn(),
+    once: vi.fn((event, fn) => { listeners[event] = fn }),
+    removeListener: vi.fn(),
+  }
+  const work = invoke('ingest-run', {}, owner)
+  await entered
+  expect(owner.once).toHaveBeenCalledWith('destroyed', expect.any(Function))
+  listeners.destroyed()
+  await expect(work).resolves.toMatchObject({ success: true, stopped: true, done: [] })
+  expect(stop).toHaveBeenCalledOnce()
+  expect(owner.removeListener).toHaveBeenCalledWith('destroyed', listeners.destroyed)
+  runAgent.mockImplementation(writeNote)
+  await expect(invoke('ingest-run')).resolves.toMatchObject({ success: true, done: ['kb_source/note.md'] })
 })

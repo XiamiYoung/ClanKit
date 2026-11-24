@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import path from 'path'
 import fs from 'fs'
 import os from 'os'
@@ -36,6 +36,26 @@ afterAll(() => {
 })
 
 const build = (cfg) => buildSystemPrompt(cfg, [], [], [], [], baseAgent)
+
+describe('systemPromptBuilder wiki overview data path', () => {
+  it('uses the dataStore fallback data dir for the overview when config.dataPath is unset', async () => {
+    const dataStore = require('../../lib/dataStore')
+    const spy = vi.spyOn(dataStore, 'paths').mockReturnValue({ DATA_DIR: tmpRoot })
+    const registryFile = registryPathFor(tmpRoot, docRoot)
+    try {
+      await writeRegistry(registryFile, { version: 1, sources: {}, pages: {
+        'wiki/source.md': { hash: 'x', type: 'summary', updated: '2026-11-04' }
+      } })
+      const { dataPath, ...withoutDataPath } = baseConfig
+      expect(dataPath).toBe(tmpRoot)
+      const out = build({ ...withoutDataPath, mode: 'productivity', aiDocEnabled: true })
+      expect(out).toContain('KNOWLEDGE BASE WIKI OVERVIEW')
+    } finally {
+      spy.mockRestore()
+      fs.rmSync(registryFile, { force: true })
+    }
+  })
+})
 
 describe('systemPromptBuilder AI Doc gating', () => {
   it('aiDocEnabled true: explains the three folders and forbids writing to kb_source and wiki', () => {

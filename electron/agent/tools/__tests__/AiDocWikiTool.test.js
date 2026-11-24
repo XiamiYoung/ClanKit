@@ -606,6 +606,20 @@ describe('write side', () => {
       expect(text(res)).toContain('edits made by the user')
     })
 
+    it('reports a hash mismatch as handEdited and an unregistered page only as unregistered', async () => {
+      put('wiki/h.md', page())
+      registry.pages['wiki/h.md'] = { hash: 'stale' }
+      put('wiki/u.md', page())
+      expect((await write('wiki/h.md', page({ title: 'New' }))).isError).toBe(true)
+      expect((await write('wiki/u.md', page({ title: 'New' }))).isError).toBe(true)
+      expect(tool.getWrittenPageState('wiki/h.md')).toMatchObject({ handEdited: true, unregistered: false })
+      expect(tool.getWrittenPageState('wiki/u.md')).toMatchObject({ handEdited: false, unregistered: true })
+      // A minimal edit keeps both classifications.
+      await run({ operation: 'edit_wiki', path: 'wiki/u.md', oldText: 'line one', newText: 'line 1' })
+      expect(tool.getWrittenPageState('wiki/u.md')).toMatchObject({ handEdited: false, unregistered: true })
+      expect(tool.getWrittenPageState('wiki/untouched.md')).toEqual({ hash: undefined, handEdited: false, unregistered: false })
+    })
+
     it('matches registry entries by canonical spelling', async () => {
       const abs = put('wiki/Case.md', page())
       registry.pages['wiki/Case.md'] = { hash: sha256Text(fs.readFileSync(abs, 'utf8')) }

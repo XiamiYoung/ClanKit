@@ -134,6 +134,9 @@ class AiDocWikiTool extends BaseTool {
     this._lastHash = new Map()
     // Canonical rel -> original char length, for pages detected as user-edited; protected for the whole run.
     this._userEdited = new Map()
+    // Subset of _userEdited whose protection comes from a real edit (registered hash mismatch or persisted flag).
+    // Pages protected only because they are unregistered must never be persisted as hand-edited.
+    this._editedByUser = new Set()
   }
 
   /** Pages written or edited during this run (index.md, log.md and SCHEMA.md excluded). */
@@ -142,7 +145,13 @@ class AiDocWikiTool extends BaseTool {
   }
 
   getWrittenPageState(rel) {
-    return { hash: this._lastHash.get(rel), handEdited: this._userEdited.has(rel) }
+    return {
+      hash: this._lastHash.get(rel),
+      // True only for detected user edits; persist this flag.
+      handEdited: this._editedByUser.has(rel),
+      // Protected during the run because no registry entry exists; do not persist as hand-edited.
+      unregistered: this._userEdited.has(rel) && !this._editedByUser.has(rel)
+    }
   }
 
   /** Every file written or edited during this run, including index.md. */
@@ -314,6 +323,7 @@ class AiDocWikiTool extends BaseTool {
     const expected = this._lastHash.get(rel) || (entry && entry.hash)
     if (!entry?.handEdited && expected && expected === sha256Text(current)) return false
     this._userEdited.set(rel, current.length)
+    if (entry?.handEdited || (expected && expected !== sha256Text(current))) this._editedByUser.add(rel)
     return true
   }
 

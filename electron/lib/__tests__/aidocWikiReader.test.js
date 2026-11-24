@@ -132,6 +132,13 @@ describe('AI Doc Wiki reader', () => {
     })
   })
 
+  it('rejects a page above the 2 MB cap with page_too_large and still reads one at the cap', async () => {
+    await write('wiki/big.md', 'x'.repeat(2 * 1024 * 1024 + 1))
+    await write('wiki/edge.md', 'x'.repeat(2 * 1024 * 1024))
+    await expect(readWikiPage({ root, cache: { files: {} }, rel: 'wiki/big.md' })).rejects.toMatchObject({ code: 'page_too_large' })
+    await expect(readWikiPage({ root, cache: { files: {} }, rel: 'wiki/edge.md' })).resolves.toMatchObject({ rel: 'wiki/edge.md' })
+  })
+
   it('rejects paths outside readable wiki pages', async () => {
     await write('general/a.md', 'outside')
     await write('wiki/SCHEMA.md', 'schema')

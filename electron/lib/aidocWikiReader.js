@@ -14,6 +14,7 @@ const HOME = `${WIKI}/index.md`
 const EXCLUDED = new Set([`${WIKI}/schema.md`, `${WIKI}/log.md`])
 const HEADER_BYTES = 4096
 const MAX_PAGES = 1000
+const MAX_PAGE_BYTES = 2 * 1024 * 1024
 
 function isWikiPage(rel) {
   return typeof rel === 'string' && rel.startsWith(`${WIKI}/`) &&
@@ -100,6 +101,9 @@ async function readWikiPage({ root, cache, rel }) {
   const target = isWikiPage(rel) && await findAreaFile(root, WIKI, rel)
   if (!target || !isWikiPage(target.rel)) throw new Error('Wiki page is missing or outside the reader scope')
 
+  if ((await fs.stat(target.abs)).size > MAX_PAGE_BYTES) {
+    throw Object.assign(new Error('Wiki page is too large to open'), { code: 'page_too_large' })
+  }
   const { data, body } = parseFrontmatter(await fs.readFile(target.abs, 'utf8'))
   const page = metadata(target.rel, data)
   const resolve = createLinkResolver([...Object.keys(cache?.files ?? {}), target.rel])

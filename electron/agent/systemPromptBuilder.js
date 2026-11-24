@@ -851,7 +851,7 @@ Loading a skill is cheap (returns a markdown guide); skipping it when relevant c
   let wikiOverview = ''
   if (aiDocOn && _isProductivity) {
     try {
-      const overview = buildWikiOverview({ dataDir: config.dataPath, root: aidocPath })
+      const overview = buildWikiOverview({ dataDir: dataPath, root: aidocPath })
       if (overview) wikiOverview = `\n${overview.text}\n\n`
     } catch {
       // Registry failures must not interrupt prompt construction.
