@@ -39,6 +39,7 @@
             <p class="docs-catalog-subtitle">{{ t('notes.filesFromVault') }}</p>
           </div>
           <div class="flex items-center gap-2">
+            <AiDocToolbar :key="store.vaultPath" @open-graph="showGraph = true" />
             <AppButton size="icon" @click="refreshAll" v-tooltip="t('common.refresh')">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             </AppButton>
@@ -64,7 +65,8 @@
       </div>
 
       <!-- Main content: file tree + editor -->
-      <div class="flex-1 flex overflow-hidden">
+      <div class="relative flex-1 flex overflow-hidden">
+        <AiDocGraphPanel v-if="showGraph" @close="showGraph = false" @open-file="openGraphFile" />
 
         <!-- ── LEFT: File Tree Panel (resizable) ── -->
         <div
@@ -898,6 +900,9 @@ import markedFootnote from 'marked-footnote'
 
 mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose', fontFamily: 'Inter, sans-serif' })
 import { useObsidianStore } from '../stores/obsidian'
+import { useAiDocStore } from '../stores/aidoc'
+import AiDocToolbar from '../components/aidoc/AiDocToolbar.vue'
+import AiDocGraphPanel from '../components/aidoc/AiDocGraphPanel.vue'
 import { useAgentsStore, BUILTIN_DOC_EDITOR_ID } from '../stores/agents'
 import { useConfigStore } from '../stores/config'
 import { useSkillsStore } from '../stores/skills'
@@ -923,6 +928,26 @@ const previewLimitMessage = ref('')
 const props = defineProps({ isEmbedded: { type: Boolean, default: false } })
 
 const store = useObsidianStore()
+const aidocStore = useAiDocStore()
+const showGraph = ref(false)
+watch(() => store.vaultPath, path => {
+  showGraph.value = false
+  aidocStore.setRoot(path)
+}, { immediate: true })
+onBeforeUnmount(() => aidocStore.dispose())
+
+async function openAiDocFile(path, name) {
+  if (/\.pdf$/i.test(name)) {
+    await window.electronAPI.openFile(path)
+  } else {
+    await store.openFile(path, name)
+  }
+}
+
+async function openGraphFile({ path, name }) {
+  showGraph.value = false
+  await openAiDocFile(path, name)
+}
 const agentsStore = useAgentsStore()
 const configStore = useConfigStore()
 const focusModeStore = useFocusModeStore()
@@ -2960,27 +2985,47 @@ async function handlePreviewClick(e) {
   }
   if (!el) return
 
-  // Wikilink (Obsidian): resolve by basename match against the vault tree.
+  // Use the graph resolver inside the knowledge base and the vault tree elsewhere.
   if (el.classList.contains('wikilink')) {
     e.preventDefault()
     e.stopPropagation()
     const target = el.dataset.target
     const section = el.dataset.section
     if (!target) return
-    const file = _findVaultFileByName(store.fileTree, target)
+    const root = store.vaultPath
+    const fromPath = store.activeFile?.path
+    let resolved
+    try {
+      resolved = await window.electronAPI?.aidoc?.resolveLink({ root, fromPath, target })
+    } catch {
+      showLinkError(t('aidoc.linkFailed', { target }))
+      return
+    }
+    if (root !== store.vaultPath || fromPath !== store.activeFile?.path) return
+    if (resolved?.success === false) {
+      showLinkError(t('aidoc.linkFailed', { target }))
+      return
+    }
+    if (resolved?.kind === 'ambiguous') {
+      showLinkError(t('aidoc.linkAmbiguous', { target, candidates: resolved.candidates.join(', ') }))
+      return
+    }
+    const file = !resolved || resolved.kind === 'outside'
+      ? _findVaultFileByName(store.fileTree, target)
+      : resolved.kind === 'resolved' ? resolved : null
     if (file) {
       try {
-        await store.openFile(file.path, file.name)
+        await openAiDocFile(file.path, file.name)
         if (section) {
           await nextTick()
           const t = document.getElementById(slugify(section))
           if (t) t.scrollIntoView({ behavior: 'smooth' })
         }
       } catch (err) {
-        showLinkError(`Could not open note: ${target}`)
+        showLinkError(t('aidoc.linkFailed', { target }))
       }
     } else {
-      showLinkError(`Note not found in vault: ${target}`)
+      showLinkError(t('aidoc.linkMissing', { target }))
     }
     return
   }

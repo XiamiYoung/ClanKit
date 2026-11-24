@@ -134,6 +134,19 @@ describe('DocsView', () => {
     expect(wrapper.find('.doc-tree-panel').exists()).toBe(true)
   })
 
+  it('opens a graph document and returns to the editor', async () => {
+    mockObsidianStore.vaultPath = '/some/vault'
+    const wrapper = shallowMount(DocsView)
+    wrapper.findComponent({ name: 'AiDocToolbar' }).vm.$emit('open-graph')
+    await wrapper.vm.$nextTick()
+    const graph = wrapper.findComponent({ name: 'AiDocGraphPanel' })
+    expect(graph.exists()).toBe(true)
+    graph.vm.$emit('open-file', { path: '/some/vault/wiki/note.md', name: 'note.md' })
+    await wrapper.vm.$nextTick()
+    expect(mockObsidianStore.openFile).toHaveBeenCalledWith('/some/vault/wiki/note.md', 'note.md')
+    expect(wrapper.findComponent({ name: 'AiDocGraphPanel' }).exists()).toBe(false)
+  })
+
   it('renders focus-mode header button and dispatches enterWith on click', async () => {
     mockObsidianStore.vaultPath = '/some/vault'
     mockObsidianStore.activeFile = { path: '/some/vault/note.md', name: 'note.md' }

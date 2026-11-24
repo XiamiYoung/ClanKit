@@ -153,6 +153,7 @@
     "dompurify": "^3.1.0",
     "electron-updater": "^6.8.3",
     "exceljs": "^4.4.0",
+    "force-graph": "1.52.0",
     "highlight.js": "^11.9.0",
     "js-tiktoken": "^1.0.21",
     "js-yaml": "^4.1.1",
