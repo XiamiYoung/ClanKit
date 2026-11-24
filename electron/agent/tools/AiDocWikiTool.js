@@ -13,6 +13,8 @@ const MAX_WIKI_READ_CHARS = 200000
 const MAX_WIKI_READ_BYTES = MAX_WIKI_READ_CHARS * 4
 const MAX_WIKI_WRITE_CHARS = 200000
 const MAX_SEGMENT_CHARS = 120
+// Temp files created by atomic writes: .<name>.<pid>.<random>.tmp
+const TEMP_FILE = /^\..+\.\d+\.[a-z0-9]+\.tmp$/
 const READONLY_FILES = {
   'wiki/schema.md': 'SCHEMA.md is owned by the user and is read-only. Use read_wiki to consult it.',
   'wiki/log.md': 'log.md is maintained by the application and is read-only.'
@@ -129,6 +131,8 @@ class AiDocWikiTool extends BaseTool {
     this._pages = new Map()
     // Hash of the last content this tool wrote per page, so its own writes never count as user edits.
     this._lastHash = new Map()
+    // Canonical rel -> original char length, for pages detected as user-edited; protected for the whole run.
+    this._userEdited = new Map()
   }
 
   /** Pages written or edited during this run (index.md, log.md and SCHEMA.md excluded). */
@@ -171,6 +175,7 @@ class AiDocWikiTool extends BaseTool {
   }
 
   async execute(toolCallId, params = {}) {
+    if (!params || typeof params !== 'object' || Array.isArray(params)) return this._err('params must be an object')
     try {
       switch (params.operation) {
         case 'list': return this._list(params)
@@ -230,6 +235,8 @@ class AiDocWikiTool extends BaseTool {
         if (ent.isDirectory()) {
           walk(path.join(absDir, ent.name), rel)
         } else if (ent.isFile()) {
+          if (TEMP_FILE.test(ent.name)) continue
+
           // Symlinks are neither files nor directories for Dirent, so they are skipped.
           if (area === 'kb_source' && !INGESTIBLE_EXTS.has(path.extname(ent.name).slice(1).toLowerCase())) continue
           if (needle && !ent.name.toLowerCase().includes(needle)) continue
@@ -294,10 +301,14 @@ class AiDocWikiTool extends BaseTool {
 
   /** True when an existing page differs from what the app (or this tool) last wrote, or is not registered at all. */
   _isHandEdited(rel, current) {
+    // Once detected, a page stays protected for the whole run, whatever the tool writes later.
+    if (this._userEdited.has(rel)) return true
     const pages = this.registry?.pages || {}
     const entry = pages[rel] || pages[rel.replace(/^wiki\//, '')]
     const expected = this._lastHash.get(rel) || (entry && entry.hash)
-    return !expected || expected !== sha256Text(current)
+    if (expected && expected === sha256Text(current)) return false
+    this._userEdited.set(rel, current.length)
+    return true
   }
 
   _readExisting(target) {
@@ -306,15 +317,15 @@ class AiDocWikiTool extends BaseTool {
   }
 
   /** Validate, persist atomically and record the result. Returns an error result, or null on success. */
-  _commit(target, isIndex, content) {
+  _commit(target, isIndex, content, hint = '') {
     let meta = null
     if (!isIndex) {
       const parsed = parseFrontmatter(content)
       if (!parsed.hasFrontmatter) {
-        return this._err('The page must start with a frontmatter block ("---" ... "---") containing type, title, sources and updated. Nothing was written.')
+        return this._err(`The page must start with a frontmatter block ("---" ... "---") containing type, title, sources and updated. Nothing was written.${hint}`)
       }
       const valid = validateWikiFrontmatter(parsed.data)
-      if (!valid.ok) return this._err(`${valid.error} Nothing was written.`)
+      if (!valid.ok) return this._err(`${valid.error} Nothing was written.${hint}`)
       const d = parsed.data
       meta = { rel: target.rel, type: d.type, title: d.title, sources: d.sources, updated: d.updated }
     }
@@ -328,7 +339,8 @@ class AiDocWikiTool extends BaseTool {
       throw error
     }
     this._touched.add(target.rel)
-    this._lastHash.set(target.rel, sha256Text(content))
+    // Only the agent's own clean pages are remembered; protected pages never become "clean" again.
+    if (!this._userEdited.has(target.rel)) this._lastHash.set(target.rel, sha256Text(content))
     if (meta) this._pages.set(target.rel, meta)
     return null
   }
@@ -358,6 +370,7 @@ class AiDocWikiTool extends BaseTool {
     const { target, isIndex } = vet
     if (typeof oldText !== 'string' || oldText === '') return this._err('oldText is required and must be a non-empty string')
     if (typeof newText !== 'string') return this._err('newText is required and must be a string')
+    if (oldText === newText) return this._err('oldText and newText are identical, so this edit would change nothing. Provide different newText.')
     let expected = 1
     if (occurrences !== undefined && occurrences !== null) {
       expected = Number(occurrences)
@@ -366,6 +379,9 @@ class AiDocWikiTool extends BaseTool {
     if (!target.exists) return this._err(`Page not found: ${target.rel}. Use write_wiki to create it.`)
     const current = this._readExisting(target)
     if (current === null) return this._err('Page is too large to edit')
+    if (current.includes('�')) {
+      return this._err('This page is not valid UTF-8 (it contains replacement characters), so editing it could corrupt its text. Ask the user to re-save the page as UTF-8.')
+    }
 
     // Match the file's own line-ending style so multi-line edits do not mix EOLs.
     const crlf = current.includes('\r\n')
@@ -381,10 +397,18 @@ class AiDocWikiTool extends BaseTool {
       return this._err(`The edited page would be too large (${next.length} chars, limit ${MAX_WIKI_WRITE_CHARS}). Nothing was written.`)
     }
     const handEdited = !isIndex && this._isHandEdited(target.rel, current)
-    if (handEdited && next.length < current.length * 0.5) {
-      return this._err("This edit would remove more than half of a page that contains edits made by the user. Keep the user's content and make a smaller change.")
+    // Cumulative guard: measured against the length the page had when the user's edits were first detected.
+    if (handEdited && next.length < this._userEdited.get(target.rel) * 0.5) {
+      return this._err("This edit would remove more than half of the original content of a page that contains edits made by the user. Keep the user's content and make a smaller change.")
     }
-    const err = this._commit(target, isIndex, next)
+    let hint = ''
+    if (!isIndex) {
+      const before = parseFrontmatter(current)
+      if (!before.hasFrontmatter || !validateWikiFrontmatter(before.data).ok) {
+        hint = ' This existing page has no valid frontmatter: the edit must add a complete frontmatter block (type, title, sources, updated) in the same edit, or the user must fix the page.'
+      }
+    }
+    const err = this._commit(target, isIndex, next, hint)
     if (err) return err
     const note = handEdited ? `\n\n${USER_EDIT_NOTE}` : ''
     return this._ok(`Edited ${target.rel}${note}`, { path: target.rel, userEdited: handEdited })

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRequire } from 'module'
 
 const require = createRequire(import.meta.url)
@@ -613,5 +613,141 @@ describe('write side', () => {
       const res = await write('wiki/case.md', page({ title: 'New' }))
       expect(res.isError).toBeFalsy()
     })
+  })
+})
+
+describe('write side hardening', () => {
+  const page = (body = 'Body line one.\nBody line two.\n') =>
+    `---\ntype: summary\ntitle: Alpha\nsources: [kb_source/a.md]\nupdated: 2026-01-02\n---\n${body}`
+  const read = rel => fs.readFileSync(path.join(root, ...rel.split('/')), 'utf8')
+  const write = (p, content) => run({ operation: 'write_wiki', path: p, content })
+  const edit = (p, oldText, newText, extra = {}) => run({ operation: 'edit_wiki', path: p, oldText, newText, ...extra })
+
+  it('keeps a user page protected after the tool edits it (stale registry hash)', async () => {
+    put('wiki/u.md', page('user text\n'))
+    registry.pages['wiki/u.md'] = { hash: 'stale' }
+    expect((await write('wiki/u.md', page('x'))).isError).toBe(true)
+    const res = await edit('wiki/u.md', 'user text', 'user text!')
+    expect(res.isError).toBeFalsy()
+    expect(text(res)).toContain('edits made by the user')
+    const after = read('wiki/u.md')
+    expect((await write('wiki/u.md', page('overwrite'))).isError).toBe(true)
+    expect(read('wiki/u.md')).toBe(after)
+    expect(after).toContain('user text!')
+  })
+
+  it('keeps a registry-less user page protected after an edit', async () => {
+    put('wiki/u.md', page('user text\n'))
+    expect(text(await edit('wiki/u.md', 'user', 'USER'))).toContain('edits made by the user')
+    expect((await write('wiki/u.md', page('overwrite'))).isError).toBe(true)
+    expect(read('wiki/u.md')).toContain('USER text')
+    expect(text(await edit('wiki/u.md', 'USER', 'User'))).toContain('edits made by the user')
+  })
+
+  it('refuses write_wiki after a refused no-op edit and keeps content', async () => {
+    const original = page('user text\n')
+    put('wiki/u.md', original)
+    registry.pages['wiki/u.md'] = { hash: 'stale' }
+    expect((await edit('wiki/u.md', 'user text', 'user text')).isError).toBe(true)
+    expect((await write('wiki/u.md', page('overwrite'))).isError).toBe(true)
+    expect(read('wiki/u.md')).toBe(original)
+  })
+
+  it('applies the shrink guard cumulatively to the original length', async () => {
+    const original = page('a'.repeat(300) + 'b'.repeat(300) + 'c'.repeat(300) + '\n')
+    put('wiki/u.md', original)
+    registry.pages['wiki/u.md'] = { hash: 'stale' }
+    const results = []
+    for (const ch of ['a', 'b', 'c']) {
+      results.push(await edit('wiki/u.md', ch.repeat(300), ''))
+      expect(read('wiki/u.md').length).toBeGreaterThanOrEqual(original.length * 0.5)
+    }
+    expect(results[0].isError).toBeFalsy()
+    expect(results.slice(1).some(r => r.isError)).toBe(true)
+    for (const r of results.filter(r => !r.isError)) expect(text(r)).toContain('edits made by the user')
+  })
+
+  it('lets the agent re-write and re-edit its own pages freely', async () => {
+    expect((await write('wiki/own.md', page('one\n'))).isError).toBeFalsy()
+    expect((await write('wiki/own.md', page('two\n'))).isError).toBeFalsy()
+    const res = await edit('wiki/own.md', 'two', 'three')
+    expect(res.isError).toBeFalsy()
+    expect(text(res)).not.toContain('edits made by the user')
+    expect((await write('wiki/own.md', page('four\n'))).isError).toBeFalsy()
+    expect(read('wiki/own.md')).toContain('four')
+  })
+
+  it('rejects a no-op edit', async () => {
+    await write('wiki/a.md', page())
+    const res = await edit('wiki/a.md', 'Body', 'Body')
+    expect(res.isError).toBe(true)
+    expect(text(res)).toMatch(/identical|nothing/)
+  })
+
+  it('hides atomic-write temp files from list', async () => {
+    put('wiki/a.md', page())
+    put('wiki/.a.md.123.abc123.tmp', 'partial')
+    const res = await run({ operation: 'list', area: 'wiki' })
+    expect(text(res)).toContain('wiki/a.md')
+    expect(text(res)).not.toContain('.tmp')
+  })
+
+  it('refuses to edit a page that is not valid UTF-8', async () => {
+    put('wiki/bad.md', Buffer.concat([Buffer.from(page('x ')), Buffer.from([0xff, 0xfe, 0x41, 0x0a])]))
+    const res = await edit('wiki/bad.md', 'x ', 'y ')
+    expect(res.isError).toBe(true)
+    expect(text(res)).toContain('UTF-8')
+  })
+
+  it('explains when an existing page lacks valid frontmatter', async () => {
+    put('wiki/plain.md', 'just text\n')
+    const before = read('wiki/plain.md')
+    const res = await edit('wiki/plain.md', 'just', 'JUST')
+    expect(res.isError).toBe(true)
+    expect(text(res)).toMatch(/no valid frontmatter/)
+    expect(read('wiki/plain.md')).toBe(before)
+  })
+
+  it('returns a clean error for non-object params', async () => {
+    for (const bad of [null, 'x', 5, []]) {
+      const res = await tool.execute('t1', bad)
+      expect(res.isError).toBe(true)
+      expect(text(res)).toContain('params must be an object')
+    }
+  })
+
+  it('handles case-variant special file names', async () => {
+    expect((await write('wiki/INDEX.md', '# i\n')).isError).toBeFalsy()
+    expect(tool.getWrittenPages()).toEqual([])
+    expect(tool.getTouchedFiles()).toEqual(['wiki/INDEX.md'])
+    put('wiki/schema.md', 'rules')
+    put('wiki/Log.MD', 'log')
+    expect((await write('wiki/schema.md', 'x')).isError).toBe(true)
+    expect((await write('wiki/Log.MD', 'x')).isError).toBe(true)
+    expect((await edit('wiki/Log.MD', 'log', 'z')).isError).toBe(true)
+    expect((await edit('wiki/schema.md', 'rules', 'z')).isError).toBe(true)
+    expect(read('wiki/schema.md')).toBe('rules')
+    expect(read('wiki/Log.MD')).toBe('log')
+  })
+
+  it('treats a nested index.md as a normal page', async () => {
+    const res = await write('wiki/sub/index.md', '# no frontmatter\n')
+    expect(res.isError).toBe(true)
+    expect(fs.existsSync(path.join(root, 'wiki', 'sub', 'index.md'))).toBe(false)
+    expect((await write('wiki/sub/index.md', page())).isError).toBeFalsy()
+    expect(tool.getWrittenPages().map(p => p.rel)).toEqual(['wiki/sub/index.md'])
+  })
+
+  it('cleans up the temp file and registers nothing when rename fails', async () => {
+    const spy = vi.spyOn(fs, 'renameSync').mockImplementation(() => { throw new Error('boom') })
+    try {
+      const res = await write('wiki/a.md', page())
+      expect(res.isError).toBe(true)
+    } finally {
+      spy.mockRestore()
+    }
+    expect(fs.readdirSync(path.join(root, 'wiki'))).toEqual([])
+    expect(tool.getWrittenPages()).toEqual([])
+    expect(tool.getTouchedFiles()).toEqual([])
   })
 })
