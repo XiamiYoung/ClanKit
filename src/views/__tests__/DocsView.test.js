@@ -142,7 +142,7 @@ describe('DocsView', () => {
     wrapper.findComponent({ name: 'AiDocToolbar' }).vm.$emit('open-graph')
     await wrapper.vm.$nextTick()
     const graph = wrapper.findComponent({ name: 'AiDocGraphPanel' })
-    expect(graph.props('anchor')).toBe(wrapper.get('.docs-display-panel').element)
+    expect(graph.element.closest('.docs-display-panel')).toBeNull()
     graph.vm.$emit('open-file', { path: '/some/vault/wiki/note.md', name: 'note.md' })
     await wrapper.vm.$nextTick()
     expect(mockObsidianStore.openFile).toHaveBeenCalledWith('/some/vault/wiki/note.md', 'note.md')

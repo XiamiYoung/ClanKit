@@ -142,7 +142,6 @@ import AppButton from '../common/AppButton.vue'
 import AppTooltip from '../common/AppTooltip.vue'
 import AiDocGraph from './AiDocGraph.vue'
 
-const props = defineProps({ anchor: { type: Object, default: null } })
 const emit = defineEmits(['close', 'open-file'])
 const { t } = useI18n()
 const store = useAiDocStore()
@@ -152,7 +151,8 @@ const query = ref('')
 const hideOrphans = ref(false)
 const hiddenExts = ref([])
 
-const GUTTER = 16
+const INITIAL_WIDTH_RATIO = 0.84
+const INITIAL_HEIGHT_RATIO = 0.86
 const MIN_WIDTH = 360
 const MIN_HEIGHT = 260
 const KEY_STEP = 16
@@ -265,11 +265,11 @@ function openFile(node) {
 }
 
 onMounted(() => {
-  const area = props.anchor?.getBoundingClientRect()
-    ?? { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight }
-  const width = clamp(area.width - 2 * GUTTER, MIN_WIDTH, window.innerWidth)
-  const height = clamp(area.height - 2 * GUTTER, MIN_HEIGHT, window.innerHeight)
-  fitFrame({ x: area.left + (area.width - width) / 2, y: area.top + (area.height - height) / 2, width, height })
+  const w = window.innerWidth
+  const h = window.innerHeight
+  const width = clamp(Math.round(w * INITIAL_WIDTH_RATIO), MIN_WIDTH, w)
+  const height = clamp(Math.round(h * INITIAL_HEIGHT_RATIO), MIN_HEIGHT, h)
+  fitFrame({ x: (w - width) / 2, y: (h - height) / 2, width, height })
   window.addEventListener('resize', fitViewport)
   store.loadGraph()
   store.refreshStatus()

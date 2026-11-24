@@ -62,14 +62,17 @@ describe('AiDocGraphPanel', () => {
     wrapper.unmount()
   })
 
-  it('uses the document for initial size and the viewport for movement and resizing', async () => {
-    const anchor = document.createElement('div')
-    vi.spyOn(anchor, 'getBoundingClientRect').mockReturnValue({ left: 240, top: 120, width: 600, height: 480 })
-    const wrapper = mount(AiDocGraphPanel, { attachTo: document.body, props: { anchor } })
+  it('opens at the center of the viewport and can move and resize', async () => {
+    const wrapper = mount(AiDocGraphPanel, { attachTo: document.body })
     try {
       await nextTick()
       const { style } = wrapper.element
-      expect([style.left, style.top, style.width, style.height]).toEqual(['256px', '136px', '568px', '448px'])
+      const width = Math.round(window.innerWidth * 0.84)
+      const height = Math.round(window.innerHeight * 0.86)
+      expect(style.width).toBe(width + 'px')
+      expect(style.height).toBe(height + 'px')
+      expect(parseFloat(style.left) * 2 + width).toBe(window.innerWidth)
+      expect(parseFloat(style.top) * 2 + height).toBe(window.innerHeight)
       const handle = wrapper.get('.graph-drag-handle')
       handle.element.setPointerCapture = vi.fn()
       await handle.trigger('pointerdown', { button: 0, pointerId: 7, clientX: 300, clientY: 160 })

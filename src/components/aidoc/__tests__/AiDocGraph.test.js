@@ -16,7 +16,7 @@ describe('AiDocGraph', () => {
     instance = {}
     for (const name of [
       'graphData', 'width', 'height', 'autoPauseRedraw', 'backgroundColor', 'nodeLabel',
-      'nodeCanvasObject', 'nodePointerAreaPaint', 'linkColor', 'linkWidth',
+      'nodeCanvasObject', 'onRenderFramePost', 'nodePointerAreaPaint', 'linkColor', 'linkWidth',
       'linkDirectionalParticles', 'linkDirectionalParticleColor',
       'linkDirectionalParticleWidth', 'linkDirectionalParticleSpeed',
       'onNodeHover', 'onNodeClick', 'onEngineStop', 'zoomToFit', '_destructor',
@@ -65,6 +65,38 @@ describe('AiDocGraph', () => {
     wrapper.unmount()
     expect(instance._destructor).toHaveBeenCalledOnce()
     expect(observer.disconnect).toHaveBeenCalledOnce()
+  })
+
+  it('prioritizes hovered names when labels would overlap, and uses larger type text', () => {
+    const node = (id, title, x, degree) => ({ id, kind: 'doc', title, ext: 'md', x, y: 50, degree })
+    const graph = {
+      nodes: [node('a', 'Main note', 40, 4), node('b', 'Nearby note', 45, 1), node('c', 'Separate note', 140, 1)],
+      links: [],
+    }
+    const wrapper = mount(AiDocGraph, { props: { graph } })
+    const context = {
+      canvas: { width: 600, height: 400 },
+      getTransform: () => ({ a: 3, e: 0, f: 0 }),
+      save: vi.fn(), restore: vi.fn(), beginPath: vi.fn(), arc: vi.fn(), fill: vi.fn(), stroke: vi.fn(),
+      measureText: text => ({ width: text.length * 2 }),
+      fillText: vi.fn(),
+    }
+    const drawLabels = instance.onRenderFramePost.mock.lastCall[0]
+    const labels = () => context.fillText.mock.calls.map(([text]) => text)
+    drawLabels(context, 3)
+    expect(labels()).toEqual(['Main note', 'Separate note'])
+
+    context.fillText.mockClear()
+    const nearby = instance.graphData.mock.lastCall[0].nodes[1]
+    instance.onNodeHover.mock.lastCall[0](nearby)
+    drawLabels(context, 3)
+    expect(labels()).toEqual(['Nearby note', 'Separate note'])
+
+    context.fillText.mockClear()
+    instance.nodeCanvasObject.mock.lastCall[0](nearby, context, 4)
+    expect(labels()).toEqual(['MD'])
+    expect(parseFloat(context.font.split(' ')[1]) * 4).toBeGreaterThanOrEqual(12)
+    wrapper.unmount()
   })
 
   it('highlights matches without updating the simulation data', async () => {
