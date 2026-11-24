@@ -6,6 +6,7 @@ export const useAiDocStore = defineStore('aidoc', () => {
   const graph = shallowRef(null)
   const progress = ref(null)
   const error = ref('')
+  const errorKey = ref('')
   const stats = shallowRef(null)
   const requestId = ref(null)
   const updating = computed(() => requestId.value !== null)
@@ -21,7 +22,15 @@ export const useAiDocStore = defineStore('aidoc', () => {
     generation++
     status.value = graph.value = progress.value = stats.value = null
     requestId.value = null
-    error.value = ''
+    error.value = errorKey.value = ''
+  }
+
+  function setError(result) {
+    error.value = result.error || ''
+    if (error.value) errorKey.value = ''
+    else if (result.code === 'rootChanged') errorKey.value = 'aidoc.rootChanged'
+    else if (result.code === 'rootUnavailable') errorKey.value = 'aidoc.rootUnavailable'
+    else errorKey.value = 'aidoc.requestFailed'
   }
 
   async function read(method, latest, isLatest, output) {
@@ -31,10 +40,10 @@ export const useAiDocStore = defineStore('aidoc', () => {
     try {
       const result = await api[method]({ root })
       if (current !== generation || !isLatest(latest)) return
-      if (result.success === false) error.value = result.error || result.code || 'aidoc_request_failed'
+      if (result.success === false) setError(result)
       else output.value = result
     } catch (err) {
-      if (current === generation && isLatest(latest)) error.value = err.message
+      if (current === generation && isLatest(latest)) setError({ error: err.message })
     }
   }
 
@@ -57,18 +66,18 @@ export const useAiDocStore = defineStore('aidoc', () => {
     const id = globalThis.crypto.randomUUID()
     requestId.value = id
     progress.value = stats.value = null
-    error.value = ''
+    error.value = errorKey.value = ''
     try {
       const result = await api.updateIndex({ root, requestId: id, full })
       if (id !== requestId.value) return
       if (!result.success) {
-        error.value = result.error || result.code || 'aidoc_request_failed'
+        setError(result)
         return
       }
       stats.value = result.stats
       await Promise.all([loadGraph(), refreshStatus()])
     } catch (err) {
-      if (id === requestId.value) error.value = err.message
+      if (id === requestId.value) setError({ error: err.message })
     } finally {
       if (id === requestId.value) requestId.value = null
     }
@@ -79,5 +88,5 @@ export const useAiDocStore = defineStore('aidoc', () => {
     unsubscribe = undefined
   }
 
-  return { status, graph, updating, progress, error, stats, setRoot, refreshStatus, loadGraph, updateIndex, dispose }
+  return { status, graph, updating, progress, error, errorKey, stats, setRoot, refreshStatus, loadGraph, updateIndex, dispose }
 })

@@ -58,6 +58,11 @@ describe('extractDocument', () => {
     expect(document).toEqual({ title: 'map', text: `See ${firstLink}\nSee ${secondLink} & more` })
   })
 
+  it('extracts visible labels on draw.io object wrappers without reading unrelated attributes', async () => {
+    const xml = '<mxGraphModel><root><object label="&lt;b&gt;[[Visible]]&lt;/b&gt;" link="[[Hidden]]"><mxCell/></object><UserObject label="[[Second]]"><mxCell/></UserObject></root></mxGraphModel>'
+    expect(await extract('labels.drawio', xml)).toMatchObject({ text: '[[Visible]]\n[[Second]]' })
+  })
+
   it('reads PowerPoint slides in numeric order and joins runs within paragraphs', async () => {
     const zip = new AdmZip()
     zip.addFile('ppt/slides/slide10.xml', Buffer.from('<a:t>[[page ten]]</a:t>'))

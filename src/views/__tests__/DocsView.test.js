@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { shallowMount } from '@vue/test-utils'
+import { flushPromises, shallowMount } from '@vue/test-utils'
 import { ref } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 
@@ -108,6 +108,8 @@ describe('DocsView', () => {
     mockObsidianStore.fileTree = []
     mockObsidianStore.activeFile = null
     focusEnterWithSpy.mockClear()
+    mockObsidianStore.openFile.mockClear()
+    delete window.electronAPI.aidoc
   })
 
   it('mounts without error', () => {
@@ -136,15 +138,34 @@ describe('DocsView', () => {
 
   it('opens a graph document and returns to the editor', async () => {
     mockObsidianStore.vaultPath = '/some/vault'
-    const wrapper = shallowMount(DocsView)
+    const wrapper = shallowMount(DocsView, { global: { stubs: { Teleport: true } } })
     wrapper.findComponent({ name: 'AiDocToolbar' }).vm.$emit('open-graph')
     await wrapper.vm.$nextTick()
     const graph = wrapper.findComponent({ name: 'AiDocGraphPanel' })
-    expect(graph.exists()).toBe(true)
+    expect(graph.element.closest('.docs-display-panel')).toBeNull()
     graph.vm.$emit('open-file', { path: '/some/vault/wiki/note.md', name: 'note.md' })
     await wrapper.vm.$nextTick()
     expect(mockObsidianStore.openFile).toHaveBeenCalledWith('/some/vault/wiki/note.md', 'note.md')
     expect(wrapper.findComponent({ name: 'AiDocGraphPanel' }).exists()).toBe(false)
+  })
+
+  it('opens a general document through a wikilink from a wiki page', async () => {
+    const root = '/some/vault'
+    const fromPath = root + '/wiki/source.md'
+    const path = root + '/general/legacy.md'
+    mockObsidianStore.vaultPath = root
+    mockObsidianStore.activeFile = { path: fromPath, name: 'source.md' }
+    mockObsidianStore.fileTree = [{ type: 'dir', children: [{ type: 'file', name: 'legacy.md', path }] }]
+    const resolveLink = vi.fn(async () => ({ success: true, kind: 'unresolved' }))
+    window.electronAPI.aidoc = { resolveLink }
+    const wrapper = shallowMount(DocsView)
+    const preview = wrapper.get('.prose-obsidian')
+    preview.element.insertAdjacentHTML('beforeend', '<a class="wikilink" data-target="legacy" href="#">Legacy</a>')
+    preview.get('a').element.click()
+    await flushPromises()
+    expect(resolveLink).toHaveBeenCalledWith({ root, fromPath, target: 'legacy' })
+    expect(mockObsidianStore.openFile).toHaveBeenCalledWith(path, 'legacy.md')
+    wrapper.unmount()
   })
 
   it('renders focus-mode header button and dispatches enterWith on click', async () => {

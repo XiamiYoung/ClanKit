@@ -56,8 +56,10 @@ async function extractDrawio(text) {
       xml = decodeURIComponent(decoded.toString('utf8'))
     }
     if (!/<mxGraphModel\b/i.test(xml)) throw new Error('Invalid draw.io diagram')
-    for (const cell of xml.matchAll(/<mxCell\b(?:[^<>"']|"[^"]*"|'[^']*')*>/gi)) {
-      const value = /\svalue\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(cell[0])
+    for (const [tag, name] of xml.matchAll(/<(mxCell|object|UserObject)\b(?:[^<>"']|"[^"]*"|'[^']*')*>/gi)) {
+      const value = name.toLowerCase() === 'mxcell'
+        ? /\svalue\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(tag)
+        : /\slabel\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(tag)
       if (value) values.push(stripHtml(decodeEntities(value[1] ?? value[2])).trim())
     }
   }

@@ -26,7 +26,6 @@ describe('AiDocGraphPanel', () => {
       status: { indexStale: true, staleCount: 3, ingestAvailable: false, pending: { new: 2, updated: 1, removed: 1 } },
       loadGraph: vi.fn(),
       refreshStatus: vi.fn(),
-      updateIndex: vi.fn(),
     })
     useAiDocStore.mockReturnValue(store)
   })
@@ -42,23 +41,61 @@ describe('AiDocGraphPanel', () => {
     wrapper.unmount()
   })
 
-  it('reports stale status, runs updates and handles graph navigation', async () => {
+  it('reports stale status and uses an icon-only close button', async () => {
     const wrapper = mount(AiDocGraphPanel)
     expect(wrapper.text()).toContain('aidoc.syncStale 3')
     expect(wrapper.text()).not.toContain('aidoc.syncPending')
     store.status.ingestAvailable = true
     await nextTick()
     expect(wrapper.text()).toContain('aidoc.syncPending 4')
-    await wrapper.get('[data-testid="aidoc-graph-update"]').trigger('click')
-    expect(store.updateIndex).toHaveBeenCalledOnce()
     const graph = wrapper.getComponent({ name: 'AiDocGraph' })
     graph.vm.$emit('select', unresolved)
     expect(wrapper.emitted('open-file')).toBeUndefined()
     graph.vm.$emit('select', doc)
     expect(wrapper.emitted('open-file')).toEqual([[{ path: doc.path, name: doc.name }]])
-    await wrapper.get('[data-testid="aidoc-graph-back"]').trigger('click')
+    const close = wrapper.get('[data-testid="aidoc-graph-close"]')
+    expect(close.classes()).toContain('app-btn--icon')
+    expect(close.attributes('aria-label')).toBe('aidoc.closeGraph')
+    expect(close.text()).toBe('')
+    await close.trigger('click')
     expect(wrapper.emitted('close')).toHaveLength(1)
     wrapper.unmount()
+  })
+
+  it('opens at the center of the viewport and can move and resize', async () => {
+    const wrapper = mount(AiDocGraphPanel, { attachTo: document.body })
+    try {
+      await nextTick()
+      const { style } = wrapper.element
+      const width = Math.round(window.innerWidth * 0.84)
+      const height = Math.round(window.innerHeight * 0.86)
+      expect(style.width).toBe(width + 'px')
+      expect(style.height).toBe(height + 'px')
+      expect(parseFloat(style.left) * 2 + width).toBe(window.innerWidth)
+      expect(parseFloat(style.top) * 2 + height).toBe(window.innerHeight)
+      const handle = wrapper.get('.graph-drag-handle')
+      handle.element.setPointerCapture = vi.fn()
+      await handle.trigger('pointerdown', { button: 0, pointerId: 7, clientX: 300, clientY: 160 })
+      await handle.trigger('pointermove', { pointerId: 7, clientX: 0, clientY: 0 })
+      expect(handle.element.setPointerCapture).toHaveBeenCalledWith(7)
+      expect([style.left, style.top]).toEqual(['0px', '0px'])
+      await handle.trigger('pointerup', { pointerId: 7 })
+      await handle.trigger('pointermove', { pointerId: 7, clientX: 500, clientY: 500 })
+      expect([style.left, style.top]).toEqual(['0px', '0px'])
+
+      const resize = wrapper.get('.graph-resize-button')
+      resize.element.setPointerCapture = vi.fn()
+      await resize.trigger('pointerdown', { button: 0, pointerId: 8, clientX: 560, clientY: 440 })
+      await resize.trigger('pointermove', { pointerId: 8, clientX: 2000, clientY: 2000 })
+      expect([style.width, style.height]).toEqual([window.innerWidth + 'px', window.innerHeight + 'px'])
+      await resize.trigger('pointerup', { pointerId: 8 })
+      await resize.trigger('keydown', { key: 'ArrowLeft' })
+      expect(style.width).toBe(window.innerWidth - 16 + 'px')
+      await handle.trigger('keydown', { key: 'ArrowRight' })
+      expect(style.left).toBe('16px')
+    } finally {
+      wrapper.unmount()
+    }
   })
 
   it('filters orphan nodes and document types', async () => {

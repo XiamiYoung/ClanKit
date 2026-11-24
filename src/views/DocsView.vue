@@ -64,9 +64,12 @@
         </div>
       </div>
 
-      <!-- Main content: file tree + editor -->
-      <div class="relative flex-1 flex overflow-hidden">
+      <Teleport to="body">
         <AiDocGraphPanel v-if="showGraph" @close="showGraph = false" @open-file="openGraphFile" />
+      </Teleport>
+
+      <!-- Main content: file tree + editor -->
+      <div class="flex-1 flex overflow-hidden">
 
         <!-- ── LEFT: File Tree Panel (resizable) ── -->
         <div
@@ -157,7 +160,7 @@
         </div>
 
         <!-- ── RIGHT: Editor / Preview Panel ── -->
-        <div class="flex-1 flex flex-col overflow-hidden" style="background:#fff;position:relative;" @mouseup="onEditorMouseUp" @mousedown="onEditorMouseDown">
+        <div class="docs-display-panel flex-1 flex flex-col overflow-hidden" style="background:#fff;position:relative;" @mouseup="onEditorMouseUp" @mousedown="onEditorMouseDown">
           <!-- Hamburger toggle tab -->
           <button
             ref="hamburgerBtnRef"
@@ -1923,6 +1926,7 @@ async function refreshAll() {
     await store.openFile(store.activeFile.path, store.activeFile.name)
     // HTML webview reload is handled by the content watch
   }
+  void aidocStore.refreshStatus()
 }
 
 async function openVaultInExplorer() {
@@ -1943,6 +1947,7 @@ async function saveFile() {
   try {
     await store.saveFile()
     saveStatus.value = 'ok'
+    void aidocStore.refreshStatus()
   } catch {
     saveStatus.value = 'error'
   } finally {
@@ -2567,8 +2572,8 @@ function _transformInline(text) {
     // [[Page#section|alias]] / [[Page|alias]] / [[Page]]
     s = s.replace(/\[\[([^\]\n|#^]+)(?:#([^\]\n|]*))?(?:\^[^\]\n|]*)?(?:\|([^\]\n]+))?\]\]/g,
       (_, target, section, alias) => {
-        const t = target.trim()
-        const display = (alias || target).trim()
+        const t = (alias ? target.replace(/\\$/, '') : target).trim()
+        const display = alias?.trim() || t
         const sec = section ? ` data-section="${_escapeAttr(section.trim())}"` : ''
         return `<a class="wikilink" data-target="${_escapeAttr(t)}"${sec} href="#">${_escapeHtml(display)}</a>`
       })
@@ -3010,9 +3015,7 @@ async function handlePreviewClick(e) {
       showLinkError(t('aidoc.linkAmbiguous', { target, candidates: resolved.candidates.join(', ') }))
       return
     }
-    const file = !resolved || resolved.kind === 'outside'
-      ? _findVaultFileByName(store.fileTree, target)
-      : resolved.kind === 'resolved' ? resolved : null
+    const file = resolved?.kind === 'resolved' ? resolved : _findVaultFileByName(store.fileTree, target)
     if (file) {
       try {
         await openAiDocFile(file.path, file.name)

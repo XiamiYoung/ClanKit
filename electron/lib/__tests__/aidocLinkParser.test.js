@@ -16,6 +16,11 @@ describe('extractWikiLinks', () => {
     expect(extractWikiLinks('plain text')).toEqual([])
   })
 
+  it('skips image targets and normalizes escaped table aliases', () => {
+    const text = '| ![[assets/photo.PNG]] | [[figure.webp]] | [[folder/page\\|Display]] | ![[note]] |'
+    expect(extractWikiLinks(text)).toEqual(['folder/page', 'note'])
+  })
+
   it('ignores inline code and fenced code blocks, including longer fences', () => {
     const text = [
       '[[before]] `[[inline]]` ```looking inline```',

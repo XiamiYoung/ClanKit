@@ -41,6 +41,32 @@ describe('AI Doc store', () => {
     expect(unsubscribe).toHaveBeenCalledOnce()
   })
 
+  it('records failed update responses and clears the updating flag', async () => {
+    const store = useAiDocStore()
+    store.setRoot('/a')
+    api.updateIndex.mockResolvedValue({ success: false, error: 'Permission denied' })
+    const update = store.updateIndex()
+    expect(store.updating).toBe(true)
+    await update
+    expect(store.error).toBe('Permission denied')
+    expect(store.updating).toBe(false)
+    expect(api.getGraph).not.toHaveBeenCalled()
+  })
+
+  it('exposes a translation key for a root mismatch and clears it on the next update', async () => {
+    const store = useAiDocStore()
+    store.setRoot('/a')
+    api.updateIndex
+      .mockResolvedValueOnce({ success: false, code: 'rootChanged' })
+      .mockResolvedValueOnce({ success: true })
+    await store.updateIndex()
+    expect(store.error).toBe('')
+    expect(store.errorKey).toBe('aidoc.rootChanged')
+    expect(store.updating).toBe(false)
+    await store.updateIndex()
+    expect(store.errorKey).toBe('')
+  })
+
   it('ignores pending reads, updates, and progress from the previous root', async () => {
     const store = useAiDocStore()
     store.setRoot('/a')

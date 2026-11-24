@@ -1,14 +1,35 @@
 <template>
-  <section class="aidoc-graph-panel" :aria-label="t('aidoc.graph')">
+  <section
+    class="aidoc-graph-panel"
+    :style="panelStyle"
+    :aria-label="t('aidoc.graph')"
+    @mousedown.stop
+    @mouseup.stop
+  >
+    <div class="graph-titlebar">
+      <div
+        class="graph-drag-handle"
+        :class="{ 'is-dragging': interaction === 'move' }"
+        tabindex="0"
+        :aria-description="t('aidoc.moveGraph')"
+        @pointerdown="startDrag($event, 'move')"
+        @keydown="adjustWithKeys($event, 'move')"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01" />
+        </svg>
+        <h2>{{ t('aidoc.graph') }}</h2>
+      </div>
+      <AppTooltip :text="t('aidoc.closeGraph')">
+        <AppButton size="icon" variant="ghost" data-testid="aidoc-graph-close" :aria-label="t('aidoc.closeGraph')" @click="$emit('close')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg>
+        </AppButton>
+      </AppTooltip>
+    </div>
     <header class="graph-header">
       <div class="graph-controls">
-        <AppButton size="compact" data-testid="aidoc-graph-back" @click="$emit('close')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <path d="m15 18-6-6 6-6" />
-          </svg>
-          {{ t('aidoc.back') }}
-        </AppButton>
-        <h2>{{ t('aidoc.graph') }}</h2>
         <div class="graph-search">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <circle cx="11" cy="11" r="6" />
@@ -25,18 +46,6 @@
           <input v-model="hideOrphans" type="checkbox" data-testid="aidoc-hide-orphans" />
           {{ t('aidoc.hideOrphans') }}
         </label>
-        <AppButton
-          class="graph-update"
-          size="compact"
-          data-testid="aidoc-graph-update"
-          :loading="store.updating"
-          @click="store.updateIndex()"
-        >
-          {{ store.updating ? t('aidoc.updating') : t('aidoc.updateIndex') }}
-          <span v-if="store.updating && store.progress">
-            {{ t('aidoc.indexProgress', store.progress) }}
-          </span>
-        </AppButton>
       </div>
 
       <div class="graph-meta">
@@ -65,11 +74,14 @@
           </span>
         </div>
       </div>
-      <p v-if="store.error" class="graph-feedback" role="alert">
-        <strong>{{ t('aidoc.indexFailed') }}</strong> {{ store.error }}
+      <p v-if="errorText" class="graph-feedback" role="alert">
+        <strong>{{ t('aidoc.indexFailed') }}</strong> {{ errorText }}
       </p>
       <p v-else-if="store.stats && !store.updating" class="graph-feedback" role="status">
         {{ t('aidoc.indexDone', store.stats) }}
+      </p>
+      <p v-else-if="store.status?.failedCount && !store.updating" class="graph-feedback" role="status">
+        {{ t('aidoc.extractionFailed', { n: store.status.failedCount }) }}
       </p>
     </header>
 
@@ -99,29 +111,129 @@
             <span class="legend-dot"></span>{{ t('aidoc.unresolvedNode') }}
           </li>
           <li v-if="hasAmbiguous">
-            <span class="legend-dot"></span>{{ t('aidoc.ambiguousNode') }}
+            <span class="legend-dot legend-dot--ambiguous"></span>{{ t('aidoc.ambiguousNode') }}
           </li>
         </ul>
       </aside>
     </div>
+    <AppTooltip class="graph-resize-handle" :text="t('aidoc.resizeGraph')">
+      <AppButton
+        class="graph-resize-button"
+        size="icon"
+        variant="ghost"
+        :aria-label="t('aidoc.resizeGraph')"
+        @pointerdown="startDrag($event, 'resize')"
+        @keydown="adjustWithKeys($event, 'resize')"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="m5 19 14-14m-7 14 7-7" />
+        </svg>
+      </AppButton>
+    </AppTooltip>
   </section>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from '../../i18n/useI18n'
 import { useAiDocStore } from '../../stores/aidoc'
 import { filterGraph } from '../../utils/aidocGraphFilter'
 import AppButton from '../common/AppButton.vue'
+import AppTooltip from '../common/AppTooltip.vue'
 import AiDocGraph from './AiDocGraph.vue'
 
 const emit = defineEmits(['close', 'open-file'])
 const { t } = useI18n()
 const store = useAiDocStore()
+const errorText = computed(() => store.errorKey ? t(store.errorKey) : store.error)
 const graph = computed(() => store.graph)
 const query = ref('')
 const hideOrphans = ref(false)
 const hiddenExts = ref([])
+
+const INITIAL_WIDTH_RATIO = 0.84
+const INITIAL_HEIGHT_RATIO = 0.86
+const MIN_WIDTH = 360
+const MIN_HEIGHT = 260
+const KEY_STEP = 16
+const frame = ref(null)
+const interaction = ref(null)
+let drag = null
+const panelStyle = computed(() => {
+  if (!frame.value) return null
+  const { x, y, width, height } = frame.value
+  return { left: x + 'px', top: y + 'px', width: width + 'px', height: height + 'px' }
+})
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max)
+}
+
+function fitFrame({ x, y, width, height }) {
+  const w = window.innerWidth
+  const h = window.innerHeight
+  width = clamp(width, MIN_WIDTH, w)
+  height = clamp(height, MIN_HEIGHT, h)
+  frame.value = { x: clamp(x, 0, w - width), y: clamp(y, 0, h - height), width, height }
+}
+
+function fitViewport() {
+  fitFrame(frame.value)
+}
+
+function resizeFrom({ x, y, width, height }, dx, dy) {
+  const availableWidth = window.innerWidth - x
+  const availableHeight = window.innerHeight - y
+  fitFrame({
+    x, y,
+    width: clamp(width + dx, MIN_WIDTH, availableWidth),
+    height: clamp(height + dy, MIN_HEIGHT, availableHeight),
+  })
+}
+
+function adjustFrame(initial, dx, dy, mode) {
+  if (mode === 'resize') resizeFrom(initial, dx, dy)
+  else fitFrame({ ...initial, x: initial.x + dx, y: initial.y + dy })
+}
+
+function startDrag(event, mode) {
+  if (event.button !== 0 || drag || !frame.value) return
+  drag = { id: event.pointerId, x: event.clientX, y: event.clientY, frame: frame.value, mode }
+  event.currentTarget.setPointerCapture(event.pointerId)
+  interaction.value = mode
+  window.addEventListener('pointermove', moveDrag, true)
+  window.addEventListener('pointerup', stopDrag, true)
+  window.addEventListener('pointercancel', stopDrag, true)
+  window.addEventListener('blur', clearDrag)
+}
+
+function moveDrag(event) {
+  if (drag?.id === event.pointerId) {
+    adjustFrame(drag.frame, event.clientX - drag.x, event.clientY - drag.y, drag.mode)
+  }
+}
+
+function stopDrag(event) {
+  if (drag?.id === event.pointerId) clearDrag()
+}
+
+function clearDrag() {
+  if (!drag) return
+  drag = null
+  interaction.value = null
+  window.removeEventListener('pointermove', moveDrag, true)
+  window.removeEventListener('pointerup', stopDrag, true)
+  window.removeEventListener('pointercancel', stopDrag, true)
+  window.removeEventListener('blur', clearDrag)
+}
+
+function adjustWithKeys(event, mode) {
+  const directions = { ArrowLeft: [-KEY_STEP, 0], ArrowRight: [KEY_STEP, 0], ArrowUp: [0, -KEY_STEP], ArrowDown: [0, KEY_STEP] }
+  const direction = directions[event.key]
+  if (!frame.value || !Array.isArray(direction)) return
+  event.preventDefault()
+  adjustFrame(frame.value, direction[0], direction[1], mode)
+}
 
 const extensions = computed(() => [...new Set(
   graph.value?.nodes.map(node => node.ext).filter(Boolean) ?? [],
@@ -153,35 +265,73 @@ function openFile(node) {
 }
 
 onMounted(() => {
+  const w = window.innerWidth
+  const h = window.innerHeight
+  const width = clamp(Math.round(w * INITIAL_WIDTH_RATIO), MIN_WIDTH, w)
+  const height = clamp(Math.round(h * INITIAL_HEIGHT_RATIO), MIN_HEIGHT, h)
+  fitFrame({ x: (w - width) / 2, y: (h - height) / 2, width, height })
+  window.addEventListener('resize', fitViewport)
   store.loadGraph()
   store.refreshStatus()
+})
+onBeforeUnmount(() => {
+  clearDrag()
+  window.removeEventListener('resize', fitViewport)
 })
 </script>
 
 <style scoped>
 .aidoc-graph-panel {
-  --graph-surface: #11161e;
-  --graph-control: #1c2430;
-  --graph-line: #343f4f;
-  --graph-text: #e3eaf3;
-  --graph-muted: #a4b2c4;
+  --graph-surface: var(--bg-card);
+  --graph-control: var(--bg-hover);
+  --graph-line: var(--border);
+  --graph-muted: var(--text-secondary);
   --graph-placeholder: #687281;
-  --graph-error: #ffadad;
-  --graph-grid: #202a36;
-  position: absolute;
-  inset: 0;
-  z-index: 70;
+  --graph-error: #b91c1c;
+  --graph-grid: #d5dce5;
+  position: fixed;
+  z-index: 100;
+  -webkit-app-region: no-drag;
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid var(--graph-line);
+  border-radius: var(--radius-md);
   background: var(--graph-surface);
-  color: var(--graph-text);
+  color: var(--text-primary);
+  box-shadow: 0 0.625rem 2rem var(--shadow-hover), 0 0.125rem 0.375rem var(--shadow);
 }
+.graph-titlebar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.3125rem 0.375rem 0.3125rem 0.625rem;
+  border-bottom: 1px solid var(--graph-line);
+}
+.graph-drag-handle {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  align-self: stretch;
+  gap: 0.375rem;
+  min-width: 0;
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.graph-drag-handle.is-dragging { cursor: grabbing; }
+.graph-drag-handle svg { flex: 0 0 auto; color: var(--graph-muted); }
+.graph-drag-handle h2 { margin: 0; font-size: var(--fs-subtitle); font-weight: 700; }
 .graph-header {
   display: grid;
-  gap: 0.625rem;
-  padding: 0.875rem 1rem 0.625rem;
+  gap: 0.5rem;
+  max-height: 50%;
+  overflow: auto;
+  padding: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--graph-line);
 }
 .graph-controls, .graph-meta, .graph-sync, .graph-toggle {
@@ -190,12 +340,6 @@ onMounted(() => {
   align-items: center;
   gap: 0.625rem;
 }
-.graph-controls h2 {
-  margin: 0 0.375rem 0 0;
-  font-size: var(--fs-subtitle);
-  font-weight: 700;
-}
-.graph-update { margin-inline-start: auto; }
 .graph-search {
   flex: 1 1 9rem;
   max-width: 20rem;
@@ -257,7 +401,8 @@ onMounted(() => {
   border-radius: var(--radius-full);
   background: var(--graph-placeholder);
 }
-.sync-dot.is-stale { background: var(--accent); }
+.sync-dot.is-stale { background: var(--graph-error); }
+.legend-dot--ambiguous { border-radius: 0; transform: rotate(45deg); }
 .graph-feedback { margin: 0; color: var(--graph-muted); overflow-wrap: anywhere; }
 .graph-feedback[role='alert'] { color: var(--graph-error); }
 .graph-stage {
@@ -304,6 +449,12 @@ onMounted(() => {
 .graph-legend ul { list-style: none; padding: 0; margin: 0; color: var(--graph-muted); }
 .graph-legend li { display: flex; align-items: center; gap: 0.375rem; overflow-wrap: anywhere; }
 .graph-legend li + li { margin-top: 0.25rem; }
+.graph-resize-handle {
+  position: absolute;
+  right: 0.25rem;
+  bottom: 0.25rem;
+}
+.graph-resize-button { cursor: nwse-resize; touch-action: none; }
 @media (prefers-reduced-motion: reduce) {
   .graph-stage::before { transition: none; }
 }

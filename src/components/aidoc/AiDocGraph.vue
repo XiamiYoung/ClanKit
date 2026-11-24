@@ -8,14 +8,16 @@ import ForceGraph from 'force-graph'
 
 const NODE_FALLBACK = '#8ca6bf'
 const NODE_PLACEHOLDER = '#687281'
-const NODE_RING = '#eff5ff'
-const NODE_LABEL = '#dce7f2'
-const NODE_TYPE = '#141a22'
-const LINK_NORMAL = 'rgba(147, 164, 185, 0.25)'
-const LINK_ACTIVE = 'rgba(176, 205, 236, 0.65)'
-const LINK_DIM = 'rgba(147, 164, 185, 0.07)'
-const PARTICLE = '#a8caeb'
-const PARTICLE_DIM = 'rgba(168, 202, 235, 0.12)'
+const NODE_RING = '#34435a'
+const NODE_LABEL = '#29364a'
+const NODE_TYPE = '#172537'
+const LABEL_FONT_SIZE = 13
+const TYPE_FONT_SIZE = 12
+const LINK_NORMAL = 'rgba(91, 110, 136, 0.36)'
+const LINK_ACTIVE = 'rgba(53, 91, 142, 0.75)'
+const LINK_DIM = 'rgba(91, 110, 136, 0.10)'
+const PARTICLE = '#4f7fac'
+const PARTICLE_DIM = 'rgba(79, 127, 172, 0.16)'
 
 const props = defineProps({
   graph: { type: Object, required: true },
@@ -61,7 +63,7 @@ function syncGraph() {
 }
 
 function radius(node) {
-  const base = node.kind === 'doc' ? 3.3 : 2.2
+  const base = node.kind === 'doc' ? 4.5 : 2.2
   return base + Math.min(6, Math.sqrt(node.degree || 0))
 }
 
@@ -69,16 +71,23 @@ function drawNode(node, context, scale) {
   const isDocument = node.kind === 'doc'
   const isMatch = props.highlightQuery && matchedIds.has(node.id)
   const isHovered = hoveredId === node.id
-  const visible = hoveredId !== undefined
-    ? isHovered || neighbors.get(hoveredId)?.has(node.id)
-    : !props.highlightQuery || isMatch
+  const visible = isEmphasized(node.id)
   const fill = isDocument ? props.colors[node.group] || NODE_FALLBACK : NODE_PLACEHOLDER
   const size = radius(node)
 
   context.save()
   context.globalAlpha = visible ? 1 : 0.19
   context.beginPath()
-  context.arc(node.x, node.y, size, 0, Math.PI * 2)
+  if (node.kind === 'ambiguous') {
+    const { x, y } = node
+    context.moveTo(x, y - size)
+    context.lineTo(x + size, y)
+    context.lineTo(x, y + size)
+    context.lineTo(x - size, y)
+    context.closePath()
+  } else {
+    context.arc(node.x, node.y, size, 0, Math.PI * 2)
+  }
   context.fillStyle = fill
   if (visible && isDocument) {
     context.shadowColor = fill
@@ -92,20 +101,89 @@ function drawNode(node, context, scale) {
     context.stroke()
   }
 
-  context.textAlign = 'center'
-  const labelOpacity = isHovered ? 1 : Math.min(1, Math.max(0, (scale - 1.3) / 0.7))
-  if (labelOpacity) {
-    context.globalAlpha *= labelOpacity
-    if (isDocument && node.ext && size * scale >= 11) {
-      context.font = `600 ${8 / scale}px system-ui`
-      context.fillStyle = NODE_TYPE
+  if (isDocument && node.ext && size * scale >= TYPE_FONT_SIZE) {
+    const type = node.ext.toUpperCase()
+    const fontSize = Math.min(16, Math.max(TYPE_FONT_SIZE, size * scale * 0.55))
+    context.font = `700 ${fontSize / scale}px system-ui`
+    if (context.measureText(type).width + 4 / scale <= size * 2) {
+      context.textAlign = 'center'
       context.textBaseline = 'middle'
-      context.fillText(node.ext.toUpperCase(), node.x, node.y)
+      context.fillStyle = NODE_TYPE
+      context.fillText(type, node.x, node.y)
     }
-    context.font = `${12 / scale}px system-ui`
-    context.textBaseline = 'top'
-    context.fillStyle = NODE_LABEL
-    context.fillText(node.title || node.name || node.id, node.x, node.y + size + 4 / scale)
+  }
+  context.restore()
+}
+
+function isEmphasized(id) {
+  if (hoveredId !== undefined) return id === hoveredId || neighbors.get(hoveredId)?.has(id)
+  return !props.highlightQuery || matchedIds.has(id)
+}
+
+function reserveLabel(cells, box, cellSize) {
+  const keys = []
+  for (let row = Math.floor(box.top / cellSize); row <= Math.floor(box.bottom / cellSize); row++) {
+    for (let col = Math.floor(box.left / cellSize); col <= Math.floor(box.right / cellSize); col++) {
+      const key = `${col}:${row}`
+      const occupied = cells.get(key)
+      if (occupied?.some(other =>
+        box.left < other.right && box.right > other.left && box.top < other.bottom && box.bottom > other.top
+      )) return false
+      keys.push(key)
+    }
+  }
+  for (const key of keys) {
+    const occupied = cells.get(key)
+    if (occupied) occupied.push(box)
+    else cells.set(key, [box])
+  }
+  return true
+}
+
+function drawLabels(context, scale) {
+  const opacity = Math.min(1, Math.max(0, (scale - 1.3) / 0.7))
+  if (!opacity && hoveredId === undefined && !props.highlightQuery) return
+
+  // Canvas coordinates include the zoom, pan, and device pixel ratio.
+  const { a, e, f } = context.getTransform()
+  const viewport = {
+    left: -e / a,
+    top: -f / a,
+    right: (context.canvas.width - e) / a,
+    bottom: (context.canvas.height - f) / a,
+  }
+  const candidates = []
+  for (const node of layoutNodes.values()) {
+    const { id, x, y } = node
+    if (!Number.isFinite(x) || !Number.isFinite(y) ||
+      x < viewport.left || x > viewport.right || y < viewport.top || y > viewport.bottom) continue
+    const priority = id === hoveredId ? 3 : props.highlightQuery && matchedIds.has(id) ? 2 : isEmphasized(id) ? 1 : 0
+    if (opacity || priority >= 2) candidates.push({ node, priority })
+  }
+  candidates.sort((a, b) => b.priority - a.priority || (b.node.degree || 0) - (a.node.degree || 0))
+
+  const cells = new Map()
+  const gap = 4 / scale
+  const labelHeight = 18 / scale
+  context.save()
+  context.font = `${LABEL_FONT_SIZE / scale}px system-ui`
+  context.textAlign = 'center'
+  context.textBaseline = 'top'
+  context.fillStyle = NODE_LABEL
+  for (const { node, priority } of candidates) {
+    const name = node.title || node.name || node.id
+    const text = name.length > 42 ? Array.from(name).slice(0, 39).join('') + '…' : name
+    const halfWidth = context.measureText(text).width / 2 + gap
+    if (2 * halfWidth > viewport.right - viewport.left) continue
+    const x = Math.min(Math.max(node.x, viewport.left + halfWidth), viewport.right - halfWidth)
+    const distance = radius(node) + gap
+    let y = node.y + distance
+    if (y + labelHeight > viewport.bottom) y = node.y - distance - labelHeight
+    if (y < viewport.top) continue
+    const box = { left: x - halfWidth, right: x + halfWidth, top: y, bottom: y + labelHeight }
+    if (!reserveLabel(cells, box, 64 / scale)) continue
+    context.globalAlpha = priority >= 2 ? 1 : opacity * (priority ? 1 : 0.24)
+    context.fillText(text, x, y)
   }
   context.restore()
 }
@@ -138,6 +216,7 @@ onMounted(() => {
     .nodeLabel('')
     .autoPauseRedraw(false)
     .nodeCanvasObject(drawNode)
+    .onRenderFramePost(drawLabels)
     .nodePointerAreaPaint(paintPointerArea)
     .linkColor(link => linkIsDim(link) ? LINK_DIM : hoveredId === undefined ? LINK_NORMAL : LINK_ACTIVE)
     .linkWidth(link => hoveredId !== undefined && linkIsHighlighted(link) ? 1.1 : 0.55)
