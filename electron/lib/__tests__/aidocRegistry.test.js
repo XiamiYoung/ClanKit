@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import { createRequire } from 'module'
 import fs from 'fs/promises'
 import os from 'os'
@@ -10,6 +10,7 @@ const {
 } = require('../aidocRegistry')
 const { readIngestedSources } = require('../aidocGraph')
 const { rootHash } = require('../aidocIndex')
+const fsPromises = require('fs/promises')
 
 const dirs = []
 afterEach(async () => {
@@ -71,6 +72,48 @@ describe('writeRegistry', () => {
     await writeRegistry(f, reg)
     expect(await readRegistry(f)).toEqual(reg)
     expect(await fs.readdir(path.dirname(f))).toEqual(['r.json'])
+  })
+
+  it('removes its tmp file and rethrows when the write fails', async () => {
+    const dir = await tmp()
+    const f = path.join(dir, 'r.json')
+    const spy = vi.spyOn(fsPromises, 'rename').mockRejectedValue(Object.assign(new Error('nope'), { code: 'ENOSPC' }))
+    try {
+      await expect(writeRegistry(f, empty())).rejects.toThrow('nope')
+    } finally { spy.mockRestore() }
+    expect(await fs.readdir(dir)).toEqual([])
+  })
+
+  it('retries the rename on EPERM and then succeeds', async () => {
+    const dir = await tmp()
+    const f = path.join(dir, 'r.json')
+    const real = fsPromises.rename.bind(fsPromises)
+    let calls = 0
+    const spy = vi.spyOn(fsPromises, 'rename').mockImplementation(async (a, b) => {
+      if (++calls <= 2) throw Object.assign(new Error('locked'), { code: 'EPERM' })
+      return real(a, b)
+    })
+    try {
+      await writeRegistry(f, empty())
+    } finally { spy.mockRestore() }
+    expect(calls).toBe(3)
+    expect(await readRegistry(f)).toEqual(empty())
+    expect(await fs.readdir(dir)).toEqual(['r.json'])
+  })
+
+  it('gives up after the retry budget and cleans up', async () => {
+    const dir = await tmp()
+    const f = path.join(dir, 'r.json')
+    let calls = 0
+    const spy = vi.spyOn(fsPromises, 'rename').mockImplementation(async () => {
+      calls++
+      throw Object.assign(new Error('busy'), { code: 'EBUSY' })
+    })
+    try {
+      await expect(writeRegistry(f, empty())).rejects.toThrow('busy')
+    } finally { spy.mockRestore() }
+    expect(calls).toBe(6)
+    expect(await fs.readdir(dir)).toEqual([])
   })
 })
 

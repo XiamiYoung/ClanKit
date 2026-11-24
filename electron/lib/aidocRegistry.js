@@ -36,11 +36,30 @@ async function readRegistry(file) {
   }
 }
 
+const RENAME_RETRY_DELAYS_MS = [20, 50, 100, 200, 400]
+const RETRYABLE_RENAME_CODES = new Set(['EPERM', 'EBUSY', 'EACCES'])
+
+async function renameWithRetry(from, to) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fs.rename(from, to)
+    } catch (error) {
+      if (attempt >= RENAME_RETRY_DELAYS_MS.length || !RETRYABLE_RENAME_CODES.has(error?.code)) throw error
+      await new Promise(resolve => setTimeout(resolve, RENAME_RETRY_DELAYS_MS[attempt]))
+    }
+  }
+}
+
 async function writeRegistry(file, registry) {
   await fs.mkdir(path.dirname(file), { recursive: true })
-  const tmp = file + '.tmp'
-  await fs.writeFile(tmp, JSON.stringify(registry, null, 2), 'utf8')
-  await fs.rename(tmp, file)
+  const tmp = `${file}.${process.pid}.${Math.random().toString(36).slice(2, 10)}.tmp`
+  try {
+    await fs.writeFile(tmp, JSON.stringify(registry, null, 2), 'utf8')
+    await renameWithRetry(tmp, file)
+  } catch (error) {
+    await fs.rm(tmp, { force: true }).catch(() => {})
+    throw error
+  }
 }
 
 function recordIngested(registry, { rel, hash, mtimeMs, size, ingestedAt, pages }) {
