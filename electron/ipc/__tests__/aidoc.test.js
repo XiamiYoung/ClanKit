@@ -316,7 +316,8 @@ describe('ingest model selection', () => {
     expect(plan.providers[1].models).toEqual(['llama'])
     expect(JSON.stringify(plan)).not.toContain('secret-qwen')
     expect(plan.providers[0]).not.toHaveProperty('apiKey')
-    expect(plan.selected).toEqual({ providerId: 'qwen', model: 'stale-max' })
+    expect(plan.selected).toEqual({ providerId: 'qwen', model: 'utility-flash' })
+    expect(plan.selectedSource).toBe('utility')
     expect(plan.providerReady).toBe(true)
   })
 
@@ -330,11 +331,35 @@ describe('ingest model selection', () => {
 
   it('prefers the remembered choice and falls back when its provider disappeared', async () => {
     const remembered = await modelFixture(vi.fn(), modelConfig({ aidocIngestModel: { providerId: 'local', model: 'llama3' } }))
-    await expect(remembered.invoke('ingest-plan')).resolves.toMatchObject({ selected: { providerId: 'local', model: 'llama3' } })
+    await expect(remembered.invoke('ingest-plan')).resolves.toMatchObject({
+      selected: { providerId: 'local', model: 'llama3' }, selectedSource: 'remembered',
+    })
     const gone = await modelFixture(vi.fn(), modelConfig({ aidocIngestModel: { providerId: 'removed', model: 'm' } }))
-    await expect(gone.invoke('ingest-plan')).resolves.toMatchObject({ selected: { providerId: 'qwen', model: 'stale-max' } })
+    await expect(gone.invoke('ingest-plan')).resolves.toMatchObject({
+      selected: { providerId: 'qwen', model: 'utility-flash' }, selectedSource: 'utility',
+    })
     const unusable = await modelFixture(vi.fn(), modelConfig({ aidocIngestModel: { providerId: 'nokey', model: 'x' } }))
-    await expect(unusable.invoke('ingest-plan')).resolves.toMatchObject({ selected: { providerId: 'qwen' } })
+    await expect(unusable.invoke('ingest-plan')).resolves.toMatchObject({ selected: { providerId: 'qwen' }, selectedSource: 'utility' })
+  })
+
+  it('defaults to the utility model matched by provider id or type, else the default provider model', async () => {
+    const byId = await modelFixture(vi.fn(), modelConfig({ utilityModel: { provider: 'local', model: 'tiny' } }))
+    await expect(byId.invoke('ingest-plan')).resolves.toMatchObject({
+      selected: { providerId: 'local', model: 'tiny' }, selectedSource: 'utility',
+    })
+    const byType = await modelFixture(vi.fn(), modelConfig({ utilityModel: { provider: 'ollama', model: 'tiny' } }))
+    await expect(byType.invoke('ingest-plan')).resolves.toMatchObject({
+      selected: { providerId: 'local', model: 'tiny' }, selectedSource: 'utility',
+    })
+    for (const utilityModel of [
+      { provider: 'nokey', model: 'x' }, { provider: 'missing', model: 'x' },
+      { provider: 'qwen', model: '  ' }, { provider: 'qwen' }, undefined,
+    ]) {
+      const fallback = await modelFixture(vi.fn(), modelConfig({ utilityModel }))
+      await expect(fallback.invoke('ingest-plan')).resolves.toMatchObject({
+        selected: { providerId: 'qwen', model: 'stale-max' }, selectedSource: 'default',
+      })
+    }
   })
 
   it('runs with the chosen provider and model and remembers the choice', async () => {
@@ -348,7 +373,17 @@ describe('ingest model selection', () => {
     expect(writes).toHaveLength(1)
     expect(writes[0].data.aidocIngestModel).toEqual({ providerId: 'local', model: 'llama3' })
     expect(writes[0].data.providers).toHaveLength(3)
-    await expect(invoke('ingest-plan')).resolves.toMatchObject({ selected: { providerId: 'local', model: 'llama3' } })
+    await expect(invoke('ingest-plan')).resolves.toMatchObject({
+      selected: { providerId: 'local', model: 'llama3' }, selectedSource: 'remembered',
+    })
+  })
+
+  it('persists the explicit choice of a run started from the utility default', async () => {
+    const { invoke, writes } = await modelFixture(vi.fn(async () => {}))
+    const plan = await invoke('ingest-plan')
+    expect(plan.selectedSource).toBe('utility')
+    await invoke('ingest-run', plan.selected)
+    expect(writes[0].data.aidocIngestModel).toEqual({ providerId: 'qwen', model: 'utility-flash' })
   })
 
   it('rejects an invalid provider or model before writing anything', async () => {

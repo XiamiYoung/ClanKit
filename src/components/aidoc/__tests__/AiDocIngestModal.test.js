@@ -46,7 +46,8 @@ describe('AiDocIngestModal', () => {
     const dialog = open()
     expect(dialog.hasAttribute('open')).toBe(true)
     expect(dialog.textContent).toContain('aidoc.ingestFiles 1')
-    expect(dialog.textContent).toContain('kb_source/report.md')
+    expect(dialog.querySelector('[role="tree"] [role="treeitem"][aria-level="2"]').textContent).toContain('report.md')
+    expect(dialog.textContent).toContain('kb_source (1)')
     expect(dialog.textContent).toContain('1 KB')
     expect(dialog.textContent).toContain('aidoc.stateNew')
     expect(dialog.textContent).toContain('aidoc.ingestOverflow 2')
@@ -233,6 +234,106 @@ describe('AiDocIngestModal', () => {
       const dialog = open()
       expect(dialog.querySelector('[data-testid="aidoc-ingest-model-hint"]')).toBeNull()
       expect(dialog.querySelector('[data-testid="aidoc-ingest-model"]')).toBeNull()
+    })
+  })
+
+  describe('model source caption', () => {
+    beforeEach(() => {
+      store.ingestPlan.providers = [{ id: 'p1', name: 'Provider One', models: ['m1', 'm2'] }]
+      store.ingestPlan.selected = { providerId: 'p1', model: 'm1' }
+      store.ingestModel = { providerId: 'p1', model: 'm1' }
+    })
+
+    it.each([
+      ['remembered', 'aidoc.ingestModelSourceRemembered'],
+      ['utility', 'aidoc.ingestModelSourceUtility'],
+      ['default', 'aidoc.ingestModelSourceDefault'],
+    ])('explains a %s selection', (source, key) => {
+      store.ingestPlan.selectedSource = source
+      const dialog = open()
+      expect(dialog.querySelector('[data-testid="aidoc-ingest-model-source"]').textContent).toBe(key)
+    })
+
+    it('hides the caption once the user changes the model', async () => {
+      store.ingestPlan.selectedSource = 'utility'
+      const dialog = open()
+      store.ingestModel.model = 'm2'
+      await nextTick()
+      expect(dialog.querySelector('[data-testid="aidoc-ingest-model-source"]')).toBeNull()
+    })
+  })
+
+  describe('source tree', () => {
+    beforeEach(() => {
+      const file = rel => ({ rel: `kb_source/${rel}`, size: 2048, state: 'updated' })
+      store.ingestPlan.sources = [
+        file('top.md'), file('01-AI Foundations/a.md'), file('01-AI Foundations/b.md'),
+        file('01-AI Foundations/deep/c.md'), file('02-Other/d.md'),
+      ]
+    })
+    const item = (dialog, text) => [...dialog.querySelectorAll('[role="treeitem"]')]
+      .find(el => el.querySelector('.tree-name').textContent === text)
+    const key = (el, name) => el.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true }))
+
+    it('expands only the root and renders collapsed subtrees lazily', () => {
+      const dialog = open()
+      const root = item(dialog, 'kb_source (5)')
+      expect(root.getAttribute('aria-expanded')).toBe('true')
+      expect(root.getAttribute('aria-level')).toBe('1')
+      const folder = item(dialog, '01-AI Foundations (3)')
+      expect(folder.getAttribute('aria-expanded')).toBe('false')
+      expect(folder.getAttribute('aria-level')).toBe('2')
+      expect(item(dialog, '02-Other (1)')).toBeTruthy()
+      expect(item(dialog, 'top.md')).toBeTruthy()
+      expect(item(dialog, 'a.md')).toBeUndefined()
+      expect(dialog.querySelector('[role="tree"]')).not.toBeNull()
+      expect(dialog.textContent).not.toContain('deep')
+    })
+
+    it('shows recursive counts after folder names and children once expanded', async () => {
+      const dialog = open()
+      dialog.querySelector('[aria-label="aidoc.ingestTreeExpand 01-AI Foundations"]').click()
+      await nextTick()
+      expect(item(dialog, '01-AI Foundations (3)').getAttribute('aria-expanded')).toBe('true')
+      expect(item(dialog, 'a.md').getAttribute('aria-level')).toBe('3')
+      const deep = item(dialog, 'deep (1)')
+      expect(deep.getAttribute('aria-expanded')).toBe('false')
+      expect(item(dialog, 'c.md')).toBeUndefined()
+      expect(dialog.querySelector('[aria-label="aidoc.ingestTreeCollapse 01-AI Foundations"]')).not.toBeNull()
+    })
+
+    it('supports keyboard expand, collapse and navigation', async () => {
+      const dialog = open()
+      const folder = item(dialog, '01-AI Foundations (3)')
+      folder.focus()
+      key(folder, 'ArrowRight')
+      await nextTick()
+      expect(folder.getAttribute('aria-expanded')).toBe('true')
+      key(folder, 'ArrowRight')
+      await nextTick()
+      expect(document.activeElement).toBe(item(dialog, 'deep (1)'))
+      key(document.activeElement, 'ArrowDown')
+      expect(document.activeElement).toBe(item(dialog, 'a.md'))
+      key(document.activeElement, 'ArrowUp')
+      expect(document.activeElement).toBe(item(dialog, 'deep (1)'))
+      key(document.activeElement, 'ArrowLeft')
+      expect(document.activeElement).toBe(folder)
+      key(folder, 'ArrowLeft')
+      await nextTick()
+      expect(folder.getAttribute('aria-expanded')).toBe('false')
+      key(folder, 'Enter')
+      await nextTick()
+      expect(folder.getAttribute('aria-expanded')).toBe('true')
+      key(folder, ' ')
+      await nextTick()
+      expect(folder.getAttribute('aria-expanded')).toBe('false')
+    })
+
+    it('keeps confirming the same plan without per-file selection', () => {
+      const dialog = open()
+      expect(dialog.querySelector('input[type="checkbox"]')).toBeNull()
+      dialog.querySelector('[data-testid="aidoc-ingest-start"]').click()
+      expect(store.confirmIngest).toHaveBeenCalledExactlyOnceWith()
     })
   })
 

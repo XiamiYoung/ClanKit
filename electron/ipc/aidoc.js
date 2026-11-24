@@ -54,12 +54,18 @@ function selectedIngestModel(config) {
   const remembered = config.aidocIngestModel
   const rememberedProvider = usableProviders(config).find(item => item.id === remembered?.providerId)
   if (rememberedProvider && typeof remembered.model === 'string' && remembered.model.trim()) {
-    return { providerId: rememberedProvider.id, model: remembered.model.trim() }
+    return { providerId: rememberedProvider.id, model: remembered.model.trim(), source: 'remembered' }
+  }
+  const utility = config.utilityModel
+  if (typeof utility?.model === 'string' && utility.model.trim() && utility.model.trim().length <= MAX_MODEL_ID_LENGTH) {
+    const usable = usableProviders(config)
+    const utilityProvider = usable.find(item => item.id === utility.provider) || usable.find(item => item.type === utility.provider)
+    if (utilityProvider) return { providerId: utilityProvider.id, model: utility.model.trim(), source: 'utility' }
   }
   const provider = defaultProviderOf(config)
   return isUsableProvider(provider)
-    ? { providerId: provider.id, model: provider.model?.trim() || '' }
-    : { providerId: '', model: '' }
+    ? { providerId: provider.id, model: provider.model?.trim() || '', source: 'default' }
+    : { providerId: '', model: '', source: 'default' }
 }
 
 function ingestLoopConfig(config, paths, root, { providerId, model } = {}) {
@@ -276,7 +282,7 @@ function registerHandlers(ipcMain, ds, { runAgent = runIngestAgent } = {}) {
     }
     const plan = await buildIngestPlan({ root, registry, only, includeIngested: options.force === true })
     await refreshRegistryMetadata(root, file, plan.refreshed)
-    const selected = selectedIngestModel(config)
+    const { source: selectedSource, ...selected } = selectedIngestModel(config)
     const providerReady = Boolean(ingestLoopConfig(config, paths, root, selected))
     // The model cache is optional; a missing or corrupt file just means fewer suggestions.
     const modelCache = paths.PROVIDER_MODELS_FILE ? await ds.readJSONAsync(paths.PROVIDER_MODELS_FILE, {}) : {}
@@ -291,6 +297,7 @@ function registerHandlers(ipcMain, ds, { runAgent = runIngestAgent } = {}) {
         models: providerModelIds(provider, config, modelCache),
       })),
       selected,
+      selectedSource,
     }
   })
 

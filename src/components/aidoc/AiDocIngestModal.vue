@@ -30,6 +30,7 @@
               <option v-for="model in providerModels" :key="model" :value="model" />
             </datalist>
           </label>
+          <p v-if="modelSourceKey" class="ingest-detail ingest-model-hint" data-testid="aidoc-ingest-model-source">{{ t(modelSourceKey) }}</p>
           <p class="ingest-detail ingest-model-hint">{{ t('aidoc.ingestModelHint') }}</p>
         </div>
 
@@ -82,13 +83,7 @@
 
         <template v-else-if="store.ingestPlan">
           <p>{{ t('aidoc.ingestFiles', { n: store.ingestPlan.sources.length }) }}</p>
-          <ul class="ingest-list">
-            <li v-for="source in store.ingestPlan.sources" :key="source.rel" class="ingest-source">
-              <span class="ingest-path">{{ source.rel }}</span>
-              <span class="ingest-size ingest-detail">{{ formatSize(source.size) }}</span>
-              <span class="ingest-state">{{ t(stateKeys[source.state]) }}</span>
-            </li>
-          </ul>
+          <AiDocIngestTree :sources="store.ingestPlan.sources" :format-size="formatSize" />
           <p v-if="store.ingestPlan.overflow" class="ingest-detail">
             {{ t('aidoc.ingestOverflow', { n: store.ingestPlan.overflow }) }}
           </p>
@@ -130,6 +125,7 @@ import { useI18n } from '../../i18n/useI18n'
 import { useAiDocStore } from '../../stores/aidoc'
 import AppButton from '../common/AppButton.vue'
 import AppTooltip from '../common/AppTooltip.vue'
+import AiDocIngestTree from './AiDocIngestTree.vue'
 
 const { t, locale } = useI18n()
 const store = useAiDocStore()
@@ -143,6 +139,17 @@ const providerMessage = computed(() => {
 const hasModelChoice = computed(() => Boolean(store.ingestPlan?.providers?.length && store.ingestModel))
 const showModelControls = computed(() => hasModelChoice.value && (confirming.value || store.ingesting || modelErrorHint.value))
 const providerModels = computed(() => store.ingestPlan?.providers?.find(provider => provider.id === store.ingestModel?.providerId)?.models || [])
+const modelSourceKeys = {
+  remembered: 'aidoc.ingestModelSourceRemembered',
+  utility: 'aidoc.ingestModelSourceUtility',
+  default: 'aidoc.ingestModelSourceDefault',
+}
+// Only explain the origin while the controls still show the server-selected choice.
+const modelSourceKey = computed(() => {
+  const plan = store.ingestPlan
+  const same = plan?.selected?.providerId === store.ingestModel?.providerId && plan?.selected?.model === store.ingestModel?.model
+  return same ? modelSourceKeys[plan?.selectedSource] : undefined
+})
 const selectionComplete = computed(() => Boolean(store.ingestModel?.providerId && store.ingestModel.model?.trim()))
 const canStart = computed(() => (hasModelChoice.value ? selectionComplete.value : store.ingestPlan?.providerReady))
 // A model that the provider rejects fails every source the same way, so point the user at the picker.
@@ -167,7 +174,6 @@ function retry() {
   store.runSync({ force: plan.force, rels: plan.force ? plan.sources.map(source => source.rel) : undefined })
 }
 
-const stateKeys = { new: 'aidoc.stateNew', updated: 'aidoc.stateUpdated', ingested: 'aidoc.stateIngested' }
 const reasonKeys = {
   scanned_pdf: 'aidoc.reasonScannedPdf',
   unsupported: 'aidoc.reasonUnsupported',
@@ -217,7 +223,7 @@ onUnmounted(() => dialog.value?.close())
   position: fixed;
   inset: 0;
   margin: auto;
-  width: min(32rem, calc(100% - 2rem));
+  width: min(46rem, 92vw);
   max-height: calc(100% - 2rem);
   padding: 0;
   overflow: hidden;
@@ -246,7 +252,6 @@ onUnmounted(() => dialog.value?.close())
 .ingest-header {
   min-height: 3.5rem;
   justify-content: space-between;
-  border-bottom: 1px solid var(--ingest-border);
 }
 .ingest-header h2 {
   margin: 0;
@@ -255,9 +260,9 @@ onUnmounted(() => dialog.value?.close())
 }
 .ingest-body {
   display: grid;
-  gap: 0.75rem;
+  gap: 1rem;
   overflow: auto;
-  padding: 1rem;
+  padding: 0.5rem 1.25rem 1.25rem;
 }
 .ingest-model {
   display: grid;
@@ -297,13 +302,6 @@ onUnmounted(() => dialog.value?.close())
   border-radius: var(--radius-sm);
 }
 .ingest-list li + li { border-top: 1px solid var(--ingest-border); }
-.ingest-source {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem 0.75rem;
-}
 .ingest-failure, .ingest-running, .ingest-summary {
   display: grid;
   gap: 0.25rem;
@@ -311,15 +309,6 @@ onUnmounted(() => dialog.value?.close())
 .ingest-failure { padding: 0.5rem 0.75rem; }
 .ingest-path, .ingest-detail, .ingest-alert { overflow-wrap: anywhere; }
 .ingest-detail { color: var(--text-muted); }
-.ingest-state, .ingest-size {
-  white-space: nowrap;
-  font-size: var(--fs-caption);
-}
-.ingest-state {
-  padding: 0.125rem 0.375rem;
-  background: var(--primary);
-  border-radius: var(--radius-sm);
-}
 .ingest-alert { color: var(--ingest-danger); }
 .ingest-warnings { display: grid; gap: 0.25rem; }
 .ingest-bar {
@@ -337,7 +326,6 @@ onUnmounted(() => dialog.value?.close())
 }
 .ingest-footer {
   justify-content: flex-end;
-  border-top: 1px solid var(--ingest-border);
   background: var(--ingest-footer);
 }
 .ingest-dialog :deep(.app-btn--ghost) {
