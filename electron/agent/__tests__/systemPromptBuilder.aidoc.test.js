@@ -72,6 +72,20 @@ describe('systemPromptBuilder AI Doc gating', () => {
     expect(out).not.toContain('WORKING FOLDER FOR THIS CHAT')
   })
 
+  it('DOC_PATH / obsidianVaultPath overrides do not introduce a second general/ root', () => {
+    const other = path.join(tmpRoot, 'other_root')
+    const prev = process.env.DOC_PATH
+    process.env.DOC_PATH = other
+    try {
+      const out = build({ ...baseConfig, mode: 'productivity', obsidianVaultPath: other })
+      expect(out).toContain(path.join(docRoot, 'general'))
+      expect(out).not.toContain(other)
+    } finally {
+      if (prev === undefined) delete process.env.DOC_PATH
+      else process.env.DOC_PATH = prev
+    }
+  })
+
   it('chat mode (default) is byte-equivalent to omitting mode', () => {
     const a = build(baseConfig)
     const b = build({ ...baseConfig, mode: 'chat' })

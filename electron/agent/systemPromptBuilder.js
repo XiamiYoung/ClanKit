@@ -923,8 +923,8 @@ ${aiDocOn ? `- NEVER write SKILL.md or any skill files into the AI DOC PATH — 
 ` : ''}- After installing or creating a skill, tell the user to click Refresh on the Skills page to reload.`
 
   // ── Document Path subfolders (for file placement guidance) ──
-  // Priority: explicit obsidian vault override → aidocPath (already resolved above)
-  const effectiveDocPath = process.env.DOC_PATH || config.obsidianVaultPath || aidocPath
+  // Same root as the AI DOC PATH block so one prompt never names two general/ roots.
+  const effectiveDocPath = aidocPath
   let docSubfolders = []
   try {
     const entries = fs.readdirSync(path.join(effectiveDocPath, AIDOC_FOLDERS.GENERAL), { withFileTypes: true })

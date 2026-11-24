@@ -111,6 +111,16 @@ async function _probeSingle(rawPath) {
     : { openable: false, reason: 'binary_content', size: stat.size }
 }
 
+// Best-effort: a bad path must never fail the config save/get.
+function _ensureLayoutSafe(docPath) {
+  try {
+    const { resolveAiDocRoot, ensureAiDocLayout } = require('../lib/aidocLayout')
+    ensureAiDocLayout(resolveAiDocRoot({ DoCPath: docPath, dataPath: ds.paths().DATA_DIR }))
+  } catch (err) {
+    logger.warn('[obsidian] ensureAiDocLayout failed:', err.message)
+  }
+}
+
 function register() {
   const p = () => ds.paths()
 
@@ -127,6 +137,7 @@ function register() {
         // Persist so it's used next time
         cfg.DoCPath = vaultPath
         ds.writeJSON(p().CONFIG_FILE, cfg)
+        _ensureLayoutSafe(vaultPath)
       }
     }
     return { vaultPath, lastOpenedDoc: cfg.docsLastOpenedDoc || null }
@@ -140,6 +151,7 @@ function register() {
       else delete existing.docsLastOpenedDoc
     }
     ds.writeJSON(p().CONFIG_FILE, existing)
+    if ('vaultPath' in config) _ensureLayoutSafe(existing.DoCPath)
     return true
   })
 
