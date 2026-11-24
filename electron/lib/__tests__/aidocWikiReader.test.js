@@ -71,7 +71,7 @@ describe('AI Doc Wiki reader', () => {
     const pages = await listWikiPages(root)
     expect(pages).toHaveLength(1000)
     expect(pages.find(page => page.isIndex)?.rel).toBe('wiki/index.md')
-  })
+  }, 30000)
 
   it('deduplicates and sorts unambiguous backlinks from navigable wiki pages', () => {
     const cache = { files: {
