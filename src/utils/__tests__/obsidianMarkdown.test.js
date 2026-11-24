@@ -86,6 +86,26 @@ describe('Obsidian Markdown preview', () => {
     expect(open).toContain('https://evil/x')
   })
 
+  it('blocks media, srcset, form and legacy background fetch vectors in restricted mode', () => {
+    const payloads = [
+      '<video src="https://evil/v.mp4" poster="https://evil/p.png"></video>',
+      '<audio src="https://evil/a.mp3"></audio>',
+      '<img srcset="https://evil/x 1x" src="data:image/png;base64,AAAA">',
+      '<picture><source srcset="https://evil/s 1x"><img src="data:image/png;base64,BBBB"></picture>',
+      '<form action="https://evil/f"><input type="image" src="https://evil/i.png"></form>',
+      '<table background="https://evil/b.png"><tr><td>cell</td></tr></table>',
+    ]
+    for (const payload of payloads) {
+      const out = renderObsidianMarkdown('before\n\n' + payload + '\n\nafter', { restrictImages: true })
+      expect(out).not.toContain('evil')
+      expect(out).not.toContain('srcset')
+      expect(out).toContain('before')
+      expect(out).toContain('after')
+    }
+    const open = renderObsidianMarkdown(payloads[0])
+    expect(open).toContain('https://evil/v.mp4')
+  })
+
   it('keeps the global marked configured for other views', () => {
     const math = marked.parse('$x^2$')
     expect(math).toContain('katex')

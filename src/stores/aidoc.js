@@ -47,8 +47,10 @@ export const useAiDocStore = defineStore('aidoc', () => {
   // Phase 1 shows index progress; phase 2 estimates progress from finished sources plus a
   // smoothed fraction of the in-flight one. 100 is only shown once the run result exists.
   const syncPercent = computed(() => {
-    if (ingestResult.value) return 100
-    if (ingesting.value) return ingestPercent.value
+    const result = ingestResult.value
+    // A stopped, aborted or partially processed run never reports a full bar.
+    if (result && !result.stopped && !result.aborted && !result.remaining) return 100
+    if (result || ingesting.value) return ingestPercent.value
     if (updating.value) return indexPercent.value
     return 0
   })

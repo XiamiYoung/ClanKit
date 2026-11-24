@@ -259,7 +259,7 @@ describe('AI Doc store', () => {
       api.runIngest.mockImplementation(() => new Promise(resolve => { finish = resolve }))
       await store.runSync()
       const run = store.confirmIngest()
-      const { requestId } = api.runIngest.mock.calls[0][0]
+      const { requestId } = api.runIngest.mock.calls.at(-1)[0]
       const send = event => ingestProgress({ requestId, total: count, ...event })
       return { run, send, finish: result => finish(result) }
     }
@@ -303,8 +303,41 @@ describe('AI Doc store', () => {
       expect(store.syncPercent).toBe(66)
       send({ index: 2, rel: 'c', status: 'done' })
       expect(store.syncPercent).toBe(99)
-      finish({ success: true, done: [], failed: [], overflow: 0 })
+      finish({ success: true, done: ['a', 'c'], failed: [{ rel: 'b', reason: 'agent_error' }], overflow: 0 })
       await run
+      expect(store.syncPercent).toBe(100)
+    })
+
+    it('keeps the last percent for stopped, aborted or partial runs and shows 100 for complete ones', async () => {
+      const store = useAiDocStore()
+      const { send, finish, run } = await startIngest(store, 3)
+      send({ index: 0, rel: 'a', status: 'done' })
+      finish({ success: true, done: ['a'], failed: [], stopped: true, overflow: 0 })
+      await run
+      expect(store.ingestResult.remaining).toBe(2)
+      expect(store.syncPercent).toBe(33)
+
+      store.setRoot('/b')
+      const aborted = await startIngest(store, 5)
+      for (let i = 0; i < 3; i++) {
+        aborted.send({ index: i, rel: 'x', status: 'start' })
+        aborted.send({ index: i, rel: 'x', status: 'failed' })
+      }
+      aborted.finish({ success: true, done: [], failed: [{}, {}, {}], stopped: false, aborted: 'consecutive_agent_errors', overflow: 0 })
+      await aborted.run
+      expect(store.syncPercent).toBe(60)
+
+      store.setRoot('/c')
+      const failedOnly = await startIngest(store, 2)
+      failedOnly.finish({ success: true, done: [], failed: [{}, {}], stopped: false, overflow: 0 })
+      await failedOnly.run
+      expect(store.ingestResult.remaining).toBe(0)
+      expect(store.syncPercent).toBe(100)
+
+      store.setRoot('/d')
+      const clean = await startIngest(store, 1)
+      clean.finish({ success: true, done: ['a'], failed: [], stopped: false, overflow: 0 })
+      await clean.run
       expect(store.syncPercent).toBe(100)
     })
 

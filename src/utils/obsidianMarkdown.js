@@ -165,14 +165,24 @@ export function preprocessObsidian(md, { resolveLink, localImageBasePath } = {})
   return out.join('\n')
 }
 
-const RESTRICTED_FORBID_TAGS = ['image', 'use', 'svg', 'math', 'style', 'link', 'iframe', 'object', 'embed']
+const RESTRICTED_FORBID_TAGS = [
+  'image', 'use', 'svg', 'math', 'style', 'link', 'iframe', 'object', 'embed',
+  'video', 'audio', 'source', 'picture', 'form', 'input', 'track',
+]
+const RESTRICTED_FORBID_ATTR = ['style', 'srcset', 'poster', 'background', 'action', 'formaction']
 
 // Wiki reader only: keep inline data images, drop remote and unresolvable relative images.
 function dropUnsafeImages(html) {
   const template = document.createElement('template')
   template.innerHTML = html
+  // Second pass independent of the sanitizer: remove fetch-capable elements and attributes that survived.
+  for (const el of template.content.querySelectorAll(RESTRICTED_FORBID_TAGS.join(','))) el.remove()
+  for (const el of template.content.querySelectorAll(RESTRICTED_FORBID_ATTR.map(name => `[${name}]`).join(','))) {
+    for (const name of RESTRICTED_FORBID_ATTR) el.removeAttribute(name)
+  }
   for (const img of template.content.querySelectorAll('img')) {
     if (!/^data:image\//i.test(img.getAttribute('src') || '')) img.remove()
+    else img.removeAttribute('srcset')
   }
   return template.innerHTML
 }
@@ -190,7 +200,7 @@ export function renderObsidianMarkdown(md, options = {}) {
       ADD_ATTR: ['data-relpath', 'data-abspath', 'data-target', 'data-section', 'data-callout', 'data-rel', 'data-unresolved', 'style'],
       // Wiki reader renders untrusted LLM output: block every remote-fetch vector
       // (CSS url(), SVG <image>/<use>, stylesheets, embeds), not just <img>.
-      ...(options.restrictImages ? { FORBID_ATTR: ['style'], FORBID_TAGS: RESTRICTED_FORBID_TAGS } : {}),
+      ...(options.restrictImages ? { FORBID_ATTR: RESTRICTED_FORBID_ATTR, FORBID_TAGS: RESTRICTED_FORBID_TAGS } : {}),
     })
     return options.restrictImages ? dropUnsafeImages(clean) : clean
   } catch { return '' }
