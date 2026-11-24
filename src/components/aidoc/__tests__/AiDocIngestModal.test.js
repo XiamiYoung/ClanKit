@@ -24,8 +24,11 @@ describe('AiDocIngestModal', () => {
       ingestPlan: {
         sources: [{ rel: 'kb_source/report.md', size: 1024, state: 'new' }],
         overflow: 2,
-        providerReady: true
+        providerReady: true,
+        languages: { available: ['en', 'zh'], selected: ['en'] }
       },
+      ingestLanguages: ['en'],
+      ingestPlanLoading: false,
       ingesting: false,
       ingestStopping: false,
       ingestProgress: null,
@@ -35,7 +38,9 @@ describe('AiDocIngestModal', () => {
       syncPercent: 0,
       cancelIngestPlan: vi.fn(),
       confirmIngest: vi.fn(),
-      stopIngest: vi.fn()
+      stopIngest: vi.fn(),
+      // Mirrors the real action: the selection changes at once, the plan follows asynchronously.
+      setIngestLanguages: vi.fn(languages => { store.ingestLanguages = ['en', 'zh'].filter(lang => languages.includes(lang)) })
     })
     useAiDocStore.mockReturnValue(store)
   })
@@ -153,6 +158,108 @@ describe('AiDocIngestModal', () => {
     const alert = dialog.querySelector('[role="alert"]')
     expect(alert.textContent).toContain('aidoc.ingestIndexError')
     expect(alert.textContent).toContain('disk full')
+  })
+
+  describe('wiki languages', () => {
+    const box = (dialog, lang) => dialog.querySelector(`[data-testid="aidoc-ingest-language-${lang}"]`)
+    const toggle = async (input, checked) => {
+      input.checked = checked
+      input.dispatchEvent(new Event('change'))
+      await nextTick()
+    }
+
+    it('offers both languages with the plan selection checked and the hint visible', () => {
+      const dialog = open()
+      const group = dialog.querySelector('[data-testid="aidoc-ingest-languages"]')
+      expect(group.tagName).toBe('FIELDSET')
+      expect(group.querySelector('legend').textContent).toBe('aidoc.ingestLanguagesLabel')
+      expect([...group.querySelectorAll('label')].map(label => label.textContent.trim())).toEqual(['aidoc.langEn', 'aidoc.langZh'])
+      expect(box(dialog, 'en').checked).toBe(true)
+      expect(box(dialog, 'zh').checked).toBe(false)
+      expect(dialog.querySelector('[data-testid="aidoc-ingest-languages-hint"]').textContent).toBe('aidoc.ingestLanguagesHint')
+    })
+
+    it('shows the second language as the default when it is the selected one', () => {
+      store.ingestLanguages = ['zh']
+      const dialog = open()
+      expect(box(dialog, 'en').checked).toBe(false)
+      expect(box(dialog, 'zh').checked).toBe(true)
+    })
+
+    it('lets the user check both languages and sends the selection to the store', async () => {
+      const dialog = open()
+      await toggle(box(dialog, 'zh'), true)
+      expect(store.setIngestLanguages).toHaveBeenCalledExactlyOnceWith(['en', 'zh'])
+      expect(box(dialog, 'en').checked).toBe(true)
+      expect(box(dialog, 'zh').checked).toBe(true)
+      expect(box(dialog, 'en').disabled).toBe(false)
+      expect(box(dialog, 'zh').disabled).toBe(false)
+    })
+
+    it('lets the user switch to the other language alone', async () => {
+      const dialog = open()
+      await toggle(box(dialog, 'zh'), true)
+      await toggle(box(dialog, 'en'), false)
+      expect(store.setIngestLanguages).toHaveBeenLastCalledWith(['zh'])
+      expect(box(dialog, 'en').checked).toBe(false)
+      expect(box(dialog, 'zh').checked).toBe(true)
+    })
+
+    it('disables the last checked language and ignores an attempt to uncheck it', async () => {
+      const dialog = open()
+      const only = box(dialog, 'en')
+      expect(only.disabled).toBe(true)
+      expect(box(dialog, 'zh').disabled).toBe(false)
+      // A keyboard or scripted change that slips past the disabled state must be a no-op.
+      await toggle(only, false)
+      expect(store.setIngestLanguages).not.toHaveBeenCalled()
+      expect(store.ingestLanguages).toEqual(['en'])
+      expect(only.checked).toBe(true)
+    })
+
+    it('disables Start for an empty selection or while the plan is recomputed', async () => {
+      const dialog = open()
+      const start = dialog.querySelector('[data-testid="aidoc-ingest-start"]')
+      expect(start.disabled).toBe(false)
+      store.ingestPlanLoading = true
+      await nextTick()
+      expect(start.disabled).toBe(true)
+      store.ingestPlanLoading = false
+      store.ingestLanguages = []
+      await nextTick()
+      expect(start.disabled).toBe(true)
+      start.click()
+      expect(store.confirmIngest).not.toHaveBeenCalled()
+    })
+
+    it('disables Start when no source has work for the selection', async () => {
+      store.ingestPlan.sources = []
+      const dialog = open()
+      expect(dialog.querySelector('[data-testid="aidoc-ingest-start"]').disabled).toBe(true)
+      expect(dialog.textContent).toContain('aidoc.ingestFiles 0')
+    })
+
+    it('locks the checkboxes while ingesting', async () => {
+      const dialog = open()
+      store.ingesting = true
+      await nextTick()
+      expect(dialog.querySelector('[data-testid="aidoc-ingest-languages"]').disabled).toBe(true)
+    })
+
+    it('is hidden in the result view and names the language of each failure', () => {
+      store.ingestPlan = null
+      store.ingestResult = {
+        done: [], remaining: 0,
+        failed: [
+          { rel: 'kb_source/a.md', lang: 'en', reason: 'agent_error' },
+          { rel: 'kb_source/a.md', lang: 'zh', reason: 'agent_error' },
+        ],
+      }
+      const dialog = open()
+      expect(dialog.querySelector('[data-testid="aidoc-ingest-languages"]')).toBeNull()
+      expect([...dialog.querySelectorAll('[data-testid="aidoc-ingest-failure-language"]')].map(el => el.textContent))
+        .toEqual(['aidoc.langEn', 'aidoc.langZh'])
+    })
   })
 
   describe('model selection', () => {
@@ -322,7 +429,7 @@ describe('AiDocIngestModal', () => {
 
     it('keeps confirming the same plan without per-file selection', () => {
       const dialog = open()
-      expect(dialog.querySelector('input[type="checkbox"]')).toBeNull()
+      expect(dialog.querySelector('[role="tree"] input[type="checkbox"]')).toBeNull()
       dialog.querySelector('[data-testid="aidoc-ingest-start"]').click()
       expect(store.confirmIngest).toHaveBeenCalledExactlyOnceWith()
     })

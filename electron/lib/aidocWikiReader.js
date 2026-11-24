@@ -7,19 +7,35 @@ const { parseFrontmatter } = require('./aidocFrontmatter')
 const { scanKnowledgeFiles } = require('./aidocIndex')
 const { extractWikiLinks } = require('./aidocLinkParser')
 const { createLinkResolver } = require('./aidocLinkResolver')
+const { wikiLanguageOf } = require('./aidocLanguages')
 const { resolveWikiToolPath } = require('../agent/tools/AiDocWikiTool')
 
 const { WIKI, KB_SOURCE } = AIDOC_FOLDERS
-const HOME = `${WIKI}/index.md`
-const EXCLUDED = new Set([`${WIKI}/schema.md`, `${WIKI}/log.md`])
 const HEADER_BYTES = 4096
 const MAX_PAGES = 1000
 const MAX_PAGE_BYTES = 2 * 1024 * 1024
 
+// Wiki root of a page: wiki/<lang> for a language wiki, plain wiki for legacy flat pages.
+function wikiRootOf(rel) {
+  const lang = wikiLanguageOf(rel)
+  return lang ? `${WIKI}/${lang}` : WIKI
+}
+
+// index.md, log.md and SCHEMA.md directly under a wiki root are scaffolding, not reader pages.
+function isScaffoldFile(rel, names) {
+  const lower = rel.toLowerCase()
+  return names.includes(path.posix.basename(lower)) && path.posix.dirname(lower) === wikiRootOf(rel)
+}
+
 function isWikiPage(rel) {
   return typeof rel === 'string' && rel.startsWith(`${WIKI}/`) &&
-    path.posix.extname(rel).toLowerCase() === '.md' && !EXCLUDED.has(rel.toLowerCase())
+    path.posix.extname(rel).toLowerCase() === '.md' && !isScaffoldFile(rel, ['schema.md', 'log.md'])
 }
+
+const isHome = rel => isScaffoldFile(rel, ['index.md'])
+
+// Pages that belong to different trees (language folders, legacy flat pages) never link to each other.
+const sameTree = (a, b) => wikiLanguageOf(a) === wikiLanguageOf(b)
 
 function pageTitle(rel) {
   return path.posix.basename(rel, path.posix.extname(rel))
@@ -66,8 +82,7 @@ async function readHeader(abs, size) {
 
 async function listWikiPages(root) {
   const files = (await scanKnowledgeFiles(root, { folders: [WIKI] })).filter(file => isWikiPage(file.rel))
-  files.sort((a, b) => Number(b.rel.toLowerCase() === HOME) - Number(a.rel.toLowerCase() === HOME) ||
-    a.rel.localeCompare(b.rel))
+  files.sort((a, b) => Number(isHome(b.rel)) - Number(isHome(a.rel)) || a.rel.localeCompare(b.rel))
 
   const pages = []
   for (const { rel, size, mtimeMs } of files) {
@@ -76,8 +91,8 @@ async function listWikiPages(root) {
     if (!target || !isWikiPage(target.rel)) continue
     try {
       const header = await readHeader(target.abs, size)
-      const page = { rel, path: target.abs, ...metadata(rel, parseFrontmatter(header).data), mtimeMs }
-      if (rel.toLowerCase() === HOME) page.isIndex = true
+      const page = { rel, path: target.abs, lang: wikiLanguageOf(rel), ...metadata(rel, parseFrontmatter(header).data), mtimeMs }
+      if (isHome(rel)) page.isIndex = true
       pages.push(page)
     } catch (error) {
       if (!isMissing(error)) throw error
@@ -91,7 +106,7 @@ function buildBacklinks(cache, rel) {
   const files = cache?.files ?? {}
   const allRels = Object.keys(files).sort()
   const resolve = createLinkResolver([...allRels, rel])
-  return allRels.filter(fromRel => fromRel !== rel && isWikiPage(fromRel) && files[fromRel].links.some(target => {
+  return allRels.filter(fromRel => fromRel !== rel && isWikiPage(fromRel) && sameTree(fromRel, rel) && files[fromRel].links.some(target => {
     const match = resolve(fromRel, target)
     return match.kind === 'resolved' && match.rel === rel
   })).map(fromRel => ({ rel: fromRel, title: files[fromRel].title || pageTitle(fromRel) }))

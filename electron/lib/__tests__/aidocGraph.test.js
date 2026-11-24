@@ -107,9 +107,65 @@ describe('AI Doc graph', () => {
       expect(await readIngestedSources(dataDir, root)).toEqual({})
     }
     const sources = {
-      'kb_source/a.md': { hash: 'hash', ingestedAt: '2026-11-24', pages: ['wiki/a.md'], mtimeMs: 1, size: 42 },
+      'kb_source/a.md': {
+        hash: 'hash', ingestedAt: '2026-11-24', pages: ['wiki/en/a.md'], mtimeMs: 1, size: 42,
+        langs: { en: { hash: 'hash', ingestedAt: '2026-11-24', pages: ['wiki/en/a.md'] } },
+      },
     }
     await fs.writeFile(metadata, JSON.stringify({ sources }))
     expect(await readIngestedSources(dataDir, root)).toEqual(sources)
+  })
+
+  it('does not report a legacy source record without languages as ingested', async () => {
+    const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aidoc-graph-'))
+    dirs.push(dataDir)
+    const root = path.join(dataDir, 'root')
+    await fs.mkdir(path.join(dataDir, 'aidoc-ingest'))
+    await fs.writeFile(path.join(dataDir, 'aidoc-ingest', rootHash(root) + '.json'), JSON.stringify({
+      sources: { 'kb_source/a.md': { hash: 'hash', ingestedAt: 'x', pages: ['wiki/a.md'] } },
+    }))
+    expect(await readIngestedSources(dataDir, root)).toEqual({})
+  })
+
+  describe('language wikis', () => {
+    const files = () => [
+      file('wiki/en/index.md', ['Topic']),
+      file('wiki/en/Topic.md', ['Topic zh', 'Missing']),
+      file('wiki/en/notes/Deep.md', ['Topic']),
+      file('wiki/zh/index.md', ['Topic']),
+      file('wiki/zh/Topic.md', ['Topic']),
+      file('wiki/Legacy.md', ['Topic']),
+      file('kb_source/source.md'),
+    ]
+    const ids = graph => graph.nodes.filter(node => node.kind === 'doc').map(node => node.id)
+
+    it('shows only the pages of the preferred language when its folder exists', () => {
+      const en = buildGraph({ files: files(), ingested: { 'kb_source/source.md': {} }, lang: 'en' })
+      expect(ids(en)).toEqual(['wiki/en/index.md', 'wiki/en/Topic.md', 'wiki/en/notes/Deep.md', 'kb_source/source.md'])
+      const zh = buildGraph({ files: files(), ingested: {}, lang: 'zh' })
+      expect(ids(zh)).toEqual(['wiki/zh/index.md', 'wiki/zh/Topic.md'])
+    })
+
+    it('resolves a link to the page in its own language even when both languages have that name', () => {
+      const en = buildGraph({ files: files(), ingested: {}, lang: 'en' })
+      expect(en.links).toContainEqual({ source: 'wiki/en/index.md', target: 'wiki/en/Topic.md' })
+      expect(en.links.some(link => link.target === 'wiki/zh/Topic.md')).toBe(false)
+      expect(en.nodes.some(node => node.kind === 'ambiguous')).toBe(false)
+      const zh = buildGraph({ files: files(), ingested: {}, lang: 'zh' })
+      expect(zh.links).toContainEqual({ source: 'wiki/zh/index.md', target: 'wiki/zh/Topic.md' })
+    })
+
+    it('groups language pages by the first folder below the language root', () => {
+      const { groups, nodes } = buildGraph({ files: files(), ingested: { 'kb_source/source.md': {} }, lang: 'en' })
+      expect(groups).toEqual(['kb_source', 'wiki', 'wiki/notes'])
+      expect(nodes.find(node => node.id === 'wiki/en/notes/Deep.md').group).toBe('wiki/notes')
+      expect(nodes.find(node => node.id === 'wiki/en/Topic.md').group).toBe('wiki')
+    })
+
+    it('shows every wiki page when the preferred language folder does not exist', () => {
+      const onlyZh = files().filter(item => !item.rel.startsWith('wiki/en/'))
+      expect(ids(buildGraph({ files: onlyZh, ingested: {}, lang: 'en' }))).toEqual(['wiki/zh/index.md', 'wiki/zh/Topic.md', 'wiki/Legacy.md'])
+      expect(ids(buildGraph({ files: onlyZh, ingested: {} }))).toEqual(['wiki/zh/index.md', 'wiki/zh/Topic.md', 'wiki/Legacy.md'])
+    })
   })
 })

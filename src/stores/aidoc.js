@@ -7,6 +7,7 @@ const ERROR_KEYS = {
   providerMissing: 'aidoc.providerMissing',
   busy: 'aidoc.ingestBusy',
   invalid_model: 'aidoc.ingestInvalidModel',
+  invalid_language: 'aidoc.ingestInvalidLanguage',
 }
 
 function describeError(result, message, key) {
@@ -43,6 +44,10 @@ export const useAiDocStore = defineStore('aidoc', () => {
   const ingestDialogVisible = ref(false)
   // Provider and model chosen for organizing. Global, so setRoot does not reset it.
   const ingestModel = ref({ providerId: '', model: '' })
+  // Wiki languages to generate. Starts from the remembered or default selection of each plan.
+  const ingestLanguages = ref([])
+  // True while the plan is recomputed for a changed language selection.
+  const ingestPlanLoading = ref(false)
   // Approximate percent bookkeeping; each value only moves forward within a run.
   const indexPercent = ref(0)
   const ingestPercent = ref(0)
@@ -51,6 +56,7 @@ export const useAiDocStore = defineStore('aidoc', () => {
   // Id of the run whose result arrives through this renderer's own invoke promise.
   let localIngestId = null
   let finishingIngestId = null
+  let planRequest = 0
 
   // Phase 1 shows index progress; phase 2 estimates progress from finished sources plus a
   // smoothed fraction of the in-flight one. 100 is only shown once the run result exists.
@@ -105,6 +111,8 @@ export const useAiDocStore = defineStore('aidoc', () => {
     ingestPlan.value = ingestResult.value = ingestProgress.value = null
     ingestError.value = ingestErrorKey.value = ''
     syncPreparing.value = ingestStopping.value = ingestNothing.value = false
+    ingestPlanLoading.value = false
+    planRequest++
     ingestDialogVisible.value = false
     localIngestId = null
     resetPercent()
@@ -210,8 +218,10 @@ export const useAiDocStore = defineStore('aidoc', () => {
         describeError(result, ingestError, ingestErrorKey)
         return
       }
-      if (result.sources.length) {
-        ingestPlan.value = { ...result, force }
+      // With nothing pending for the selection the dialog still opens when another language has work to add.
+      if (result.sources.length || result.languages?.otherWork) {
+        ingestPlan.value = { ...result, force, rels }
+        ingestLanguages.value = [...(result.languages?.selected || [])]
         ingestDialogVisible.value = true
         // Keep an in-session choice while its provider is still offered; otherwise use the remembered one.
         const kept = result.providers?.some(provider => provider.id === ingestModel.value.providerId)
@@ -222,6 +232,33 @@ export const useAiDocStore = defineStore('aidoc', () => {
       if (current === generation) describeError({ error: err.message }, ingestError, ingestErrorKey)
     } finally {
       if (current === generation) syncPreparing.value = false
+    }
+  }
+
+  // Recomputes which sources have work for the new language selection; at least one language stays selected.
+  async function setIngestLanguages(languages) {
+    const plan = ingestPlan.value
+    const api = window.electronAPI?.aidoc
+    const next = (plan?.languages?.available || []).filter(lang => languages.includes(lang))
+    if (!plan || !api?.getIngestPlan || ingesting.value || !next.length) return
+    ingestLanguages.value = next
+    const current = generation
+    const latest = ++planRequest
+    ingestPlanLoading.value = true
+    ingestError.value = ingestErrorKey.value = ''
+    try {
+      const result = await api.getIngestPlan({ root, rels: plan.rels, force: plan.force, languages: next })
+      if (current !== generation || latest !== planRequest) return
+      if (!result.success) describeError(result, ingestError, ingestErrorKey)
+      else {
+        ingestPlan.value = {
+          ...ingestPlan.value, sources: result.sources, removed: result.removed, overflow: result.overflow, languages: result.languages,
+        }
+      }
+    } catch (err) {
+      if (current === generation && latest === planRequest) describeError({ error: err.message }, ingestError, ingestErrorKey)
+    } finally {
+      if (current === generation && latest === planRequest) ingestPlanLoading.value = false
     }
   }
 
@@ -301,7 +338,7 @@ export const useAiDocStore = defineStore('aidoc', () => {
       resetPercent()
       if (snapshot.total) {
         ingestProgress.value = {
-          requestId: snapshot.requestId, status: snapshot.status, index: snapshot.index, total: snapshot.total, rel: snapshot.rel,
+          requestId: snapshot.requestId, status: snapshot.status, index: snapshot.index, total: snapshot.total, rel: snapshot.rel, lang: snapshot.lang,
         }
         trackIngestEvent(ingestProgress.value)
       }
@@ -312,7 +349,8 @@ export const useAiDocStore = defineStore('aidoc', () => {
   async function confirmIngest() {
     const api = window.electronAPI?.aidoc
     const plan = ingestPlan.value
-    if (!api?.runIngest || ingesting.value || !plan?.providerReady || !plan.sources.length) return
+    if (!api?.runIngest || ingesting.value || ingestPlanLoading.value || !plan?.providerReady || !plan.sources.length) return
+    if (plan.languages && !ingestLanguages.value.length) return
     const id = globalThis.crypto.randomUUID()
     ingestRequestId.value = id
     localIngestId = id
@@ -326,6 +364,7 @@ export const useAiDocStore = defineStore('aidoc', () => {
       ensureIngestListener()
       const result = await api.runIngest({
         root, requestId: id, force: plan.force, rels: plan.sources.map(source => source.rel),
+        ...(plan.languages ? { languages: [...ingestLanguages.value] } : {}),
         ...(plan.providers?.length ? { providerId: ingestModel.value.providerId, model: ingestModel.value.model } : {}),
       })
       if (id !== ingestRequestId.value) return
@@ -339,7 +378,9 @@ export const useAiDocStore = defineStore('aidoc', () => {
         return
       }
       const overflow = Math.max(result.overflow || 0, plan.overflow || 0)
-      const remaining = Math.max(0, plan.sources.length - result.done.length - result.failed.length) + overflow
+      // A source can fail in several languages, so failures are counted per source.
+      const failedSources = new Set(result.failed.map(failure => failure.rel)).size
+      const remaining = Math.max(0, plan.sources.length - result.done.length - failedSources) + overflow
       ingestResult.value = { ...result, overflow, remaining }
       await refreshAfterIngest()
     } catch (err) {
@@ -393,8 +434,8 @@ export const useAiDocStore = defineStore('aidoc', () => {
     status, graph, progress, updating, error, errorKey, stats,
     sourceStates, wikiPages, currentWikiPage, wikiLoading,
     ingestPlan, ingesting, ingestProgress, ingestResult, ingestError, ingestErrorKey,
-    ingestStopping, syncPreparing, ingestNothing, syncPercent, ingestModel, ingestDialogVisible,
-    setRoot, refreshStatus, loadGraph, refreshSourceStates, loadWikiPages, openWikiPage,
+    ingestStopping, syncPreparing, ingestNothing, syncPercent, ingestModel, ingestDialogVisible, ingestLanguages, ingestPlanLoading,
+    setRoot, setIngestLanguages, refreshStatus, loadGraph, refreshSourceStates, loadWikiPages, openWikiPage,
     updateIndex, runSync, ingestSingle, confirmIngest, cancelIngestPlan, stopIngest, ensureIngestListener, restoreIngestStatus, openIngestResult, dispose,
   }
 })

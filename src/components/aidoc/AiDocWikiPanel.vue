@@ -31,6 +31,12 @@
 
     <div v-else class="wiki-columns">
       <nav class="wiki-navigation" :aria-label="t('aidoc.wiki')">
+        <div v-if="languages.length > 1" class="wiki-language" role="radiogroup" :aria-label="t('aidoc.wikiLanguage')" data-testid="aidoc-wiki-languages">
+          <button v-for="lang in languages" :key="lang" type="button" role="radio" :aria-checked="lang === activeLanguage"
+            :data-testid="'aidoc-wiki-language-' + lang" @click="selectLanguage(lang)">
+            {{ t(languageLabelKey(lang)) }}
+          </button>
+        </div>
         <div class="wiki-search">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <circle cx="11" cy="11" r="6" />
@@ -99,15 +105,16 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch, watchPostEffect } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, watchPostEffect } from 'vue'
 import { useI18n } from '../../i18n/useI18n'
 import { useAiDocStore } from '../../stores/aidoc'
 import { renderObsidianMarkdown } from '../../utils/obsidianMarkdown'
+import { languageLabelKey, matchWikiLanguage } from '../../utils/aidocLanguages'
 import AppButton from '../common/AppButton.vue'
 import AppTooltip from '../common/AppTooltip.vue'
 
 const emit = defineEmits(['close', 'open-file'])
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const store = useAiDocStore()
 const panel = ref(null)
 const readingPane = ref(null)
@@ -116,10 +123,23 @@ const query = ref('')
 const loadingPages = ref(true)
 const page = computed(() => store.currentWikiPage)
 const errorText = computed(() => store.errorKey ? t(store.errorKey) : store.error)
-const isIndexPage = item => item.isIndex || item.rel.toLowerCase() === 'wiki/index.md'
-const home = computed(() => store.wikiPages?.find(isIndexPage))
+const isIndexPage = item => item.isIndex || item.rel.toLowerCase() === 'wiki/index.md' ||
+  (!!item.lang && item.rel.toLowerCase() === `wiki/${item.lang}/index.md`)
+
+// Every language folder is an independent wiki. Only languages with readable pages count, and
+// pages directly under wiki/ (from before language folders) form the legacy tree.
+const languages = computed(() => [...new Set((store.wikiPages || []).filter(item => item.lang && !isIndexPage(item)).map(item => item.lang))].sort())
+const chosenLanguage = ref('')
+const activeLanguage = computed(() => languages.value.includes(chosenLanguage.value)
+  ? chosenLanguage.value
+  : matchWikiLanguage(locale.value, languages.value) || languages.value[0] || null)
+const scopedPages = computed(() => (store.wikiPages || []).filter(item => (item.lang || null) === activeLanguage.value))
+const legacyPages = computed(() => activeLanguage.value
+  ? (store.wikiPages || []).filter(item => !item.lang && !isIndexPage(item))
+  : [])
+const home = computed(() => scopedPages.value.find(isIndexPage))
 // A wiki holding only the scaffold index has nothing to read yet.
-const hasContentPages = computed(() => !!store.wikiPages?.some(item => !isIndexPage(item)))
+const hasContentPages = computed(() => scopedPages.value.some(item => !isIndexPage(item)))
 let active = true
 
 const TYPE_LABELS = {
@@ -134,12 +154,11 @@ function typeLabel(type) {
   return Object.hasOwn(TYPE_LABELS, type) ? TYPE_LABELS[type] : TYPE_LABELS.other
 }
 
-const matchingPages = computed(() => {
+const matchesQuery = item => {
   const term = query.value.trim().toLowerCase()
-  return (store.wikiPages || []).filter(item =>
-    item !== home.value && (!term || item.title.toLowerCase().includes(term) || item.rel.toLowerCase().includes(term))
-  )
-})
+  return !term || item.title.toLowerCase().includes(term) || item.rel.toLowerCase().includes(term)
+}
+const matchingPages = computed(() => scopedPages.value.filter(item => item !== home.value && matchesQuery(item)))
 
 const navigationGroups = computed(() => {
   const groups = Object.values(TYPE_LABELS).map(label => ({
@@ -153,6 +172,10 @@ const navigationGroups = computed(() => {
       pages: [...matchingPages.value].sort((a, b) => b.mtimeMs - a.mtimeMs || a.rel.localeCompare(b.rel)).slice(0, 10),
     })
   }
+  groups.push({
+    label: 'aidoc.wikiLegacy',
+    pages: legacyPages.value.filter(matchesQuery).sort((a, b) => a.title.localeCompare(b.title) || a.rel.localeCompare(b.rel)),
+  })
   return groups.filter(group => group.pages.length)
 })
 
@@ -190,6 +213,14 @@ function wikiDestination(anchor) {
 
 function selectPage(rel) {
   if (isWikiRel(rel)) store.openWikiPage(rel)
+}
+
+async function selectLanguage(lang) {
+  if (lang === activeLanguage.value) return
+  chosenLanguage.value = lang
+  query.value = ''
+  await nextTick()
+  selectPage(home.value?.rel || scopedPages.value[0]?.rel)
 }
 
 function followLink(event) {
@@ -235,7 +266,7 @@ onMounted(async () => {
   await store.loadWikiPages()
   if (!active) return
   loadingPages.value = false
-  if (hasContentPages.value) selectPage(home.value?.rel || store.wikiPages?.[0]?.rel)
+  if (hasContentPages.value) selectPage(home.value?.rel || scopedPages.value[0]?.rel)
 })
 onBeforeUnmount(() => { active = false })
 </script>
@@ -281,6 +312,33 @@ onBeforeUnmount(() => { active = false })
 .wiki-navigation, .wiki-details { padding: 0.75rem; font-size: var(--fs-secondary); }
 .wiki-navigation { border-inline-end: 1px solid var(--border); }
 .wiki-details { border-inline-start: 1px solid var(--border); }
+.wiki-language {
+  display: flex;
+  gap: 0.125rem;
+  padding: 0.125rem;
+  margin-bottom: 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-hover);
+}
+.wiki-language button {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: var(--fs-secondary);
+  text-align: center;
+}
+.wiki-language button:hover { color: var(--text-primary); }
+.wiki-language button[aria-checked='true'] {
+  background: linear-gradient(135deg, #0F0F0F, #1A1A1A, #374151);
+  color: var(--bg-sidebar);
+}
+.wiki-language button:focus-visible {
+  outline: 0.125rem solid var(--text-secondary);
+  outline-offset: 0.0625rem;
+}
 .wiki-search {
   display: flex;
   align-items: center;

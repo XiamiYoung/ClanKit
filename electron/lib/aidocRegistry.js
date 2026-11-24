@@ -6,6 +6,7 @@ const path = require('path')
 const { randomUUID } = require('node:crypto')
 const { rootHash } = require('./aidocIndex')
 const { INGESTIBLE_EXTS } = require('./aidocSourceText')
+const { WIKI_LANGUAGES, isWikiLanguage } = require('./aidocLanguages')
 
 const VERSION = 1
 const KB_SOURCE_PREFIX = 'kb_source/'
@@ -24,6 +25,15 @@ function validRecords(map, isValid) {
   return Object.fromEntries(Object.entries(map).filter(([, record]) => isPlainObject(record) && isValid(record)))
 }
 
+const isLanguageRecord = record =>
+  isPlainObject(record) && typeof record.hash === 'string' && typeof record.ingestedAt === 'string' && Array.isArray(record.pages)
+
+// Per-language ingest records of one source: { <lang>: { hash, ingestedAt, pages } }.
+function validLanguageRecords(map) {
+  if (!isPlainObject(map)) return {}
+  return Object.fromEntries(Object.entries(map).filter(([lang, record]) => isWikiLanguage(lang) && isLanguageRecord(record)))
+}
+
 function parseRegistry(text) {
   const parsed = JSON.parse(text)
   // Plan-2 registry files carry no version field; treat a missing version as v1.
@@ -32,8 +42,11 @@ function parseRegistry(text) {
   }
   return {
     version: VERSION,
-    sources: validRecords(parsed.sources, record =>
-      typeof record.hash === 'string' && typeof record.ingestedAt === 'string' && Array.isArray(record.pages)),
+    sources: Object.fromEntries(Object.entries(validRecords(parsed.sources, record =>
+      typeof record.hash === 'string' && typeof record.ingestedAt === 'string' && Array.isArray(record.pages)))
+      // Records from before per-language wikis carry no langs: they count as not ingested for any language.
+      .map(([rel, record]) => [rel, { ...record, langs: validLanguageRecords(record.langs) }])
+      .filter(([, record]) => Object.keys(record.langs).length > 0)),
     pages: validRecords(parsed.pages, record => typeof record.hash === 'string')
   }
 }
@@ -123,17 +136,32 @@ async function updateRegistry(file, update) {
   }
 }
 
-// keepPages: previously recorded page rels to union into the source's page list (caller vets existence).
-// They only extend sources[rel].pages; registry.pages entries are written solely for `pages`.
-function recordIngested(registry, { rel, hash, mtimeMs, size, ingestedAt, pages, keepPages = [] }) {
+// keepPages: previously recorded page rels to union into the language's page list (caller vets existence).
+// They only extend the page list; registry.pages entries are written solely for `pages`.
+// The top-level hash, mtime and size describe the latest ingested snapshot; langs[lang].hash says which
+// version each language wiki was built from, so a language is stale when its hash differs from the top-level one.
+function recordIngested(registry, { rel, lang, hash, mtimeMs, size, ingestedAt, pages, keepPages = [] }) {
+  if (!isWikiLanguage(lang)) throw new Error(`Unsupported wiki language: ${lang}`)
   const next = {
     version: VERSION,
     sources: { ...registry.sources },
     pages: { ...registry.pages }
   }
   for (const { rel: pageRel, ...rest } of pages) next.pages[pageRel] = { ...rest }
-  next.sources[rel] = { hash, mtimeMs, size, ingestedAt, pages: [...new Set([...keepPages, ...pages.map(p => p.rel)])] }
+  const langs = {
+    ...registry.sources[rel]?.langs,
+    [lang]: { hash, ingestedAt, pages: [...new Set([...keepPages, ...pages.map(p => p.rel)])] }
+  }
+  next.sources[rel] = {
+    hash, mtimeMs, size, ingestedAt, langs,
+    pages: [...new Set(WIKI_LANGUAGES.flatMap(code => langs[code]?.pages || []))]
+  }
   return next
+}
+
+// Languages (of `languages`) whose wiki lacks the current version of the source.
+function pendingLanguages(record, languages, currentHash = record?.hash) {
+  return languages.filter(lang => !record?.langs?.[lang] || record.langs[lang].hash !== currentHash)
 }
 
 function classifySources({ scanned, registry }) {
@@ -154,5 +182,5 @@ function removedSources({ scanned, registry }) {
 }
 
 module.exports = {
-  registryPathFor, registryFileKey, readRegistry, readRegistryStrict: readRegistryForUpdate, readRegistrySync, writeRegistry, updateRegistry, recordIngested, classifySources, removedSources
+  registryPathFor, registryFileKey, readRegistry, readRegistryStrict: readRegistryForUpdate, readRegistrySync, writeRegistry, updateRegistry, recordIngested, pendingLanguages, classifySources, removedSources
 }

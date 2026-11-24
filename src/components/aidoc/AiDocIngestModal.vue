@@ -34,6 +34,19 @@
           <p class="ingest-detail ingest-model-hint">{{ t('aidoc.ingestModelHint') }}</p>
         </div>
 
+        <fieldset v-if="showLanguageControls" class="ingest-languages" data-testid="aidoc-ingest-languages" :disabled="store.ingesting">
+          <legend class="ingest-detail">{{ t('aidoc.ingestLanguagesLabel') }}</legend>
+          <div class="ingest-language-options">
+            <label v-for="lang in languageChoices" :key="lang" class="ingest-language">
+              <input type="checkbox" :value="lang" :data-testid="'aidoc-ingest-language-' + lang"
+                :checked="selectedLanguages.includes(lang)" :disabled="isLastSelected(lang)"
+                @change="toggleLanguage(lang, $event)">
+              <span>{{ t(languageLabelKey(lang)) }}</span>
+            </label>
+          </div>
+          <p class="ingest-detail ingest-language-hint" data-testid="aidoc-ingest-languages-hint">{{ t('aidoc.ingestLanguagesHint') }}</p>
+        </fieldset>
+
         <template v-if="store.ingestResult">
           <div class="ingest-summary" role="status">
             <div class="ingest-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"
@@ -48,8 +61,9 @@
             <p v-if="modelErrorHint" class="ingest-alert" role="alert" data-testid="aidoc-ingest-model-hint">{{ t('aidoc.ingestModelErrorHint') }}</p>
           </div>
           <ul v-if="store.ingestResult.failed.length" class="ingest-list">
-            <li v-for="failure in store.ingestResult.failed" :key="failure.rel" class="ingest-failure">
+            <li v-for="failure in store.ingestResult.failed" :key="failure.rel + '|' + failure.lang" class="ingest-failure">
               <span class="ingest-path">{{ failure.rel }}</span>
+              <span v-if="failure.lang" class="ingest-detail" data-testid="aidoc-ingest-failure-language">{{ t(languageLabelKey(failure.lang)) }}</span>
               <span class="ingest-detail">{{ t(reasonKeys[failure.reason] || 'aidoc.reasonAgentError') }}</span>
               <span v-if="failure.detail" class="ingest-detail">{{ failure.detail }}</span>
             </li>
@@ -107,6 +121,7 @@ import { useAiDocStore } from '../../stores/aidoc'
 import AppButton from '../common/AppButton.vue'
 import AppTooltip from '../common/AppTooltip.vue'
 import AiDocIngestTree from './AiDocIngestTree.vue'
+import { languageLabelKey } from '../../utils/aidocLanguages'
 
 const { t, locale } = useI18n()
 const store = useAiDocStore()
@@ -132,13 +147,32 @@ const modelSourceKey = computed(() => {
   return same ? modelSourceKeys[plan?.selectedSource] : undefined
 })
 const selectionComplete = computed(() => Boolean(store.ingestModel?.providerId && store.ingestModel.model?.trim()))
-const canStart = computed(() => (hasModelChoice.value ? selectionComplete.value : store.ingestPlan?.providerReady))
+const languageChoices = computed(() => store.ingestPlan?.languages?.available || [])
+const selectedLanguages = computed(() => store.ingestLanguages || [])
+const showLanguageControls = computed(() => confirming.value && languageChoices.value.length > 0)
+// Without a language, or while the plan is recomputed for a changed selection, there is nothing valid to start.
+const languagesReady = computed(() => selectedLanguages.value.length > 0 && !store.ingestPlanLoading && store.ingestPlan?.sources.length > 0)
+const canStart = computed(() => Boolean((hasModelChoice.value ? selectionComplete.value : store.ingestPlan?.providerReady) && languagesReady.value))
 // A model that the provider rejects fails every source the same way, so point the user at the picker.
 const modelErrorHint = computed(() => {
   const result = store.ingestResult
   return Boolean(result && (result.aborted === 'consecutive_agent_errors'
     || result.failed?.some(failure => /model.*(not exist|not found)|404/i.test(failure.detail || ''))))
 })
+
+// The last selected language cannot be unchecked: its box is disabled and a forced change is ignored.
+const isLastSelected = lang => selectedLanguages.value.length === 1 && selectedLanguages.value[0] === lang
+
+function toggleLanguage(lang, event) {
+  const next = new Set(selectedLanguages.value)
+  if (event.target.checked) next.add(lang)
+  else next.delete(lang)
+  if (!next.size) {
+    event.target.checked = true
+    return
+  }
+  store.setIngestLanguages([...next])
+}
 
 function changeProvider(providerId) {
   const remembered = store.ingestPlan.selected
@@ -263,6 +297,42 @@ onUnmounted(() => dialog.value?.close())
 .ingest-input:disabled { opacity: 0.6; }
 .ingest-model-hint {
   grid-column: 1 / -1;
+  margin: 0;
+  font-size: var(--fs-caption);
+}
+.ingest-languages {
+  display: grid;
+  gap: 0.375rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.ingest-languages legend {
+  padding: 0;
+  margin-bottom: 0.25rem;
+}
+.ingest-language-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem 1.25rem;
+}
+.ingest-language {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  cursor: pointer;
+}
+.ingest-language input {
+  margin: 0;
+  accent-color: var(--ingest-title);
+}
+.ingest-language input:disabled { cursor: not-allowed; }
+.ingest-language input:focus-visible {
+  outline: 0.125rem solid var(--text-muted);
+  outline-offset: 0.0625rem;
+}
+.ingest-language-hint {
   margin: 0;
   font-size: var(--fs-caption);
 }

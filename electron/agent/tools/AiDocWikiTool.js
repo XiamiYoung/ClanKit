@@ -5,6 +5,7 @@ const path = require('node:path')
 const { BaseTool } = require('./BaseTool')
 const { INGESTIBLE_EXTS, loadSourceText, readSourceChunk } = require('../../lib/aidocSourceText')
 const { parseFrontmatter, validateWikiFrontmatter, sha256Text } = require('../../lib/aidocFrontmatter')
+const { isWikiLanguage, wikiLanguageRoot } = require('../../lib/aidocLanguages')
 
 const AREAS = ['kb_source', 'wiki']
 const MAX_LIST = 300
@@ -15,9 +16,10 @@ const MAX_WIKI_WRITE_CHARS = 200000
 const MAX_SEGMENT_CHARS = 120
 // Temp files created by atomic writes: .<name>.<pid>.<random>.tmp
 const TEMP_FILE = /^\..+\.\d+\.[a-z0-9]+\.tmp$/
+// File names (relative to the language root) the model may read but never write.
 const READONLY_FILES = {
-  'wiki/schema.md': 'SCHEMA.md is owned by the user and is read-only. Use read_wiki to consult it.',
-  'wiki/log.md': 'log.md is maintained by the application and is read-only.'
+  'schema.md': 'SCHEMA.md is owned by the user and is read-only. Use read_wiki to consult it.',
+  'log.md': 'log.md is maintained by the application and is read-only.'
 }
 const RESERVED_DEVICE_NAME = /^(con|prn|aux|nul|conin\$|conout\$|com[1-9]|lpt[1-9])$/i
 const USER_EDIT_NOTE = '[NOTE: this page contains edits made by the user; preserve their content]'
@@ -119,12 +121,17 @@ function humanSize(bytes) {
 }
 
 class AiDocWikiTool extends BaseTool {
-  constructor({ root, registry, sourceText } = {}) {
+  // lang: the wiki language this tool instance maintains. Wiki access is rooted at wiki/<lang>/.
+  constructor({ root, registry, sourceText, lang } = {}) {
+    if (!isWikiLanguage(lang)) throw new Error(`Unsupported wiki language: ${lang}`)
+    const wikiRoot = wikiLanguageRoot(lang)
     super(
       'aidoc_wiki',
-      'Read source documents (kb_source/) and read or maintain wiki pages (wiki/) of the AI Doc knowledge base. Access is confined to those two folders.',
+      `Read source documents (kb_source/) and read or maintain wiki pages (${wikiRoot}/) of the AI Doc knowledge base. Access is confined to kb_source/ and ${wikiRoot}/.`,
       'aidoc_wiki'
     )
+    this.lang = lang
+    this.wikiRoot = wikiRoot
     this.root = root
     this.registry = registry || { version: 1, sources: {}, pages: {} }
     this.sourceText = sourceText
@@ -167,16 +174,16 @@ class AiDocWikiTool extends BaseTool {
           type: 'string',
           enum: ['list', 'read_source', 'read_wiki', 'write_wiki', 'edit_wiki'],
           description: [
-            '- "list": list files in an area. REQUIRED: area. OPTIONAL: dir (sub-directory), query (case-insensitive filename substring).',
+            '- "list": list files in an area. REQUIRED: area. OPTIONAL: dir (sub-directory), query (case-insensitive filename substring). Area "wiki" lists ' + this.wikiRoot + '/ and dir is relative to it.',
             '- "read_source": read a source document, paginated. REQUIRED: path (kb_source/...). OPTIONAL: offset, limit.',
-            '- "read_wiki": read a whole wiki page. REQUIRED: path (wiki/...).',
-            '- "write_wiki" / "edit_wiki": modify wiki pages.'
+            '- "read_wiki": read a whole wiki page. REQUIRED: path (' + this.wikiRoot + '/...).',
+            '- "write_wiki" / "edit_wiki": modify wiki pages under ' + this.wikiRoot + '/.'
           ].join('\n')
         },
         area: { type: 'string', enum: AREAS, description: 'list only: which area to list.' },
         dir: { type: 'string', description: 'list only: sub-directory inside the area, relative.' },
         query: { type: 'string', description: 'list only: filename substring filter.' },
-        path: { type: 'string', description: 'Relative path starting with kb_source/ or wiki/. Never absolute, never containing "..".' },
+        path: { type: 'string', description: 'Relative path starting with kb_source/ or ' + this.wikiRoot + '/. Never absolute, never containing "..".' },
         offset: { type: 'number', description: 'read_source only: character offset to start from.' },
         limit: { type: 'number', description: 'read_source only: maximum characters to return.' },
         content: { type: 'string', description: 'write_wiki only: the full page content, including frontmatter (type, title, sources, updated).' },
@@ -234,11 +241,20 @@ class AiDocWikiTool extends BaseTool {
     }
   }
 
+  /** Wiki paths must stay inside this tool's language folder. Returns an error message, or null when allowed. */
+  _confineError(target) {
+    if (target.area !== 'wiki' || target.rel === this.wikiRoot || target.rel.startsWith(this.wikiRoot + '/')) return null
+    return `Wiki paths must be inside ${this.wikiRoot}/`
+  }
+
   _list({ area, dir, query }) {
     if (!AREAS.includes(area)) return this._err('area must be "kb_source" or "wiki"')
-    const target = resolveWikiToolPath(this.root, dir ? `${area}/${dir}` : area)
+    const base = area === 'wiki' ? this.wikiRoot : area
+    const target = resolveWikiToolPath(this.root, dir ? `${base}/${dir}` : base)
     if (!target.ok) return this._err(target.error)
     if (target.area !== area) return this._err('dir does not belong to the requested area')
+    const outside = this._confineError(target)
+    if (outside) return this._err(outside)
     if (!target.exists || !fs.statSync(target.abs).isDirectory()) return this._err('Directory not found')
 
     const needle = typeof query === 'string' ? query.trim().toLowerCase() : ''
@@ -300,18 +316,21 @@ class AiDocWikiTool extends BaseTool {
   _writeTarget(relPath) {
     const target = resolveWikiToolPath(this.root, relPath)
     if (!target.ok) return target
-    if (target.area !== 'wiki') return { ok: false, error: 'Only paths starting with wiki/ can be written' }
+    if (target.area !== 'wiki') return { ok: false, error: `Only paths starting with ${this.wikiRoot}/ can be written` }
+    const outside = this._confineError(target)
+    if (outside) return { ok: false, error: outside }
     const lower = target.rel.toLowerCase()
-    if (READONLY_FILES[lower]) return { ok: false, error: READONLY_FILES[lower] }
+    const inLanguageRoot = target.rel.slice(this.wikiRoot.length + 1).toLowerCase()
+    if (Object.hasOwn(READONLY_FILES, inLanguageRoot)) return { ok: false, error: READONLY_FILES[inLanguageRoot] }
     const segments = target.rel.split('/').slice(1)
-    if (segments.length === 0) return { ok: false, error: 'path must point to a .md file inside wiki/' }
+    if (inLanguageRoot === '') return { ok: false, error: `path must point to a .md file inside ${this.wikiRoot}/` }
     for (const seg of segments) {
       if (seg.length > MAX_SEGMENT_CHARS) return { ok: false, error: `Invalid path: a name segment is longer than ${MAX_SEGMENT_CHARS} characters` }
       if (/[\x00-\x1f\x7f]/.test(seg)) return { ok: false, error: 'Invalid path: control characters are not allowed' }
     }
     if (path.extname(target.rel).toLowerCase() !== '.md') return { ok: false, error: 'Only .md files can be written; the path must end with .md' }
     if (target.exists && !fs.statSync(target.abs).isFile()) return { ok: false, error: `Not a file: ${target.rel}` }
-    return { ok: true, target, isIndex: lower === 'wiki/index.md' }
+    return { ok: true, target, isIndex: lower === `${this.wikiRoot.toLowerCase()}/index.md` }
   }
 
   /** True when an existing page differs from what the app (or this tool) last wrote, or is not registered at all. */
@@ -432,7 +451,9 @@ class AiDocWikiTool extends BaseTool {
   _readWiki({ path: relPath }) {
     const target = resolveWikiToolPath(this.root, relPath)
     if (!target.ok) return this._err(target.error)
-    if (target.area !== 'wiki') return this._err('read_wiki requires a path starting with wiki/')
+    if (target.area !== 'wiki') return this._err(`read_wiki requires a path starting with ${this.wikiRoot}/`)
+    const outside = this._confineError(target)
+    if (outside) return this._err(outside)
     if (!target.exists || !fs.statSync(target.abs).isFile()) return this._err(`Page not found: ${target.rel}`)
 
     if (fs.statSync(target.abs).size > MAX_WIKI_READ_BYTES) return this._err('Page is too large to read')

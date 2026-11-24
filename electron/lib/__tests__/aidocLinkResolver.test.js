@@ -37,6 +37,40 @@ describe('AI Doc link resolution', () => {
     expect(resolve('wiki/index.md', 'cept/a')).toEqual({ kind: 'unresolved' })
   })
 
+  describe('language wiki trees', () => {
+    const files = [
+      'wiki/en/Topic.md', 'wiki/zh/Topic.md', 'wiki/en/index.md', 'wiki/zh/index.md', 'wiki/Topic.md',
+      'wiki/en/sub/Topic.md', 'kb_source/source.md',
+    ]
+    const resolve = createLinkResolver(files)
+
+    it('resolves a basename inside the language of the linking page', () => {
+      expect(resolve('wiki/en/index.md', 'Topic')).toEqual({ kind: 'resolved', rel: 'wiki/en/Topic.md' })
+      expect(resolve('wiki/zh/index.md', 'topic')).toEqual({ kind: 'resolved', rel: 'wiki/zh/Topic.md' })
+      expect(resolve('wiki/Topic.md', 'Topic')).toEqual({ kind: 'resolved', rel: 'wiki/Topic.md' })
+    })
+
+    it('never resolves a wiki link into another tree', () => {
+      const lone = createLinkResolver(['wiki/zh/Only.md', 'wiki/Flat.md'])
+      expect(lone('wiki/en/index.md', 'Only')).toEqual({ kind: 'unresolved' })
+      expect(lone('wiki/en/index.md', 'wiki/zh/Only')).toEqual({ kind: 'unresolved' })
+      expect(lone('wiki/zh/index.md', 'Flat')).toEqual({ kind: 'unresolved' })
+      expect(lone('wiki/index.md', 'Only')).toEqual({ kind: 'unresolved' })
+    })
+
+    it('still reports real ambiguity inside one language tree', () => {
+      expect(resolve('wiki/en/other/x.md', 'Topic')).toEqual({
+        kind: 'ambiguous', candidates: ['wiki/en/Topic.md', 'wiki/en/sub/Topic.md'],
+      })
+      expect(resolve('wiki/en/sub/x.md', 'Topic')).toEqual({ kind: 'resolved', rel: 'wiki/en/sub/Topic.md' })
+    })
+
+    it('lets wiki pages link to sources of any folder', () => {
+      expect(resolve('wiki/zh/index.md', 'source')).toEqual({ kind: 'resolved', rel: 'kb_source/source.md' })
+      expect(resolve('wiki/zh/index.md', 'kb_source/source.md')).toEqual({ kind: 'resolved', rel: 'kb_source/source.md' })
+    })
+  })
+
   it('prefers the source directory, then wiki, then reports sorted candidates', () => {
     const resolve = createLinkResolver(['wiki/z/X.md', 'kb_source/x.md', 'wiki/a/x.md', 'wiki/a/x.md'])
     expect(resolve('kb_source/y.md', 'x')).toEqual({ kind: 'resolved', rel: 'kb_source/x.md' })

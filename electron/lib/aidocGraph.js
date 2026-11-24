@@ -4,25 +4,33 @@ const { AIDOC_FOLDERS } = require('./aidocLayout')
 const { readRegistry, registryPathFor } = require('./aidocRegistry')
 const { createLinkResolver } = require('./aidocLinkResolver')
 const { isImageWikiTarget } = require('./aidocLinkParser')
+const { wikiLanguageOf } = require('./aidocLanguages')
 
 async function readIngestedSources(dataDir, root) {
   return (await readRegistry(registryPathFor(dataDir, root))).sources
 }
 
-function buildGraph({ files, ingested }) {
+// lang: the preferred wiki language. Its pages are shown when that language folder exists in the vault;
+// otherwise every wiki page is shown.
+function buildGraph({ files, ingested, lang }) {
   const nodes = new Map()
   const links = []
   const groups = new Set()
   const targetsBySource = new Map()
-  const resolve = createLinkResolver(files.map(file => file.rel))
+  const hasLanguageWiki = Boolean(lang) && files.some(file => wikiLanguageOf(file.rel) === lang)
+  const inScope = rel => !rel.startsWith(AIDOC_FOLDERS.WIKI + '/') || !hasLanguageWiki || wikiLanguageOf(rel) === lang
+  const resolve = createLinkResolver(files.map(file => file.rel).filter(inScope))
 
   for (const { rel, abs, ext, title } of files) {
+    if (!inScope(rel)) continue
     const segments = rel.split('/')
-    const [area, folder] = segments
+    const [area] = segments
     if (area !== AIDOC_FOLDERS.WIKI &&
       !(area === AIDOC_FOLDERS.KB_SOURCE && Object.hasOwn(ingested, rel))) continue
 
-    const group = segments.length > 2 ? area + '/' + folder : area
+    // A language folder is the wiki root: colour wiki pages by their first folder below it.
+    const folders = wikiLanguageOf(rel) ? segments.slice(2) : segments.slice(1)
+    const group = folders.length > 1 ? area + '/' + folders[0] : area
     nodes.set(rel, { id: rel, path: abs, name: segments.at(-1), title, ext, area, group, kind: 'doc', degree: 0 })
     groups.add(group)
   }

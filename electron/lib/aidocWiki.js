@@ -3,10 +3,12 @@
 const fs = require('fs')
 const path = require('path')
 const { extractWikiLinks } = require('./aidocLinkParser')
+const { wikiLanguageRoot } = require('./aidocLanguages')
 
-const DEFAULT_SCHEMA_MD = `# Wiki Schema
+// {WIKI} is replaced with the language root (for example wiki/en) when the scaffold is written.
+const SCHEMA_TEMPLATE_EN = `# Wiki Schema
 
-This wiki is maintained by an AI agent from the user's source documents. Follow these rules exactly.
+This wiki is maintained by an AI agent from the user's source documents. Follow these rules exactly. It lives under \`{WIKI}/\`: read and write only inside that folder, and write page prose in English.
 
 ## Page types
 
@@ -40,7 +42,7 @@ updated: YYYY-MM-DD
 
 ## File names
 
-- A page file is named after its title: \`Page Title.md\`.
+- A page file is named after its title and stored under \`{WIKI}/\`: \`Page Title.md\`.
 - Do not use characters that are illegal in file names (\\ / : * ? " < > |) or that break links ([ ] # ^).
 - Keep names short and stable. Reuse an existing page instead of creating a near-duplicate.
 
@@ -62,34 +64,58 @@ updated: YYYY-MM-DD
 
 ## Rules
 
-- \`wiki/log.md\` and \`wiki/SCHEMA.md\` are owned by the app and the user. Never write them; the app appends to the log itself.
+- \`{WIKI}/log.md\` and \`{WIKI}/SCHEMA.md\` are owned by the app and the user. Never write them; the app appends to the log itself.
 - Every page you write or revise must be listed in \`index.md\`.
 - Do not invent anything that the source does not say.
 - If new information conflicts with an existing page, keep both and note the conflict (with its sources) inside the page. Never silently overwrite.
 - Do not edit or delete the user's source files.
 `
 
-const INDEX_MD = `# Index
+const INDEX_MD_EN = `# Index
 
 Catalog of all wiki pages, grouped by type. One line per page: \`- [[Page Name]] — one-sentence summary\`.
 `
 
-const LOG_MD = '# Log\n'
-
-const UNCATEGORIZED = '## Uncategorized'
-
-function _wikiDir(root) {
-  return path.join(root, 'wiki')
+const SCAFFOLD_EN = {
+  schema: SCHEMA_TEMPLATE_EN,
+  index: INDEX_MD_EN,
+  log: '# Log\n',
+  uncategorized: '## Uncategorized',
 }
 
-function ensureWikiScaffold(root) {
-  const dir = _wikiDir(root)
+// Non-English scaffold texts live in a data file so that source code stays English-only.
+const SCAFFOLD_TEMPLATES = { en: SCAFFOLD_EN, ...require('../data/aidoc-wiki-templates.json') }
+
+function _scaffoldFor(lang) {
+  const template = SCAFFOLD_TEMPLATES[lang]
+  if (!template) throw new Error(`Unsupported wiki language: ${lang}`)
+  return template
+}
+
+function defaultSchema(lang) {
+  return _scaffoldFor(lang).schema.replaceAll('{WIKI}', wikiLanguageRoot(lang))
+}
+
+function _wikiDir(root, lang) {
+  _scaffoldFor(lang)
+  return path.join(root, ...wikiLanguageRoot(lang).split('/'))
+}
+
+function ensureWikiScaffold(root, lang) {
+  const dir = _wikiDir(root, lang)
+  // A linked language folder could redirect scaffold writes outside the wiki.
+  try {
+    if (fs.lstatSync(dir).isSymbolicLink()) throw new Error(`${wikiLanguageRoot(lang)} must not be a link`)
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err
+  }
   fs.mkdirSync(dir, { recursive: true })
   const created = []
+  const template = _scaffoldFor(lang)
   const files = [
-    ['SCHEMA.md', DEFAULT_SCHEMA_MD],
-    ['index.md', INDEX_MD],
-    ['log.md', LOG_MD],
+    ['SCHEMA.md', defaultSchema(lang)],
+    ['index.md', template.index],
+    ['log.md', template.log],
   ]
   for (const [name, content] of files) {
     try {
@@ -111,9 +137,9 @@ function _singleLine(text) {
   return String(text == null ? '' : text).replace(/[\r\n]+/g, ' ').trim()
 }
 
-async function appendLog(root, { date, sourceRel, pages }) {
-  ensureWikiScaffold(root)
-  const logPath = path.join(_wikiDir(root), 'log.md')
+async function appendLog(root, lang, { date, sourceRel, pages }) {
+  ensureWikiScaffold(root, lang)
+  const logPath = path.join(_wikiDir(root, lang), 'log.md')
   const existing = await fs.promises.readFile(logPath, 'utf8')
   const lead = existing && !existing.endsWith('\n') ? '\n' : ''
   const lines = (pages || []).map(p => `- [[${_safeName(p)}]]\n`).join('')
@@ -127,9 +153,10 @@ function _baseName(rel) {
   return dot > 0 ? file.slice(0, dot) : file
 }
 
-async function ensureIndexCoverage(root, pages) {
-  ensureWikiScaffold(root)
-  const indexPath = path.join(_wikiDir(root), 'index.md')
+async function ensureIndexCoverage(root, lang, pages) {
+  ensureWikiScaffold(root, lang)
+  const indexPath = path.join(_wikiDir(root, lang), 'index.md')
+  const uncategorized = _scaffoldFor(lang).uncategorized
   const content = await fs.promises.readFile(indexPath, 'utf8')
   const linked = new Set(extractWikiLinks(content).map(l => l.toLowerCase()))
 
@@ -149,7 +176,7 @@ async function ensureIndexCoverage(root, pages) {
 
   const eol = content.includes('\r\n') ? '\r\n' : '\n'
   const block = lines.join(eol)
-  const heading = new RegExp(`^${UNCATEGORIZED}[ \\t]*\\r?$`, 'im').exec(content)
+  const heading = new RegExp(`^${uncategorized}[ \\t]*\\r?$`, 'im').exec(content)
   let next
   if (heading) {
     const afterHeading = heading.index + heading[0].length
@@ -159,10 +186,10 @@ async function ensureIndexCoverage(root, pages) {
     const tail = content.slice(end)
     next = `${head}${eol}${block}${eol}${tail ? `${eol}${tail}` : ''}`
   } else {
-    next = `${content.replace(/\s+$/, '')}${eol}${eol}${UNCATEGORIZED}${eol}${eol}${block}${eol}`
+    next = `${content.replace(/\s+$/, '')}${eol}${eol}${uncategorized}${eol}${eol}${block}${eol}`
   }
   await fs.promises.writeFile(indexPath, next, 'utf8')
   return { added }
 }
 
-module.exports = { DEFAULT_SCHEMA_MD, ensureWikiScaffold, appendLog, ensureIndexCoverage }
+module.exports = { defaultSchema, ensureWikiScaffold, appendLog, ensureIndexCoverage }

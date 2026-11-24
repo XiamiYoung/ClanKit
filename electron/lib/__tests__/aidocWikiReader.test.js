@@ -59,6 +59,68 @@ describe('AI Doc Wiki reader', () => {
     ])
   })
 
+  describe('language wikis', () => {
+    const page = title => `---\ntitle: ${title}\ntype: concept\n---\nBody of ${title} [[Shared]]`
+
+    async function twoLanguages() {
+      await write('wiki/en/index.md', '# Home en')
+      await write('wiki/en/SCHEMA.md', '# Schema')
+      await write('wiki/en/log.md', '# Log')
+      await write('wiki/en/Shared.md', page('Shared EN'))
+      await write('wiki/zh/index.md', '# Home zh')
+      await write('wiki/zh/SCHEMA.md', '# Schema')
+      await write('wiki/zh/log.md', '# Log')
+      await write('wiki/zh/Shared.md', page('Shared ZH'))
+      await write('wiki/Legacy.md', page('Legacy'))
+    }
+
+    it('tags each page with its language, flags every language index and hides scaffold files', async () => {
+      await twoLanguages()
+      const rows = (await listWikiPages(root)).map(item => [item.rel, item.lang, item.isIndex === true])
+      // Index pages come first; the order of the rest depends on the locale collation.
+      expect(rows.slice(0, 2)).toEqual([['wiki/en/index.md', 'en', true], ['wiki/zh/index.md', 'zh', true]])
+      expect(rows.slice(2).sort()).toEqual([
+        ['wiki/Legacy.md', null, false],
+        ['wiki/en/Shared.md', 'en', false],
+        ['wiki/zh/Shared.md', 'zh', false],
+      ])
+    })
+
+    it('lists a legacy index as a home entry without a language', async () => {
+      await write('wiki/index.md', '# Legacy home')
+      await write('wiki/SCHEMA.md', '# Schema')
+      expect(await listWikiPages(root)).toEqual([expect.objectContaining({ rel: 'wiki/index.md', lang: null, isIndex: true })])
+    })
+
+    it('scopes backlinks to the language tree of the page', () => {
+      const cache = { files: {
+        'wiki/en/A.md': { title: 'A en', links: ['Shared'] },
+        'wiki/zh/A.md': { title: 'A zh', links: ['Shared'] },
+        'wiki/en/Shared.md': { title: 'Shared en', links: [] },
+        'wiki/zh/Shared.md': { title: 'Shared zh', links: [] },
+        'wiki/Legacy.md': { title: 'Legacy', links: ['Shared'] },
+      } }
+      expect(buildBacklinks(cache, 'wiki/en/Shared.md')).toEqual([{ rel: 'wiki/en/A.md', title: 'A en' }])
+      expect(buildBacklinks(cache, 'wiki/zh/Shared.md')).toEqual([{ rel: 'wiki/zh/A.md', title: 'A zh' }])
+    })
+
+    it('resolves wikilinks of a page inside its own language only', async () => {
+      await twoLanguages()
+      const cache = { files: {
+        'wiki/en/Shared.md': { title: 'Shared EN', links: [] },
+        'wiki/zh/Shared.md': { title: 'Shared ZH', links: [] },
+        'wiki/en/index.md': { title: 'index', links: ['Shared'] },
+      } }
+      const en = await readWikiPage({ root, cache, rel: 'wiki/en/Shared.md' })
+      expect(en.links).toEqual({ Shared: 'wiki/en/Shared.md' })
+      const zh = await readWikiPage({ root, cache, rel: 'wiki/zh/Shared.md' })
+      expect(zh.links).toEqual({ Shared: 'wiki/zh/Shared.md' })
+      expect(zh.backlinks).toEqual([])
+      expect((await readWikiPage({ root, cache, rel: 'wiki/en/Shared.md' })).backlinks).toEqual([{ rel: 'wiki/en/index.md', title: 'index' }])
+      await expect(readWikiPage({ root, rel: 'wiki/zh/SCHEMA.md' })).rejects.toThrow()
+    })
+  })
+
   it('returns an empty list with no wiki folder', async () => {
     await write('kb_source', 'not a directory')
     expect(await listWikiPages(root)).toEqual([])

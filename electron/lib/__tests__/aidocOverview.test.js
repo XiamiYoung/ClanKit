@@ -20,7 +20,7 @@ afterEach(async () => {
   await fs.rm(dataDir, { recursive: true, force: true })
 })
 
-const overview = () => buildWikiOverview({ dataDir, root })
+const overview = language => buildWikiOverview({ dataDir, root, language })
 
 describe('buildWikiOverview', () => {
   it('returns null for missing, empty, and damaged records', async () => {
@@ -46,6 +46,44 @@ describe('buildWikiOverview', () => {
     expect(result.text).toContain('file_operation')
     expect(result.text).not.toMatch(/PRIVATE|one\.md/)
     expect(result.text.length).toBeLessThan(1500)
+  })
+
+  describe('language wikis', () => {
+    const pages = {
+      'wiki/en/a.md': { hash: 'x', type: 'summary', updated: '2026-01-01' },
+      'wiki/en/b.md': { hash: 'x', type: 'summary', updated: '2026-02-01' },
+      'wiki/zh/a.md': { hash: 'x', type: 'concept', updated: '2026-03-01' },
+    }
+    const posix = value => value.replace(/\\/g, '/')
+
+    it('describes the language folder matching the configured language', async () => {
+      await writeRegistry(file, { version: 1, sources: {}, pages })
+      const zh = overview('zh')
+      expect(zh).toMatchObject({ pageCount: 1, byType: { concept: 1 }, lastUpdated: '2026-03-01' })
+      expect(zh.text).toContain(`Location: ${posix(root)}/wiki/zh\n`)
+      expect(zh.text).toContain(`read \`${posix(root)}/wiki/zh/index.md\``)
+      const en = overview('en')
+      expect(en).toMatchObject({ pageCount: 2, byType: { summary: 2 }, lastUpdated: '2026-02-01' })
+      expect(en.text).toContain(`read \`${posix(root)}/wiki/en/index.md\``)
+      expect(overview('zh-CN').pageCount).toBe(1)
+    })
+
+    it('falls back to the first available language when the configured one has no pages', async () => {
+      await writeRegistry(file, { version: 1, sources: {}, pages: { 'wiki/zh/a.md': pages['wiki/zh/a.md'] } })
+      const fallback = overview('en')
+      expect(fallback.pageCount).toBe(1)
+      expect(fallback.text).toContain(`${posix(root)}/wiki/zh/index.md`)
+      expect(overview(undefined).pageCount).toBe(1)
+    })
+
+    it('ignores legacy flat pages while a language wiki exists and uses them otherwise', async () => {
+      await writeRegistry(file, { version: 1, sources: {}, pages: { ...pages, 'wiki/old.md': { hash: 'y', type: 'entity' } } })
+      expect(overview('en').pageCount).toBe(2)
+      await writeRegistry(file, { version: 1, sources: {}, pages: { 'wiki/old.md': { hash: 'y', type: 'entity' } } })
+      const legacy = overview('zh')
+      expect(legacy.pageCount).toBe(1)
+      expect(legacy.text).toContain(`read \`${posix(root)}/wiki/index.md\``)
+    })
   })
 
   it('refreshes the cache when a same-mtime registry is atomically replaced', async () => {

@@ -113,7 +113,7 @@ it('runs only selected sources with a restricted main model and publishes the ne
     expect(loopConfig.providers.map(provider => provider.id)).toEqual(['my-provider'])
     onAction('write_wiki')
     await tool.execute('write', {
-      operation: 'write_wiki', path: 'wiki/note.md',
+      operation: 'write_wiki', path: 'wiki/en/note.md',
       content: '---\ntype: summary\ntitle: note\nsources:\n  - kb_source/note.md\nupdated: 2026-11-24\n---\n\nA wiki note.',
     })
   })
@@ -127,16 +127,16 @@ it('runs only selected sources with a restricted main model and publishes the ne
   }))
   await expect(invoke('graph-data')).resolves.toMatchObject({
     hasIndex: true, nodes: expect.arrayContaining([
-      expect.objectContaining({ id: 'wiki/note.md' }),
+      expect.objectContaining({ id: 'wiki/en/note.md' }),
       expect.objectContaining({ id: 'kb_source/note.md' }),
     ]),
   })
   await expect(invoke('source-states')).resolves.toMatchObject({ states: { [source]: 'ingested' } })
   await expect(invoke('wiki-pages')).resolves.toMatchObject({
-    pages: expect.arrayContaining([expect.objectContaining({ rel: 'wiki/note.md', type: 'summary' })]),
+    pages: expect.arrayContaining([expect.objectContaining({ rel: 'wiki/en/note.md', type: 'summary' })]),
   })
-  await expect(invoke('wiki-page', { rel: 'wiki/note.md' })).resolves.toMatchObject({
-    page: { rel: 'wiki/note.md', sources: [{ rel: 'kb_source/note.md', exists: true, path: source }] },
+  await expect(invoke('wiki-page', { rel: 'wiki/en/note.md' })).resolves.toMatchObject({
+    page: { rel: 'wiki/en/note.md', sources: [{ rel: 'kb_source/note.md', exists: true, path: source }] },
   })
   await expect(invoke('wiki-page', { rel: 'kb_source/note.md' })).resolves.toMatchObject({ success: false })
 
@@ -200,7 +200,7 @@ it('reports the active run through ingest-status and pushes a final complete eve
 
 const noteContent = ['---', 'type: summary', 'title: note', 'sources:', '  - kb_source/note.md', 'updated: 2026-11-24', '---', '', 'A wiki note.'].join('\n')
 const writeNote = async ({ tool }) => {
-  await tool.execute('write', { operation: 'write_wiki', path: 'wiki/note.md', content: noteContent })
+  await tool.execute('write', { operation: 'write_wiki', path: 'wiki/en/note.md', content: noteContent })
 }
 
 it('returns registry_unreadable without running the agent when the registry is corrupt', async () => {
@@ -430,5 +430,174 @@ describe('ingest model selection', () => {
     expect(writes).toEqual([])
     expect(runAgent).not.toHaveBeenCalled()
     await expect(fs.access(path.join(root, 'wiki'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+})
+
+describe('ingest languages', () => {
+  async function languageFixture(runAgent, config = {}) {
+    const writes = []
+    let stored = {}
+    const fixture = await ingestFixture(runAgent, { ...configuredProvider(), ...config }, {
+      readJSONAsync: async () => ({ DoCPath: fixture.root, ...configuredProvider(), ...config, ...stored }),
+      writeJSONAtomic: async (file, data) => { writes.push(data); stored = data },
+    })
+    return { ...fixture, writes, setConfig: patch => { stored = { ...stored, ...patch } } }
+  }
+
+  const writePage = lang => async ({ tool }) => {
+    await tool.execute('write', {
+      operation: 'write_wiki', path: `wiki/${lang}/note.md`,
+      content: noteContent,
+    })
+  }
+  const writeOwnPage = async input => writePage(input.lang)(input)
+
+  it('offers the supported languages and defaults the selection to the UI language', async () => {
+    for (const [language, selected] of [[undefined, ['en']], ['en', ['en']], ['zh', ['zh']], ['zh-CN', ['zh']], ['fr', ['en']]]) {
+      const { invoke } = await languageFixture(vi.fn(), { language })
+      await expect(invoke('ingest-plan')).resolves.toMatchObject({ success: true, languages: { available: ['en', 'zh'], selected } })
+    }
+  })
+
+  it('resolves a wikilink from a source to the wiki of the UI language when both languages have the page', async () => {
+    const { root, invoke } = await languageFixture(vi.fn(), { language: 'zh' })
+    for (const lang of ['en', 'zh']) {
+      await fs.mkdir(path.join(root, 'wiki', lang), { recursive: true })
+      await fs.writeFile(path.join(root, 'wiki', lang, 'Shared.md'), '# Shared\n')
+    }
+    const fromPath = path.join(root, 'kb_source', 'note.md')
+    await expect(invoke('resolve-link', { fromPath, target: 'Shared' })).resolves.toMatchObject({
+      success: true, kind: 'resolved', rel: 'wiki/zh/Shared.md',
+    })
+  })
+
+  it('prefers a remembered valid selection and falls back to the UI language when it is invalid', async () => {
+    const cases = [
+      [['en', 'zh'], ['en', 'zh']], [['zh', 'en', 'zh'], ['en', 'zh']], [['en'], ['en']],
+      [['fr'], ['zh']], [['en', 'fr'], ['zh']], [[], ['zh']], ['en', ['zh']], [null, ['zh']],
+    ]
+    for (const [remembered, selected] of cases) {
+      const { invoke } = await languageFixture(vi.fn(), { language: 'zh', aidocIngestLanguages: remembered })
+      const plan = await invoke('ingest-plan')
+      expect(plan.languages, JSON.stringify(remembered)).toEqual({ available: ['en', 'zh'], selected, otherWork: false })
+    }
+  })
+
+  it('plans the sources for the requested selection and rejects an invalid one', async () => {
+    const runAgent = vi.fn(writeOwnPage)
+    const { invoke } = await languageFixture(runAgent, { language: 'en' })
+    await invoke('ingest-run', { languages: ['en'] })
+    // Nothing is left in English, but Chinese still has work: the dialog is told so the language can be added.
+    await expect(invoke('ingest-plan')).resolves.toMatchObject({ sources: [], languages: { selected: ['en'], otherWork: true } })
+    await expect(invoke('ingest-plan', { languages: ['en', 'zh'] })).resolves.toMatchObject({
+      sources: [{ rel: 'kb_source/note.md', state: 'ingested', langs: ['zh'] }], languages: { selected: ['en', 'zh'], otherWork: false },
+    })
+    await expect(invoke('ingest-plan', { languages: ['zh'] })).resolves.toMatchObject({
+      sources: [{ langs: ['zh'] }], languages: { selected: ['zh'] },
+    })
+    for (const languages of [[], ['fr'], 'en', null]) {
+      await expect(invoke('ingest-plan', { languages })).resolves.toMatchObject({ success: false, code: 'invalid_language' })
+    }
+  })
+
+  it('rejects an invalid language selection before any write or agent call', async () => {
+    const runAgent = vi.fn()
+    const { root, invoke, writes } = await languageFixture(runAgent)
+    for (const languages of [[], ['fr'], ['en', 'fr'], 'en', null, [1]]) {
+      await expect(invoke('ingest-run', { languages })).resolves.toMatchObject({ success: false, code: 'invalid_language' })
+    }
+    expect(runAgent).not.toHaveBeenCalled()
+    expect(writes).toEqual([])
+    await expect(fs.access(path.join(root, 'wiki'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
+  it('runs one unit per language, tags progress with the language and remembers the selection', async () => {
+    const runAgent = vi.fn(writeOwnPage)
+    const { root, sender, invoke, writes } = await languageFixture(runAgent, { language: 'zh' })
+    await expect(invoke('ingest-run', { requestId: 'both', languages: ['zh', 'en', 'zh'] })).resolves.toMatchObject({
+      success: true, done: ['kb_source/note.md'], failed: [], stopped: false,
+    })
+    expect(runAgent.mock.calls.map(([input]) => [input.lang, input.wikiRoot, input.loopConfig.customModel])).toEqual([
+      ['en', 'wiki/en', 'main-model'], ['zh', 'wiki/zh', 'main-model'],
+    ])
+    expect(writes).toHaveLength(1)
+    expect(writes[0].aidocIngestLanguages).toEqual(['en', 'zh'])
+    await expect(fs.readFile(path.join(root, 'wiki', 'en', 'note.md'), 'utf8')).resolves.toBe(noteContent)
+    await expect(fs.readFile(path.join(root, 'wiki', 'zh', 'note.md'), 'utf8')).resolves.toBe(noteContent)
+
+    const events = sender.send.mock.calls.filter(([channel]) => channel === 'aidoc:ingest-progress').map(([, payload]) => payload)
+    expect(events.filter(event => event.status === 'done').map(event => [event.index, event.total, event.lang])).toEqual([
+      [0, 2, 'en'], [1, 2, 'zh'],
+    ])
+    expect(events.find(event => event.type === 'complete').summary).toMatchObject({
+      done: ['kb_source/note.md'], failed: [], remaining: 0, languages: ['en', 'zh'],
+    })
+    await expect(invoke('ingest-plan')).resolves.toMatchObject({ sources: [], languages: { selected: ['en', 'zh'] } })
+  })
+
+  it('uses the remembered or default selection without rewriting the config when none is sent', async () => {
+    const runAgent = vi.fn(writeOwnPage)
+    const { invoke, writes } = await languageFixture(runAgent, { language: 'zh' })
+    await invoke('ingest-run')
+    expect(runAgent.mock.calls.map(([input]) => input.lang)).toEqual(['zh'])
+    expect(writes).toEqual([])
+    const remembered = vi.fn(writeOwnPage)
+    const second = await languageFixture(remembered, { language: 'zh', aidocIngestLanguages: ['en'] })
+    await second.invoke('ingest-run')
+    expect(remembered.mock.calls.map(([input]) => input.lang)).toEqual(['en'])
+  })
+
+  it('reports a failed language with its language and keeps the finished one', async () => {
+    const runAgent = vi.fn(async input => {
+      if (input.lang === 'zh') throw new Error('zh failed')
+      await writePage('en')(input)
+    })
+    const { sender, invoke } = await languageFixture(runAgent)
+    const result = await invoke('ingest-run', { languages: ['en', 'zh'] })
+    expect(result).toMatchObject({
+      success: true, done: [], failed: [{ rel: 'kb_source/note.md', lang: 'zh', reason: 'agent_error', detail: 'zh failed' }],
+    })
+    const complete = sender.send.mock.calls.map(([, payload]) => payload).find(payload => payload?.type === 'complete')
+    expect(complete.summary).toMatchObject({ done: [], remaining: 0 })
+    expect(complete.summary.failed).toEqual([expect.objectContaining({ lang: 'zh' })])
+    // The English wiki is complete; only the Chinese one is offered again.
+    await expect(invoke('ingest-plan', { languages: ['en', 'zh'] })).resolves.toMatchObject({ sources: [{ langs: ['zh'] }] })
+  })
+
+  it('reports the language of the running unit through ingest-status', async () => {
+    let release
+    let taskEntered
+    const entered = new Promise(resolve => { taskEntered = resolve })
+    const runAgent = vi.fn(({ active }) => {
+      active.loop = { stop: () => release() }
+      taskEntered()
+      return new Promise(resolve => { release = resolve })
+    })
+    const { invoke } = await languageFixture(runAgent)
+    const work = invoke('ingest-run', { requestId: 'bg', languages: ['zh', 'en'] })
+    await entered
+    await expect(invoke('ingest-status')).resolves.toMatchObject({ running: true, index: 0, total: 2, lang: 'en' })
+    await invoke('ingest-stop')
+    await work
+  })
+
+  it('shows the pending source in sync-status only for the remembered languages', async () => {
+    const { invoke, setConfig } = await languageFixture(vi.fn(writeOwnPage), { language: 'en' })
+    await invoke('ingest-run', { languages: ['en'] })
+    await invoke('index-update', { requestId: 'u' })
+    await expect(invoke('sync-status')).resolves.toMatchObject({ pending: { new: 0, updated: 0, removed: 0 } })
+    setConfig({ aidocIngestLanguages: ['en', 'zh'] })
+    await expect(invoke('sync-status')).resolves.toMatchObject({ pending: { new: 1, updated: 0, removed: 0 } })
+  })
+
+  it('shows only the pages of the UI language in the graph when its folder exists', async () => {
+    const runAgent = vi.fn(writeOwnPage)
+    const { invoke } = await languageFixture(runAgent, { language: 'zh' })
+    await invoke('ingest-run', { languages: ['en', 'zh'] })
+    const graph = await invoke('graph-data')
+    const wikiIds = graph.nodes.filter(node => node.area === 'wiki').map(node => node.id)
+    expect(wikiIds).toContain('wiki/zh/note.md')
+    expect(wikiIds.every(id => id.startsWith('wiki/zh/'))).toBe(true)
+    expect(graph.nodes.map(node => node.id)).toContain('kb_source/note.md')
   })
 })

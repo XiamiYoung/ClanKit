@@ -32,9 +32,9 @@ const src = (name, text = 'Some meaningful source text. '.repeat(5)) => {
 const pageText = (title, sources, extra = '') =>
   `---\ntype: concept\ntitle: ${title}\nsources: [${sources.join(', ')}]\nupdated: 2026-11-24\n---\nBody of ${title}. ${extra}\n`
 const write = (tool, title, source, extra) =>
-  tool.execute('c', { operation: 'write_wiki', path: `wiki/${title}.md`, content: pageText(title, [source], extra) })
-const wikiRead = name => fs.readFileSync(path.join(root, 'wiki', name), 'utf8')
-const entry = (rel, extra = {}) => ({ rel, hash: 'h', mtimeMs: 1, size: 1, ingestedAt: 'x', pages: [], ...extra })
+  tool.execute('c', { operation: 'write_wiki', path: `wiki/en/${title}.md`, content: pageText(title, [source], extra) })
+const wikiRead = (name, lang = 'en') => fs.readFileSync(path.join(root, 'wiki', lang, name), 'utf8')
+const entry = (rel, extra = {}) => ({ rel, lang: 'en', hash: 'h', mtimeMs: 1, size: 1, ingestedAt: 'x', pages: [], ...extra })
 
 // Fake agent: writes one summary page per source (plus an optional shared page) through the real tool.
 const okAgent = (opts = {}) => vi.fn(async ({ source, tool }) => {
@@ -42,7 +42,7 @@ const okAgent = (opts = {}) => vi.fn(async ({ source, tool }) => {
   await write(tool, base + ' summary', source.rel)
   if (opts.extra) await write(tool, opts.extra, source.rel)
 })
-const run = (sources, runAgent, extra = {}) => runIngest({ root, registryFile, sources, runAgent, now: NOW, ...extra })
+const run = (sources, runAgent, extra = {}) => runIngest({ root, registryFile, sources, languages: ['en'], runAgent, now: NOW, ...extra })
 
 describe('runIngest', () => {
   it('ingests sources sequentially, records pages, log and index coverage', async () => {
@@ -51,17 +51,17 @@ describe('runIngest', () => {
     expect(result).toEqual({ done: [a.rel, b.rel], failed: [], stopped: false })
     const reg = await readRegistry(registryFile)
     expect(Object.keys(reg.sources).sort()).toEqual([a.rel, b.rel])
-    expect([...reg.sources[a.rel].pages].sort()).toEqual(['wiki/Shared Concept.md', 'wiki/a summary.md'])
+    expect([...reg.sources[a.rel].pages].sort()).toEqual(['wiki/en/Shared Concept.md', 'wiki/en/a summary.md'])
     for (const [rel, rec] of Object.entries(reg.pages)) {
       expect(rec.hash).toBe(sha256Text(fs.readFileSync(path.join(root, rel), 'utf8')))
       expect(rec.type).toBe('concept')
     }
     expect(reg.sources[a.rel].hash).toBe(await sha256File(a.abs))
     // The second source's write to the shared page succeeded and is reflected in the registry.
-    expect([...reg.sources[b.rel].pages].sort()).toEqual(['wiki/Shared Concept.md', 'wiki/b summary.md'])
+    expect([...reg.sources[b.rel].pages].sort()).toEqual(['wiki/en/Shared Concept.md', 'wiki/en/b summary.md'])
     expect(wikiRead('Shared Concept.md')).toContain(`sources: [${b.rel}]`)
-    expect(reg.pages['wiki/Shared Concept.md'].hash).toBe(sha256Text(wikiRead('Shared Concept.md')))
-    expect(reg.pages['wiki/Shared Concept.md'].handEdited).toBeUndefined()
+    expect(reg.pages['wiki/en/Shared Concept.md'].hash).toBe(sha256Text(wikiRead('Shared Concept.md')))
+    expect(reg.pages['wiki/en/Shared Concept.md'].handEdited).toBeUndefined()
     const log = wikiRead('log.md')
     expect(log).toContain('## [2026-11-24] ingest | kb_source/a.md')
     expect(log).toContain('## [2026-11-24] ingest | kb_source/b.md')
@@ -79,7 +79,7 @@ describe('runIngest', () => {
     require.cache[key].exports = async () => ({ text: 'Hi', numpages: 3 })
     try {
       expect(await run([pdf, b], agent)).toEqual({
-        done: [b.rel], failed: [{ rel: pdf.rel, reason: 'scanned_pdf' }], stopped: false
+        done: [b.rel], failed: [{ rel: pdf.rel, lang: 'en', reason: 'scanned_pdf' }], stopped: false
       })
     } finally {
       require.cache[key].exports = real
@@ -96,9 +96,9 @@ describe('runIngest', () => {
       await write(tool, 'b summary', source.rel)
     })
     const result = await run([a, b], agent)
-    expect(result.failed).toEqual([{ rel: a.rel, reason: 'agent_error', detail: 'boom' }])
+    expect(result.failed).toEqual([{ rel: a.rel, lang: 'en', reason: 'agent_error', detail: 'boom' }])
     expect(result.done).toEqual([b.rel])
-    expect(fs.existsSync(path.join(root, 'wiki', 'Partial.md'))).toBe(true)
+    expect(fs.existsSync(path.join(root, 'wiki', 'en', 'Partial.md'))).toBe(true)
     expect(Object.keys((await readRegistry(registryFile)).sources)).toEqual([b.rel])
   })
 
@@ -134,7 +134,7 @@ describe('runIngest', () => {
     const agent = okAgent()
     const result = await run([a, b], agent)
     expect(result).toEqual({
-      done: [b.rel], failed: [{ rel: a.rel, reason: 'read_failed', detail: expect.stringContaining('ENOENT') }], stopped: false
+      done: [b.rel], failed: [{ rel: a.rel, lang: 'en', reason: 'read_failed', detail: expect.stringContaining('ENOENT') }], stopped: false
     })
     expect(agent).toHaveBeenCalledTimes(1)
     expect(Object.keys((await readRegistry(registryFile)).sources)).toEqual([b.rel])
@@ -142,7 +142,7 @@ describe('runIngest', () => {
 
   it('keeps the source done and reports a warning when index coverage fails after the registry write', async () => {
     const a = src('a.md'), b = src('b.md')
-    const indexPath = path.join(root, 'wiki', 'index.md')
+    const indexPath = path.join(root, 'wiki', 'en', 'index.md')
     let index
     const events = []
     const result = await run([a, b], async ({ source, tool }) => {
@@ -158,11 +158,11 @@ describe('runIngest', () => {
     }, { onProgress: e => events.push(e) })
     expect(result).toEqual({
       done: [a.rel, b.rel], failed: [], stopped: false,
-      warnings: [{ rel: a.rel, step: 'index', detail: expect.any(String) }]
+      warnings: [{ rel: a.rel, lang: 'en', step: 'index', detail: expect.any(String) }]
     })
     const reg = await readRegistry(registryFile)
     expect(Object.keys(reg.sources).sort()).toEqual([a.rel, b.rel])
-    expect(reg.sources[a.rel].pages).toEqual(['wiki/a.md'])
+    expect(reg.sources[a.rel].pages).toEqual(['wiki/en/a.md'])
     expect(wikiRead('log.md')).toContain(a.rel)
     expect(events.find(e => e.rel === a.rel && e.status === 'done').warnings).toEqual(result.warnings)
     expect(events.find(e => e.rel === b.rel && e.status === 'done').warnings).toBeUndefined()
@@ -171,15 +171,15 @@ describe('runIngest', () => {
   it('keeps the source done and reports a warning when the log cannot be appended', async () => {
     const a = src('a.md')
     const result = await run([a], async ({ source, tool }) => {
-      fs.rmSync(path.join(root, 'wiki', 'log.md'), { force: true })
-      fs.mkdirSync(path.join(root, 'wiki', 'log.md'))
+      fs.rmSync(path.join(root, 'wiki', 'en', 'log.md'), { force: true })
+      fs.mkdirSync(path.join(root, 'wiki', 'en', 'log.md'))
       await write(tool, 'a', source.rel)
     })
     expect(result.done).toEqual([a.rel])
     expect(result.failed).toEqual([])
-    expect(result.warnings).toEqual([{ rel: a.rel, step: 'log', detail: expect.any(String) }])
+    expect(result.warnings).toEqual([{ rel: a.rel, lang: 'en', step: 'log', detail: expect.any(String) }])
     const reg = await readRegistry(registryFile)
-    expect(reg.sources[a.rel].pages).toEqual(['wiki/a.md'])
+    expect(reg.sources[a.rel].pages).toEqual(['wiki/en/a.md'])
     expect(wikiRead('index.md')).toContain('[[a]]')
   })
 
@@ -189,9 +189,9 @@ describe('runIngest', () => {
       await write(tool, 'a', source.rel)
       fs.mkdirSync(registryFile, { recursive: true })
     })
-    expect(result).toEqual({ done: [], failed: [{ rel: a.rel, reason: 'record_failed', detail: expect.any(String) }], stopped: false })
+    expect(result).toEqual({ done: [], failed: [{ rel: a.rel, lang: 'en', reason: 'record_failed', detail: expect.any(String) }], stopped: false })
     expect(wikiRead('a.md')).toContain('Body of a.')
-    const logFile = path.join(root, 'wiki', 'log.md')
+    const logFile = path.join(root, 'wiki', 'en', 'log.md')
     expect(fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '').not.toContain(a.rel)
   })
 
@@ -202,15 +202,15 @@ describe('runIngest', () => {
     fs.writeFileSync(a.abs, 'a changed source text. '.repeat(8))
     await run([a], async ({ source, tool }) => { await write(tool, 'p1', source.rel, 'v2') })
     const reg = await readRegistry(registryFile)
-    expect(reg.sources[a.rel].pages).toEqual(['wiki/p1.md', 'wiki/p2.md'])
-    expect(reg.pages['wiki/p2.md']).toEqual(first.pages['wiki/p2.md'])
-    expect(reg.pages['wiki/p1.md'].hash).toBe(sha256Text(wikiRead('p1.md')))
-    expect(reg.pages['wiki/p1.md'].hash).not.toBe(first.pages['wiki/p1.md'].hash)
+    expect(reg.sources[a.rel].pages).toEqual(['wiki/en/p1.md', 'wiki/en/p2.md'])
+    expect(reg.pages['wiki/en/p2.md']).toEqual(first.pages['wiki/en/p2.md'])
+    expect(reg.pages['wiki/en/p1.md'].hash).toBe(sha256Text(wikiRead('p1.md')))
+    expect(reg.pages['wiki/en/p1.md'].hash).not.toBe(first.pages['wiki/en/p1.md'].hash)
 
-    fs.rmSync(path.join(root, 'wiki', 'p2.md'))
+    fs.rmSync(path.join(root, 'wiki', 'en', 'p2.md'))
     fs.writeFileSync(a.abs, 'a third source text. '.repeat(9))
     await run([a], async ({ source, tool }) => { await write(tool, 'p1', source.rel, 'v3') })
-    expect((await readRegistry(registryFile)).sources[a.rel].pages).toEqual(['wiki/p1.md'])
+    expect((await readRegistry(registryFile)).sources[a.rel].pages).toEqual(['wiki/en/p1.md'])
   })
 
   it('rejects with registry_unreadable and never runs the agent when the registry is corrupt', async () => {
@@ -220,7 +220,7 @@ describe('runIngest', () => {
     const agent = okAgent()
     await expect(run([a], agent)).rejects.toMatchObject({ code: 'registry_unreadable' })
     expect(agent).not.toHaveBeenCalled()
-    expect(fs.existsSync(path.join(root, 'wiki', 'a summary.md'))).toBe(false)
+    expect(fs.existsSync(path.join(root, 'wiki', 'en', 'a summary.md'))).toBe(false)
     expect(fs.readFileSync(registryFile, 'utf8')).toBe('{ not json')
     // A future registry version is equally unreadable, and the lock is released afterwards.
     fs.writeFileSync(registryFile, JSON.stringify({ version: 99, sources: {}, pages: {} }))
@@ -236,13 +236,13 @@ describe('runIngest', () => {
     // Run 2: the unregistered page is protected from write_wiki but may be minimally edited.
     await run([a], async ({ source, tool }) => {
       expect((await write(tool, 'orphan', source.rel, 'rewrite')).isError).toBe(true)
-      const edit = await tool.execute('c', { operation: 'edit_wiki', path: 'wiki/orphan.md', oldText: 'Body of orphan.', newText: 'Revised orphan.' })
+      const edit = await tool.execute('c', { operation: 'edit_wiki', path: 'wiki/en/orphan.md', oldText: 'Body of orphan.', newText: 'Revised orphan.' })
       expect(edit.isError).toBeFalsy()
       await write(tool, 'extra', source.rel)
     })
     const reg = await readRegistry(registryFile)
-    expect(reg.pages['wiki/orphan.md'].hash).toBe(sha256Text(wikiRead('orphan.md')))
-    expect(reg.pages['wiki/orphan.md'].handEdited).toBeUndefined()
+    expect(reg.pages['wiki/en/orphan.md'].hash).toBe(sha256Text(wikiRead('orphan.md')))
+    expect(reg.pages['wiki/en/orphan.md'].handEdited).toBeUndefined()
     // Run 3: now registered and unchanged, so the agent may overwrite it.
     await run([a], async ({ source, tool }) => {
       expect((await write(tool, 'orphan', source.rel, 'rewrite')).isError).toBeFalsy()
@@ -252,7 +252,7 @@ describe('runIngest', () => {
   it('fails with no_pages when the agent writes nothing', async () => {
     const a = src('a.md')
     const result = await run([a], vi.fn(async () => {}))
-    expect(result.failed).toEqual([{ rel: a.rel, reason: 'no_pages' }])
+    expect(result.failed).toEqual([{ rel: a.rel, lang: 'en', reason: 'no_pages' }])
     expect(Object.keys((await readRegistry(registryFile)).sources)).toEqual([])
   })
 
@@ -260,9 +260,9 @@ describe('runIngest', () => {
     const a = src('a.md')
     await run([a], vi.fn(async ({ source, tool }) => {
       await write(tool, 'a summary', source.rel)
-      await tool.execute('c', { operation: 'write_wiki', path: 'wiki/index.md', content: '# Index\n- [[a summary]] - x\n' })
+      await tool.execute('c', { operation: 'write_wiki', path: 'wiki/en/index.md', content: '# Index\n- [[a summary]] - x\n' })
     }))
-    expect(Object.keys((await readRegistry(registryFile)).pages)).toEqual(['wiki/a summary.md'])
+    expect(Object.keys((await readRegistry(registryFile)).pages)).toEqual(['wiki/en/a summary.md'])
   })
 
   it('skips registering a written page that disappeared', async () => {
@@ -270,10 +270,10 @@ describe('runIngest', () => {
     const result = await run([a], vi.fn(async ({ source, tool }) => {
       await write(tool, 'keep', source.rel)
       await write(tool, 'gone', source.rel)
-      fs.rmSync(path.join(root, 'wiki', 'gone.md'))
+      fs.rmSync(path.join(root, 'wiki', 'en', 'gone.md'))
     }))
     expect(result.done).toEqual([a.rel])
-    expect((await readRegistry(registryFile)).sources[a.rel].pages).toEqual(['wiki/keep.md'])
+    expect((await readRegistry(registryFile)).sources[a.rel].pages).toEqual(['wiki/en/keep.md'])
   })
 
   it('records the first source and stops before the second when stop is requested between them', async () => {
@@ -307,8 +307,8 @@ describe('runIngest', () => {
       shouldStop: () => stop, onProgress: e => events.push(e)
     })
     expect(events).toEqual([
-      { index: 0, total: 1, rel: a.rel, status: 'start' },
-      { index: 0, total: 1, rel: a.rel, status: 'stopped' }
+      { index: 0, total: 1, rel: a.rel, lang: 'en', status: 'start' },
+      { index: 0, total: 1, rel: a.rel, lang: 'en', status: 'stopped' }
     ])
     const aborted = []
     await run([a], async () => { throw Object.assign(new Error('x'), { name: 'AbortError' }) }, { onProgress: e => aborted.push(e.status) })
@@ -344,14 +344,14 @@ describe('runIngest', () => {
     await run([a], async ({ source, tool }) => {
       await write(tool, 'one', source.rel); await write(tool, 'two', source.rel); await write(tool, 'three', source.rel)
     })
-    fs.writeFileSync(path.join(root, 'wiki', 'two.md'), pageText('two', [a.rel], 'USER EDIT'))
-    fs.rmSync(path.join(root, 'wiki', 'three.md'))
+    fs.writeFileSync(path.join(root, 'wiki', 'en', 'two.md'), pageText('two', [a.rel], 'USER EDIT'))
+    fs.rmSync(path.join(root, 'wiki', 'en', 'three.md'))
     fs.writeFileSync(a.abs, 'second version of the source text. '.repeat(6))
     const agent = vi.fn(async ({ source, tool }) => { await write(tool, 'one', source.rel, 'v2') })
     await run([a], agent)
     const arg = agent.mock.calls[0][0]
-    expect([...arg.previousPages].sort()).toEqual(['wiki/one.md', 'wiki/three.md', 'wiki/two.md'])
-    expect(arg.handEditedPages).toEqual(['wiki/two.md'])
+    expect([...arg.previousPages].sort()).toEqual(['wiki/en/one.md', 'wiki/en/three.md', 'wiki/en/two.md'])
+    expect(arg.handEditedPages).toEqual(['wiki/en/two.md'])
     expect(typeof arg.schemaText).toBe('string')
     expect(arg.source.rel).toBe(a.rel)
     expect((await readRegistry(registryFile)).sources[a.rel].hash).toBe(await sha256File(a.abs))
@@ -361,7 +361,7 @@ describe('runIngest', () => {
     const a = src('a.md')
     await run([a], okAgent())
     const title = 'a summary'
-    const rel = `wiki/${title}.md`
+    const rel = `wiki/en/${title}.md`
     fs.writeFileSync(path.join(root, rel), pageText(title, [a.rel], 'USER EDIT'))
     await run([a], async ({ tool }) => {
       const edit = await tool.execute('c', { operation: 'edit_wiki', path: rel, oldText: 'Body of a summary.', newText: 'Revised summary.' })
@@ -438,7 +438,7 @@ describe('runIngest', () => {
     expect(events.map(e => [e.index, e.total, e.rel, e.status])).toEqual([
       [0, 2, a.rel, 'start'], [0, 2, a.rel, 'done'], [1, 2, b.rel, 'start'], [1, 2, b.rel, 'failed']
     ])
-    expect(events[1].pages).toEqual(['wiki/p.md'])
+    expect(events[1].pages).toEqual(['wiki/en/p.md'])
   })
 })
 
@@ -447,7 +447,7 @@ describe('buildIngestPlan', () => {
 
   it('marks unrecorded files as new and sorts by path', async () => {
     src('b.md'); src('a.md')
-    const plan = await buildIngestPlan({ root, registry: emptyReg() })
+    const plan = await buildIngestPlan({ root, languages: ['en'], registry: emptyReg() })
     expect(plan.sources.map(s => [s.rel, s.state])).toEqual([['kb_source/a.md', 'new'], ['kb_source/b.md', 'new']])
     expect(plan).toMatchObject({ refreshed: [], removed: [], overflow: 0 })
   })
@@ -456,7 +456,7 @@ describe('buildIngestPlan', () => {
     const a = src('a.md'), b = src('b.md', 'b text. '.repeat(10))
     let registry = recordIngested(emptyReg(), entry(a.rel, { hash: await sha256File(a.abs) }))
     registry = recordIngested(registry, entry(b.rel, { hash: 'different' }))
-    const plan = await buildIngestPlan({ root, registry })
+    const plan = await buildIngestPlan({ root, languages: ['en'], registry })
     expect(plan.refreshed).toEqual([a.rel])
     expect(plan.sources.map(s => [s.rel, s.state])).toEqual([[b.rel, 'updated']])
   })
@@ -465,7 +465,7 @@ describe('buildIngestPlan', () => {
     const a = src('a.md')
     const registry = recordIngested(emptyReg(), entry(a.rel))
     const hashFile = vi.fn().mockRejectedValue(new Error('unreadable'))
-    const plan = await buildIngestPlan({ root, registry, hashFile })
+    const plan = await buildIngestPlan({ root, languages: ['en'], registry, hashFile })
     expect(plan.refreshed).toEqual([])
     expect(plan.sources.map(s => [s.rel, s.state])).toEqual([[a.rel, 'updated']])
   })
@@ -473,7 +473,7 @@ describe('buildIngestPlan', () => {
   it('caps at MAX_SOURCES_PER_RUN and reports overflow', async () => {
     expect(MAX_SOURCES_PER_RUN).toBe(30)
     for (let i = 0; i < 33; i++) src(`f${String(i).padStart(2, '0')}.md`)
-    const plan = await buildIngestPlan({ root, registry: emptyReg() })
+    const plan = await buildIngestPlan({ root, languages: ['en'], registry: emptyReg() })
     expect(plan.sources).toHaveLength(30)
     expect(plan.overflow).toBe(3)
   })
@@ -489,10 +489,10 @@ describe('buildIngestPlan', () => {
     }
     const fresh = src('zz-new.md')
     rels.push(fresh.rel)
-    const plan = await buildIngestPlan({ root, registry, only: rels, includeIngested: false })
+    const plan = await buildIngestPlan({ root, languages: ['en'], registry, only: rels, includeIngested: false })
     expect(plan.sources.map(s => [s.rel, s.state])).toEqual([[fresh.rel, 'new']])
     expect(plan.overflow).toBe(0)
-    const forced = await buildIngestPlan({ root, registry, only: rels })
+    const forced = await buildIngestPlan({ root, languages: ['en'], registry, only: rels })
     expect(forced.sources).toHaveLength(30)
     expect(forced.overflow).toBe(2)
   })
@@ -500,15 +500,260 @@ describe('buildIngestPlan', () => {
   it('reports registry sources missing on disk as removed', async () => {
     src('a.md')
     const registry = recordIngested(emptyReg(), entry('kb_source/gone.md'))
-    expect((await buildIngestPlan({ root, registry })).removed).toEqual(['kb_source/gone.md'])
+    expect((await buildIngestPlan({ root, languages: ['en'], registry })).removed).toEqual(['kb_source/gone.md'])
   })
 
   it('excludes ingested files without only, includes them (state ingested) with only', async () => {
     const a = src('a.md'), b = src('b.md')
     const st = fs.statSync(a.abs)
     const registry = recordIngested(emptyReg(), entry(a.rel, { mtimeMs: st.mtimeMs, size: st.size }))
-    expect((await buildIngestPlan({ root, registry })).sources.map(s => s.rel)).toEqual([b.rel])
-    const forced = await buildIngestPlan({ root, registry, only: [a.rel] })
+    expect((await buildIngestPlan({ root, languages: ['en'], registry })).sources.map(s => s.rel)).toEqual([b.rel])
+    const forced = await buildIngestPlan({ root, languages: ['en'], registry, only: [a.rel] })
     expect(forced.sources.map(s => [s.rel, s.state])).toEqual([[a.rel, 'ingested']])
+  })
+})
+
+describe('runIngest with several languages', () => {
+  const BOTH = ['en', 'zh']
+  const runBoth = (sources, runAgent, extra = {}) => run(sources, runAgent, { languages: BOTH, ...extra })
+  const writeIn = (tool, lang, title, source) =>
+    tool.execute('c', { operation: 'write_wiki', path: `wiki/${lang}/${title}.md`, content: pageText(title, [source]) })
+  // Writes one summary page into the unit's own language folder.
+  const langAgent = () => vi.fn(async ({ source, tool, lang }) => {
+    await writeIn(tool, lang, `${path.basename(source.rel, '.md')} ${lang}`, source.rel)
+  })
+
+  it('runs one unit per source and language with its own root, scaffold, log and registry record', async () => {
+    const a = src('a.md'), b = src('b.md')
+    const agent = langAgent()
+    const events = []
+    const result = await runBoth([a, b], agent, { onProgress: e => events.push(e) })
+
+    expect(result).toEqual({ done: [a.rel, b.rel], failed: [], stopped: false })
+    expect(agent.mock.calls.map(([arg]) => [arg.source.rel, arg.lang, arg.wikiRoot])).toEqual([
+      [a.rel, 'en', 'wiki/en'], [a.rel, 'zh', 'wiki/zh'], [b.rel, 'en', 'wiki/en'], [b.rel, 'zh', 'wiki/zh']
+    ])
+    for (const lang of BOTH) {
+      expect(fs.readdirSync(path.join(root, 'wiki', lang)).sort()).toEqual([
+        'SCHEMA.md', 'a ' + lang + '.md', 'b ' + lang + '.md', 'index.md', 'log.md'
+      ].sort())
+      expect(wikiRead('SCHEMA.md', lang)).toContain(`wiki/${lang}/log.md`)
+      expect(wikiRead('log.md', lang)).toContain('ingest | kb_source/a.md')
+      expect(wikiRead('index.md', lang)).toContain(`[[a ${lang}]]`)
+      expect(wikiRead('index.md', lang)).not.toContain(lang === 'en' ? 'zh]]' : 'en]]')
+    }
+    expect(fs.readdirSync(path.join(root, 'wiki')).sort()).toEqual(['en', 'zh'])
+
+    const reg = await readRegistry(registryFile)
+    expect(Object.keys(reg.sources[a.rel].langs)).toEqual(['en', 'zh'])
+    expect(reg.sources[a.rel].langs.en.pages).toEqual(['wiki/en/a en.md'])
+    expect(reg.sources[a.rel].langs.zh.pages).toEqual(['wiki/zh/a zh.md'])
+    expect(Object.keys(reg.pages).sort()).toEqual(['wiki/en/a en.md', 'wiki/en/b en.md', 'wiki/zh/a zh.md', 'wiki/zh/b zh.md'])
+
+    expect(events.filter(e => e.status === 'start').map(e => [e.index, e.total, e.rel, e.lang])).toEqual([
+      [0, 4, a.rel, 'en'], [1, 4, a.rel, 'zh'], [2, 4, b.rel, 'en'], [3, 4, b.rel, 'zh']
+    ])
+    expect(events.filter(e => e.status === 'done').map(e => [e.index, e.lang, e.pages])).toEqual([
+      [0, 'en', ['wiki/en/a en.md']], [1, 'zh', ['wiki/zh/a zh.md']], [2, 'en', ['wiki/en/b en.md']], [3, 'zh', ['wiki/zh/b zh.md']]
+    ])
+  })
+
+  it('confines each unit to its own language folder', async () => {
+    const a = src('a.md')
+    const outcomes = []
+    await runBoth([a], async ({ source, tool, lang }) => {
+      const other = lang === 'en' ? 'zh' : 'en'
+      outcomes.push((await writeIn(tool, other, 'leak', source.rel)).isError === true)
+      outcomes.push((await tool.execute('c', { operation: 'write_wiki', path: 'wiki/flat.md', content: pageText('flat', [source.rel]) })).isError === true)
+      await writeIn(tool, lang, 'ok', source.rel)
+    })
+    expect(outcomes).toEqual([true, true, true, true])
+    expect(fs.existsSync(path.join(root, 'wiki', 'flat.md'))).toBe(false)
+    expect(fs.existsSync(path.join(root, 'wiki', 'en', 'leak.md'))).toBe(false)
+    expect(fs.existsSync(path.join(root, 'wiki', 'zh', 'leak.md'))).toBe(false)
+  })
+
+  it('records only the language that succeeded when the other one fails', async () => {
+    const a = src('a.md')
+    const agent = vi.fn(async ({ source, tool, lang }) => {
+      if (lang === 'zh') throw new Error('zh boom')
+      await writeIn(tool, lang, 'a en', source.rel)
+    })
+    const result = await runBoth([a], agent)
+    expect(result.done).toEqual([])
+    expect(result.failed).toEqual([{ rel: a.rel, lang: 'zh', reason: 'agent_error', detail: 'zh boom' }])
+    const reg = await readRegistry(registryFile)
+    expect(Object.keys(reg.sources[a.rel].langs)).toEqual(['en'])
+    expect(reg.sources[a.rel].pages).toEqual(['wiki/en/a en.md'])
+  })
+
+  it('reports a failed source for every language and counts each as a unit', async () => {
+    const a = src('a.md')
+    fs.rmSync(a.abs)
+    const events = []
+    const result = await runBoth([a], langAgent(), { onProgress: e => events.push(e) })
+    expect(result.failed).toEqual([
+      { rel: a.rel, lang: 'en', reason: 'read_failed', detail: expect.stringContaining('ENOENT') },
+      { rel: a.rel, lang: 'zh', reason: 'read_failed', detail: expect.stringContaining('ENOENT') }
+    ])
+    expect(events.map(e => [e.index, e.total, e.lang, e.status])).toEqual([
+      [0, 2, 'en', 'start'], [0, 2, 'en', 'failed'], [1, 2, 'zh', 'start'], [1, 2, 'zh', 'failed']
+    ])
+  })
+
+  it('re-offers an ingested source only for a language added later', async () => {
+    const a = src('a.md'), b = src('b.md')
+    await run([a, b], langAgent(), { languages: ['en'] })
+    const afterEnglish = await readRegistry(registryFile)
+
+    expect((await buildIngestPlan({ root, registry: afterEnglish, languages: ['en'] })).sources).toEqual([])
+    const plan = await buildIngestPlan({ root, registry: afterEnglish, languages: BOTH })
+    expect(plan.sources.map(s => [s.rel, s.state, s.langs])).toEqual([[a.rel, 'ingested', ['zh']], [b.rel, 'ingested', ['zh']]])
+
+    const agent = langAgent()
+    const result = await run(plan.sources, agent, { languages: BOTH })
+    expect(result.done).toEqual([a.rel, b.rel])
+    expect(agent.mock.calls.map(([arg]) => [arg.source.rel, arg.lang, arg.previousPages])).toEqual([
+      [a.rel, 'zh', []], [b.rel, 'zh', []]
+    ])
+    const reg = await readRegistry(registryFile)
+    expect(Object.keys(reg.sources[a.rel].langs)).toEqual(['en', 'zh'])
+    expect(reg.sources[a.rel].langs.en).toEqual(afterEnglish.sources[a.rel].langs.en)
+    expect((await buildIngestPlan({ root, registry: reg, languages: BOTH })).sources).toEqual([])
+  })
+
+  it('makes every language stale when the source changed and passes language-specific previous pages', async () => {
+    const a = src('a.md', 'first version of the source text. '.repeat(4))
+    await runBoth([a], langAgent())
+    fs.writeFileSync(a.abs, 'second version of the source text. '.repeat(6))
+    const registry = await readRegistry(registryFile)
+    const plan = await buildIngestPlan({ root, registry, languages: BOTH })
+    expect(plan.sources.map(s => [s.state, s.langs])).toEqual([['updated', ['en', 'zh']]])
+
+    const agent = langAgent()
+    await runBoth(plan.sources, agent)
+    expect(agent.mock.calls.map(([arg]) => [arg.lang, arg.previousPages])).toEqual([
+      ['en', ['wiki/en/a en.md']], ['zh', ['wiki/zh/a zh.md']]
+    ])
+    const hash = await sha256File(a.abs)
+    const reg = await readRegistry(registryFile)
+    expect([reg.sources[a.rel].langs.en.hash, reg.sources[a.rel].langs.zh.hash]).toEqual([hash, hash])
+  })
+
+  it('marks the language that missed a newer version as pending after a partial run', async () => {
+    const a = src('a.md', 'first version of the source text. '.repeat(4))
+    await runBoth([a], langAgent())
+    fs.writeFileSync(a.abs, 'second version of the source text. '.repeat(6))
+    const plan = await buildIngestPlan({ root, registry: await readRegistry(registryFile), languages: BOTH })
+    await runBoth(plan.sources, vi.fn(async ({ source, tool, lang }) => {
+      if (lang === 'zh') throw new Error('zh down')
+      await writeIn(tool, lang, 'a en', source.rel)
+    }))
+    const next = await buildIngestPlan({ root, registry: await readRegistry(registryFile), languages: BOTH })
+    expect(next.sources.map(s => [s.state, s.langs])).toEqual([['ingested', ['zh']]])
+  })
+
+  it('counts consecutive agent errors per unit', async () => {
+    const files = ['a', 'b', 'c'].map(n => src(n + '.md'))
+    const agent = vi.fn(async () => { throw new Error('401 invalid key') })
+    const result = await runBoth(files, agent)
+    expect(agent).toHaveBeenCalledTimes(3)
+    expect(result.aborted).toBe('consecutive_agent_errors')
+    expect(result.failed.map(f => [f.rel, f.lang])).toEqual([[files[0].rel, 'en'], [files[0].rel, 'zh'], [files[1].rel, 'en']])
+  })
+
+  it('resets the error streak after a successful unit of the other language', async () => {
+    const a = src('a.md'), b = src('b.md')
+    const agent = vi.fn(async ({ source, tool, lang }) => {
+      if (lang === 'en') throw new Error('en boom')
+      await writeIn(tool, lang, 'ok', source.rel)
+    })
+    const result = await runBoth([a, b], agent)
+    expect(agent).toHaveBeenCalledTimes(4)
+    expect(result.aborted).toBeUndefined()
+    expect(result.failed).toHaveLength(2)
+  })
+
+  it('stops between the languages of one source and keeps the finished language', async () => {
+    const a = src('a.md')
+    let stop = false
+    const agent = vi.fn(async ({ source, tool, lang }) => {
+      await writeIn(tool, lang, 'a ' + lang, source.rel)
+    })
+    const result = await runBoth([a], agent, {
+      shouldStop: () => stop,
+      onProgress: ({ status, lang }) => { if (status === 'done' && lang === 'en') stop = true }
+    })
+    expect(result).toEqual({ done: [], failed: [], stopped: true })
+    expect(agent).toHaveBeenCalledTimes(1)
+    expect(Object.keys((await readRegistry(registryFile)).sources[a.rel].langs)).toEqual(['en'])
+  })
+
+  it('uses the per-source language list before the run-wide languages', async () => {
+    const a = src('a.md'), b = src('b.md')
+    const agent = langAgent()
+    const events = []
+    await runBoth([{ ...a, langs: ['zh'] }, b], agent, { onProgress: e => events.push(e) })
+    expect(agent.mock.calls.map(([arg]) => [arg.source.rel, arg.lang])).toEqual([[a.rel, 'zh'], [b.rel, 'en'], [b.rel, 'zh']])
+    expect(events[0]).toMatchObject({ index: 0, total: 3, lang: 'zh' })
+  })
+
+  it('rejects invalid languages before writing anything', async () => {
+    const a = src('a.md')
+    const agent = langAgent()
+    for (const languages of [[], ['fr'], ['en', 'fr'], undefined, 'en']) {
+      await expect(run([a], agent, { languages })).rejects.toMatchObject({ code: 'invalid_language' })
+    }
+    expect(agent).not.toHaveBeenCalled()
+    expect(fs.existsSync(path.join(root, 'wiki'))).toBe(false)
+    expect(fs.existsSync(registryFile)).toBe(false)
+  })
+
+  it('deduplicates languages and keeps the stable order', async () => {
+    const a = src('a.md')
+    const agent = langAgent()
+    await run([a], agent, { languages: ['zh', 'en', 'zh'] })
+    expect(agent.mock.calls.map(([arg]) => arg.lang)).toEqual(['en', 'zh'])
+  })
+})
+
+describe('buildIngestPlan languages', () => {
+  const emptyReg = () => ({ version: 1, sources: {}, pages: {} })
+
+  it('requires a valid language selection', async () => {
+    src('a.md')
+    for (const languages of [undefined, [], ['fr'], 'en']) {
+      await expect(buildIngestPlan({ root, registry: emptyReg(), languages })).rejects.toMatchObject({ code: 'invalid_language' })
+    }
+  })
+
+  it('lists a new source for every selected language, deduplicated and in stable order', async () => {
+    src('a.md')
+    const plan = await buildIngestPlan({ root, registry: emptyReg(), languages: ['zh', 'en', 'zh'] })
+    expect(plan.sources.map(s => s.langs)).toEqual([['en', 'zh']])
+    expect((await buildIngestPlan({ root, registry: emptyReg(), languages: ['zh'] })).sources.map(s => s.langs)).toEqual([['zh']])
+  })
+
+  it('treats a legacy record without langs as not ingested', async () => {
+    const a = src('a.md')
+    const st = fs.statSync(a.abs)
+    fs.mkdirSync(path.dirname(registryFile), { recursive: true })
+    fs.writeFileSync(registryFile, JSON.stringify({
+      version: 1,
+      sources: { [a.rel]: { hash: 'h', mtimeMs: st.mtimeMs, size: st.size, ingestedAt: 'x', pages: ['wiki/old.md'] } },
+      pages: {}
+    }))
+    const plan = await buildIngestPlan({ root, registry: await readRegistry(registryFile), languages: ['en'] })
+    expect(plan.sources.map(s => [s.rel, s.state, s.langs])).toEqual([[a.rel, 'new', ['en']]])
+  })
+
+  it('forces every selected language for an explicitly requested ingested source', async () => {
+    const a = src('a.md')
+    const st = fs.statSync(a.abs)
+    const registry = recordIngested(emptyReg(), entry(a.rel, { mtimeMs: st.mtimeMs, size: st.size }))
+    const forced = await buildIngestPlan({ root, registry, only: [a.rel], languages: ['en', 'zh'] })
+    expect(forced.sources.map(s => [s.state, s.langs])).toEqual([['ingested', ['en', 'zh']]])
+    const notForced = await buildIngestPlan({ root, registry, only: [a.rel], includeIngested: false, languages: ['en', 'zh'] })
+    expect(notForced.sources.map(s => s.langs)).toEqual([['zh']])
   })
 })

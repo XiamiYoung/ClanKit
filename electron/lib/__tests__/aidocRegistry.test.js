@@ -6,7 +6,7 @@ import path from 'path'
 
 const require = createRequire(import.meta.url)
 const {
-  registryPathFor, readRegistry, writeRegistry, updateRegistry, recordIngested, classifySources, removedSources
+  registryPathFor, readRegistry, readRegistrySync, writeRegistry, updateRegistry, recordIngested, pendingLanguages, classifySources, removedSources
 } = require('../aidocRegistry')
 const { readIngestedSources } = require('../aidocGraph')
 const { rootHash } = require('../aidocIndex')
@@ -24,7 +24,7 @@ async function tmp() {
 const empty = () => ({ version: 1, sources: {}, pages: {} })
 const page = (rel, extra = {}) => ({ rel, hash: 'h-' + rel, type: 'concept', title: rel, sources: [], updated: 'd', ...extra })
 const entry = (rel, pages, extra = {}) => ({
-  rel, hash: 'sh', mtimeMs: 10, size: 5, ingestedAt: '2026-01-01T00:00:00Z', pages, ...extra
+  rel, lang: 'en', hash: 'sh', mtimeMs: 10, size: 5, ingestedAt: '2026-01-01T00:00:00Z', pages, ...extra
 })
 
 describe('registryPathFor', () => {
@@ -50,9 +50,9 @@ describe('readRegistry', () => {
     await fs.writeFile(f, JSON.stringify({
       version: 1,
       sources: {
-        good: { hash: 'h', ingestedAt: 'x', pages: [], size: 1 },
-        bad1: { hash: 1, ingestedAt: 'x', pages: [] },
-        bad2: { hash: 'h', ingestedAt: 'x', pages: 'no' },
+        good: { hash: 'h', ingestedAt: 'x', pages: [], size: 1, langs: { en: { hash: 'h', ingestedAt: 'x', pages: [] } } },
+        bad1: { hash: 1, ingestedAt: 'x', pages: [], langs: { en: { hash: 'h', ingestedAt: 'x', pages: [] } } },
+        bad2: { hash: 'h', ingestedAt: 'x', pages: 'no', langs: { en: { hash: 'h', ingestedAt: 'x', pages: [] } } },
         bad3: null
       },
       pages: { p: { hash: 'h', extra: 1 }, q: { hash: 5 }, r: null }
@@ -61,6 +61,53 @@ describe('readRegistry', () => {
     expect(Object.keys(reg.sources)).toEqual(['good'])
     expect(reg.sources.good.size).toBe(1)
     expect(Object.keys(reg.pages)).toEqual(['p'])
+  })
+})
+
+describe('readRegistry of older files', () => {
+  const langRecord = (hash, pages = []) => ({ hash, ingestedAt: '2026-01-01T00:00:00Z', pages })
+
+  it('treats source records without langs as not ingested for any language', async () => {
+    const dir = await tmp()
+    const f = path.join(dir, 'r.json')
+    await fs.writeFile(f, JSON.stringify({
+      version: 1,
+      sources: {
+        'kb_source/old.md': { hash: 'h', mtimeMs: 1, size: 1, ingestedAt: 'x', pages: ['wiki/old.md'] },
+        'kb_source/new.md': { hash: 'h2', mtimeMs: 1, size: 1, ingestedAt: 'x', pages: ['wiki/en/n.md'], langs: { en: langRecord('h2', ['wiki/en/n.md']) } }
+      },
+      pages: { 'wiki/old.md': { hash: 'ph', type: 'concept' } }
+    }))
+    const reg = await readRegistry(f)
+    expect(Object.keys(reg.sources)).toEqual(['kb_source/new.md'])
+    // Legacy flat pages stay known so they remain readable and protected.
+    expect(reg.pages['wiki/old.md']).toMatchObject({ hash: 'ph' })
+    expect(reg.version).toBe(1)
+    expect(readRegistrySync(f).sources).toEqual(reg.sources)
+  })
+
+  it('also reads a file that has no version field', async () => {
+    const dir = await tmp()
+    const f = path.join(dir, 'r.json')
+    await fs.writeFile(f, JSON.stringify({ sources: {}, pages: { p: { hash: 'h' } } }))
+    expect(Object.keys((await readRegistry(f)).pages)).toEqual(['p'])
+  })
+
+  it('drops unsupported languages and malformed language records', async () => {
+    const dir = await tmp()
+    const f = path.join(dir, 'r.json')
+    await fs.writeFile(f, JSON.stringify({
+      version: 1,
+      sources: {
+        a: { hash: 'h', ingestedAt: 'x', pages: [], langs: { en: langRecord('h'), fr: langRecord('h'), zh: { hash: 5 } } },
+        b: { hash: 'h', ingestedAt: 'x', pages: [], langs: { fr: langRecord('h') } },
+        c: { hash: 'h', ingestedAt: 'x', pages: [], langs: [langRecord('h')] }
+      },
+      pages: {}
+    }))
+    const reg = await readRegistry(f)
+    expect(Object.keys(reg.sources)).toEqual(['a'])
+    expect(Object.keys(reg.sources.a.langs)).toEqual(['en'])
   })
 })
 
@@ -164,11 +211,59 @@ describe('recordIngested', () => {
     expect(next.pages['wiki/a.md']).toMatchObject({ hash: 'h-wiki/a.md', type: 'concept' })
   })
 
+  it('records each language separately and keeps the top-level snapshot of the latest unit', () => {
+    const en = recordIngested(empty(), entry('kb_source/a.md', [page('wiki/en/a.md')]))
+    const both = recordIngested(en, entry('kb_source/a.md', [page('wiki/zh/a.md')], {
+      lang: 'zh', hash: 'sh2', ingestedAt: '2026-02-02T00:00:00Z'
+    }))
+    expect(both.sources['kb_source/a.md'].langs).toEqual({
+      en: { hash: 'sh', ingestedAt: '2026-01-01T00:00:00Z', pages: ['wiki/en/a.md'] },
+      zh: { hash: 'sh2', ingestedAt: '2026-02-02T00:00:00Z', pages: ['wiki/zh/a.md'] }
+    })
+    expect(both.sources['kb_source/a.md']).toMatchObject({ hash: 'sh2', pages: ['wiki/en/a.md', 'wiki/zh/a.md'] })
+    expect(Object.keys(both.pages)).toEqual(['wiki/en/a.md', 'wiki/zh/a.md'])
+  })
+
+  it('unions kept pages inside the language and leaves the other language untouched', () => {
+    const start = recordIngested(recordIngested(empty(), entry('kb_source/a.md', [page('wiki/en/a.md')])),
+      entry('kb_source/a.md', [page('wiki/zh/a.md')], { lang: 'zh' }))
+    const next = recordIngested(start, entry('kb_source/a.md', [page('wiki/en/b.md')], { keepPages: ['wiki/en/a.md'] }))
+    expect(next.sources['kb_source/a.md'].langs.en.pages).toEqual(['wiki/en/a.md', 'wiki/en/b.md'])
+    expect(next.sources['kb_source/a.md'].langs.zh.pages).toEqual(['wiki/zh/a.md'])
+  })
+
+  it('rejects an unsupported language', () => {
+    expect(() => recordIngested(empty(), entry('kb_source/a.md', [], { lang: 'fr' }))).toThrow(/Unsupported wiki language/)
+  })
+
   it('shrinks the source page list but keeps old page entries', () => {
     const first = recordIngested(empty(), entry('kb_source/a.md', [page('wiki/a.md'), page('wiki/b.md')]))
     const second = recordIngested(first, entry('kb_source/a.md', [page('wiki/a.md')]))
     expect(second.sources['kb_source/a.md'].pages).toEqual(['wiki/a.md'])
     expect(Object.keys(second.pages).sort()).toEqual(['wiki/a.md', 'wiki/b.md'])
+  })
+})
+
+describe('pendingLanguages', () => {
+  const ingested = recordIngested(empty(), entry('kb_source/a.md', [])).sources['kb_source/a.md']
+
+  it('lists every selected language for a missing record', () => {
+    expect(pendingLanguages(undefined, ['en', 'zh'])).toEqual(['en', 'zh'])
+  })
+
+  it('lists only the languages without a record for the current hash', () => {
+    expect(pendingLanguages(ingested, ['en', 'zh'])).toEqual(['zh'])
+    expect(pendingLanguages(ingested, ['en'])).toEqual([])
+  })
+
+  it('makes every language stale when the hash changed', () => {
+    expect(pendingLanguages(ingested, ['en', 'zh'], 'other-hash')).toEqual(['en', 'zh'])
+  })
+
+  it('marks the older language stale after a newer version was ingested into another one', () => {
+    const next = recordIngested(recordIngested(empty(), entry('kb_source/a.md', [])),
+      entry('kb_source/a.md', [], { lang: 'zh', hash: 'sh2' })).sources['kb_source/a.md']
+    expect(pendingLanguages(next, ['en', 'zh'])).toEqual(['en'])
   })
 })
 

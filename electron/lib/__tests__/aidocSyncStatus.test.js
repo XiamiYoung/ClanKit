@@ -8,11 +8,18 @@ const a = { rel: 'kb_source/a.md', ext: 'md', mtimeMs: 1, size: 10 }
 const b = { rel: 'kb_source/b.pdf', ext: 'pdf', mtimeMs: 1, size: 10 }
 const c = { rel: 'kb_source/c.docx', ext: 'docx', mtimeMs: 1, size: 10 }
 
-function status(scanned = [], files = {}, ingested = {}) {
-  return computeSyncStatus({ scanned, cache: { version: 1, files }, ingested })
+function status(scanned = [], files = {}, ingested = {}, languages) {
+  return computeSyncStatus({ scanned, cache: { version: 1, files }, ingested, languages })
 }
 
 describe('AI Doc sync status', () => {
+  it('counts an ingested source as new when it lacks a selected language', () => {
+    const record = { ...a, hash: 'h', langs: { en: { hash: 'h', ingestedAt: 'x', pages: [] } } }
+    expect(status([a], {}, { [a.rel]: record }, ['en']).pending).toEqual({ new: 0, updated: 0, removed: 0 })
+    expect(status([a], {}, { [a.rel]: record }, ['en', 'zh']).pending).toEqual({ new: 1, updated: 0, removed: 0 })
+    expect(status([a], {}, { [a.rel]: { ...record, mtimeMs: 2 } }, ['en', 'zh']).pending).toEqual({ new: 0, updated: 1, removed: 0 })
+  })
+
   it('reports a fresh empty index for an empty scan', () => {
     expect(status()).toEqual({
       indexStale: false, staleCount: 0, failedCount: 0, pending: { new: 0, updated: 0, removed: 0 }, total: 0,

@@ -5,13 +5,14 @@ import { reactive } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import AiDocWikiPanel from '../AiDocWikiPanel.vue'
 
-const { useAiDocStore, renderObsidianMarkdown } = vi.hoisted(() => ({
+const { useAiDocStore, renderObsidianMarkdown, locale } = vi.hoisted(() => ({
   useAiDocStore: vi.fn(),
   renderObsidianMarkdown: vi.fn(),
+  locale: { value: 'en' },
 }))
 vi.mock('../../../stores/aidoc', () => ({ useAiDocStore }))
 vi.mock('../../../utils/obsidianMarkdown', () => ({ renderObsidianMarkdown }))
-vi.mock('../../../i18n/useI18n', () => ({ useI18n: () => ({ t: key => key }) }))
+vi.mock('../../../i18n/useI18n', () => ({ useI18n: () => ({ t: key => key, locale }) }))
 
 describe('AiDocWikiPanel', () => {
   const home = { rel: 'wiki/index.md', title: 'Index', isIndex: true, mtimeMs: 30 }
@@ -20,6 +21,7 @@ describe('AiDocWikiPanel', () => {
   let store
 
   beforeEach(() => {
+    locale.value = 'en'
     store = reactive({
       wikiPages: [],
       currentWikiPage: null,
@@ -45,6 +47,108 @@ describe('AiDocWikiPanel', () => {
     expect(wrapper.text()).toContain('aidoc.wikiEmptyHint')
     expect(wrapper.find('.wiki-columns').exists()).toBe(false)
     wrapper.unmount()
+  })
+
+  describe('language wikis', () => {
+    const page = (lang, name, extra = {}) => ({ rel: `wiki/${lang}/${name}.md`, lang, title: `${name} ${lang}`, type: 'concept', mtimeMs: 10, ...extra })
+    const index = lang => page(lang, 'index', { isIndex: true, title: 'Index' })
+    const legacy = { rel: 'wiki/old.md', lang: null, title: 'Old page', type: 'entity', mtimeMs: 5 }
+    const bothLanguages = () => [index('en'), page('en', 'alpha'), index('zh'), page('zh', 'beta'), page('zh', 'gamma')]
+    const radio = (wrapper, lang) => wrapper.get(`[data-testid="aidoc-wiki-language-${lang}"]`)
+    const listed = wrapper => wrapper.findAll('.wiki-nav-group button').map(button => button.text())
+
+    it('shows no switcher when a single language exists', async () => {
+      store.wikiPages = [index('en'), page('en', 'alpha')]
+      const wrapper = await openPanel()
+      expect(wrapper.find('[data-testid="aidoc-wiki-languages"]').exists()).toBe(false)
+      expect(store.openWikiPage).toHaveBeenCalledExactlyOnceWith('wiki/en/index.md')
+      wrapper.unmount()
+    })
+
+    it('shows no switcher when the second language holds only its scaffold index', async () => {
+      store.wikiPages = [index('en'), page('en', 'alpha'), index('zh')]
+      const wrapper = await openPanel()
+      expect(wrapper.find('[data-testid="aidoc-wiki-languages"]').exists()).toBe(false)
+      expect(listed(wrapper)).not.toContain('Index')
+      wrapper.unmount()
+    })
+
+    it('shows a labelled segmented control that defaults to the UI language', async () => {
+      locale.value = 'zh'
+      store.wikiPages = bothLanguages()
+      const wrapper = await openPanel()
+      const group = wrapper.get('[data-testid="aidoc-wiki-languages"]')
+      expect(group.attributes('role')).toBe('radiogroup')
+      expect(group.attributes('aria-label')).toBe('aidoc.wikiLanguage')
+      expect(group.findAll('button').map(button => button.text())).toEqual(['aidoc.langEn', 'aidoc.langZh'])
+      expect(radio(wrapper, 'zh').attributes('aria-checked')).toBe('true')
+      expect(radio(wrapper, 'en').attributes('aria-checked')).toBe('false')
+      expect(store.openWikiPage).toHaveBeenCalledExactlyOnceWith('wiki/zh/index.md')
+      expect(listed(wrapper).sort()).toEqual(['beta zh', 'beta zh', 'gamma zh', 'gamma zh'])
+      wrapper.unmount()
+    })
+
+    it('falls back to an available language when the UI language has no wiki', async () => {
+      locale.value = 'zh-CN'
+      store.wikiPages = [index('en'), page('en', 'alpha'), index('fr'), page('fr', 'beta')]
+      const wrapper = await openPanel()
+      expect(radio(wrapper, 'en').attributes('aria-checked')).toBe('true')
+      expect(store.openWikiPage).toHaveBeenCalledExactlyOnceWith('wiki/en/index.md')
+      wrapper.unmount()
+    })
+
+    it('scopes the lists to the chosen language and opens its home when switching', async () => {
+      store.wikiPages = bothLanguages()
+      const wrapper = await openPanel()
+      expect(new Set(listed(wrapper))).toEqual(new Set(['alpha en']))
+      await radio(wrapper, 'zh').trigger('click')
+      await flushPromises()
+      expect(store.openWikiPage).toHaveBeenLastCalledWith('wiki/zh/index.md')
+      expect(radio(wrapper, 'zh').attributes('aria-checked')).toBe('true')
+      expect(new Set(listed(wrapper))).toEqual(new Set(['beta zh', 'gamma zh']))
+      await wrapper.get('input[type="search"]').setValue('alpha')
+      expect(wrapper.text()).toContain('common.noResults')
+      await radio(wrapper, 'en').trigger('click')
+      await flushPromises()
+      expect(wrapper.get('input[type="search"]').element.value).toBe('')
+      expect(store.openWikiPage).toHaveBeenLastCalledWith('wiki/en/index.md')
+      wrapper.unmount()
+    })
+
+    it('opens the first page of a language that has no index', async () => {
+      store.wikiPages = [index('en'), page('en', 'alpha'), page('zh', 'beta')]
+      const wrapper = await openPanel()
+      await radio(wrapper, 'zh').trigger('click')
+      await flushPromises()
+      expect(store.openWikiPage).toHaveBeenLastCalledWith('wiki/zh/beta.md')
+      wrapper.unmount()
+    })
+
+    it('lists legacy flat pages in their own group only when some exist', async () => {
+      store.wikiPages = [index('en'), page('en', 'alpha')]
+      let wrapper = await openPanel()
+      expect(wrapper.text()).not.toContain('aidoc.wikiLegacy')
+      wrapper.unmount()
+
+      store.wikiPages = [index('en'), page('en', 'alpha'), legacy]
+      wrapper = await openPanel()
+      const groups = wrapper.findAll('.wiki-nav-group')
+      expect(groups.at(-1).get('h3').text()).toBe('aidoc.wikiLegacy')
+      expect(groups.at(-1).findAll('button').map(button => button.text())).toEqual(['Old page'])
+      await groups.at(-1).get('button').trigger('click')
+      expect(store.openWikiPage).toHaveBeenLastCalledWith('wiki/old.md')
+      wrapper.unmount()
+    })
+
+    it('reads a wiki that only has legacy flat pages', async () => {
+      store.wikiPages = [{ rel: 'wiki/index.md', lang: null, title: 'Index', isIndex: true, mtimeMs: 1 }, legacy]
+      const wrapper = await openPanel()
+      expect(wrapper.find('[data-testid="aidoc-wiki-languages"]').exists()).toBe(false)
+      expect(wrapper.text()).not.toContain('aidoc.wikiLegacy')
+      expect(store.openWikiPage).toHaveBeenCalledExactlyOnceWith('wiki/index.md')
+      expect(listed(wrapper)).toContain('Old page')
+      wrapper.unmount()
+    })
   })
 
   it('shows the empty state when only the scaffold index exists', async () => {

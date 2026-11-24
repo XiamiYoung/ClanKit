@@ -3,9 +3,17 @@
 const path = require('path').posix
 const { AIDOC_FOLDERS } = require('./aidocLayout')
 const { DOCUMENT_EXTS } = require('./aidocTextExtract')
+const { wikiLanguageOf } = require('./aidocLanguages')
 
 function normalize(value) {
   return value.replace(/\\/g, '/').toLowerCase()
+}
+
+// The independent wiki a path belongs to: its language folder, '' for legacy flat wiki pages,
+// or null outside the wiki. Wikilinks between wiki pages never cross trees.
+function wikiTreeOf(rel) {
+  if (!rel.startsWith(AIDOC_FOLDERS.WIKI + '/')) return null
+  return wikiLanguageOf(rel) || ''
 }
 
 function addCandidate(index, key, candidate) {
@@ -32,7 +40,7 @@ function createLinkResolver(allRels) {
     const normalized = normalize(rel)
     const dirname = path.dirname(normalized)
     const ext = path.extname(normalized)
-    const candidate = { rel, dirname, wiki: normalized.startsWith(AIDOC_FOLDERS.WIKI + '/') }
+    const candidate = { rel, dirname, wiki: normalized.startsWith(AIDOC_FOLDERS.WIKI + '/'), tree: wikiTreeOf(normalized) }
     indexPath(normalized, candidate)
 
     const stem = normalized.slice(0, -ext.length)
@@ -44,6 +52,11 @@ function createLinkResolver(allRels) {
     let candidates = key.includes('/') ? exactPaths.get(key) ?? suffixes.get(key) : names.get(key)
     if (!candidates?.length) return { kind: 'unresolved' }
 
+    const fromTree = wikiTreeOf(normalize(fromRel))
+    if (fromTree !== null) {
+      candidates = candidates.filter(candidate => candidate.tree === null || candidate.tree === fromTree)
+      if (!candidates.length) return { kind: 'unresolved' }
+    }
     if (candidates.length > 1) {
       const folder = path.dirname(normalize(fromRel))
       const local = candidates.filter(candidate => candidate.dirname === folder)

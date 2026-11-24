@@ -497,13 +497,13 @@ describe('AI Doc store', () => {
         aborted.send({ index: i, rel: 'x', status: 'start' })
         aborted.send({ index: i, rel: 'x', status: 'failed' })
       }
-      aborted.finish({ success: true, done: [], failed: [{}, {}, {}], stopped: false, aborted: 'consecutive_agent_errors', overflow: 0 })
+      aborted.finish({ success: true, done: [], failed: [{ rel: 'a' }, { rel: 'b' }, { rel: 'c' }], stopped: false, aborted: 'consecutive_agent_errors', overflow: 0 })
       await aborted.run
       expect(store.syncPercent).toBe(60)
 
       store.setRoot('/c')
       const failedOnly = await startIngest(store, 2)
-      failedOnly.finish({ success: true, done: [], failed: [{}, {}], stopped: false, overflow: 0 })
+      failedOnly.finish({ success: true, done: [], failed: [{ rel: 'a' }, { rel: 'b' }], stopped: false, overflow: 0 })
       await failedOnly.run
       expect(store.ingestResult.remaining).toBe(0)
       expect(store.syncPercent).toBe(100)
@@ -536,4 +536,156 @@ describe('AI Doc store', () => {
       expect(store.syncPercent).toBe(0)
     })
   })
+  describe('wiki languages', () => {
+    const languages = selected => ({ available: ['en', 'zh'], selected })
+    const planOf = (sources, selected = ['en'], extra = {}) => ({
+      success: true, sources, providerReady: true, overflow: 0, removed: [], languages: languages(selected), ...extra,
+    })
+    const note = rel => ({ rel, size: 1, state: 'new', langs: ['en'] })
+
+    async function openPlan(store, plan, options) {
+      store.setRoot('/a')
+      api.updateIndex.mockResolvedValue({ success: true })
+      api.getIngestPlan.mockResolvedValue(plan)
+      await store.runSync(options)
+    }
+
+    it('adopts the selection of the plan and remembers the requested sources for later plans', async () => {
+      const store = useAiDocStore()
+      await openPlan(store, planOf([note('kb_source/a.md')], ['zh']), { rels: ['kb_source/a.md'], force: true })
+      expect(store.ingestLanguages).toEqual(['zh'])
+      expect(store.ingestPlan).toMatchObject({ rels: ['kb_source/a.md'], force: true })
+    })
+
+    it('re-requests the plan for a changed selection and replaces the sources', async () => {
+      const store = useAiDocStore()
+      await openPlan(store, planOf([note('kb_source/a.md')]), { rels: ['kb_source/a.md'], force: true })
+      api.getIngestPlan.mockResolvedValue(planOf([note('kb_source/a.md'), note('kb_source/b.md')], ['en', 'zh'], { overflow: 3 }))
+      const change = store.setIngestLanguages(['zh', 'en'])
+      expect(store.ingestLanguages).toEqual(['en', 'zh'])
+      expect(store.ingestPlanLoading).toBe(true)
+      await change
+      expect(api.getIngestPlan).toHaveBeenLastCalledWith({ root: '/a', rels: ['kb_source/a.md'], force: true, languages: ['en', 'zh'] })
+      expect(store.ingestPlanLoading).toBe(false)
+      expect(store.ingestPlan.sources.map(source => source.rel)).toEqual(['kb_source/a.md', 'kb_source/b.md'])
+      expect(store.ingestPlan).toMatchObject({ overflow: 3, languages: languages(['en', 'zh']), providerReady: true })
+    })
+
+    it('keeps at least one language and ignores unknown ones', async () => {
+      const store = useAiDocStore()
+      await openPlan(store, planOf([note('kb_source/a.md')]))
+      api.getIngestPlan.mockClear()
+      await store.setIngestLanguages([])
+      await store.setIngestLanguages(['fr'])
+      expect(store.ingestLanguages).toEqual(['en'])
+      expect(api.getIngestPlan).not.toHaveBeenCalled()
+    })
+
+    it('ignores a stale plan response when the selection changed again', async () => {
+      const store = useAiDocStore()
+      await openPlan(store, planOf([note('kb_source/a.md')]))
+      let releaseFirst
+      api.getIngestPlan
+        .mockImplementationOnce(() => new Promise(resolve => { releaseFirst = resolve }))
+        .mockResolvedValueOnce(planOf([note('kb_source/zh.md')], ['zh']))
+      const first = store.setIngestLanguages(['en', 'zh'])
+      await store.setIngestLanguages(['zh'])
+      releaseFirst(planOf([note('kb_source/both.md')], ['en', 'zh']))
+      await first
+      expect(store.ingestLanguages).toEqual(['zh'])
+      expect(store.ingestPlan.sources.map(source => source.rel)).toEqual(['kb_source/zh.md'])
+      expect(store.ingestPlanLoading).toBe(false)
+    })
+
+    it('opens the dialog for an empty plan only when another language still has work', async () => {
+      const store = useAiDocStore()
+      await openPlan(store, planOf([], ['en'], { languages: { available: ['en', 'zh'], selected: ['en'], otherWork: false } }))
+      expect(store.ingestDialogVisible).toBe(false)
+      expect(store.ingestNothing).toBe(true)
+      store.setRoot('/b')
+      await openPlan(store, planOf([], ['en'], { languages: { available: ['en', 'zh'], selected: ['en'], otherWork: true } }))
+      expect(store.ingestDialogVisible).toBe(true)
+      expect(store.ingestNothing).toBe(false)
+      expect(store.ingestLanguages).toEqual(['en'])
+    })
+
+    it('shows a failed plan request as an error and keeps the previous plan', async () => {
+      const store = useAiDocStore()
+      await openPlan(store, planOf([note('kb_source/a.md')]))
+      api.getIngestPlan.mockResolvedValue({ success: false, code: 'invalid_language' })
+      await store.setIngestLanguages(['en', 'zh'])
+      expect(store.ingestErrorKey).toBe('aidoc.ingestInvalidLanguage')
+      expect(store.ingestPlan.sources.map(source => source.rel)).toEqual(['kb_source/a.md'])
+      expect(store.ingestPlanLoading).toBe(false)
+    })
+
+    it('sends the selected languages with the run and refuses to start with none or while loading', async () => {
+      const store = useAiDocStore()
+      await openPlan(store, planOf([note('kb_source/a.md')]))
+      await store.setIngestLanguages(['en', 'zh'])
+      api.runIngest.mockResolvedValue({ success: true, done: ['kb_source/a.md'], failed: [], overflow: 0 })
+
+      store.ingestLanguages = []
+      await store.confirmIngest()
+      expect(api.runIngest).not.toHaveBeenCalled()
+
+      store.ingestLanguages = ['en', 'zh']
+      store.ingestPlanLoading = true
+      await store.confirmIngest()
+      expect(api.runIngest).not.toHaveBeenCalled()
+
+      store.ingestPlanLoading = false
+      await store.confirmIngest()
+      expect(api.runIngest).toHaveBeenCalledWith(expect.objectContaining({
+        root: '/a', rels: ['kb_source/a.md'], force: false, languages: ['en', 'zh'],
+      }))
+    })
+
+    it('counts a source that failed in several languages once and keeps partial sources as remaining', async () => {
+      const store = useAiDocStore()
+      await openPlan(store, planOf([note('kb_source/a.md'), note('kb_source/b.md'), note('kb_source/c.md')], ['en', 'zh']))
+      api.runIngest.mockResolvedValue({
+        success: true, done: ['kb_source/a.md'],
+        failed: [
+          { rel: 'kb_source/b.md', lang: 'en', reason: 'read_failed' },
+          { rel: 'kb_source/b.md', lang: 'zh', reason: 'read_failed' },
+          { rel: 'kb_source/c.md', lang: 'zh', reason: 'agent_error' },
+        ],
+        stopped: false, overflow: 0,
+      })
+      await store.confirmIngest()
+      expect(store.ingestResult.remaining).toBe(0)
+      expect(store.ingestResult.failed).toHaveLength(3)
+    })
+
+    it('measures progress in units of source and language', async () => {
+      const store = useAiDocStore()
+      await openPlan(store, planOf([note('kb_source/a.md'), note('kb_source/b.md')], ['en', 'zh']))
+      let finish
+      api.runIngest.mockImplementation(() => new Promise(resolve => { finish = resolve }))
+      const run = store.confirmIngest()
+      const { requestId } = api.runIngest.mock.calls.at(-1)[0]
+      const send = event => ingestProgress({ requestId, total: 4, ...event })
+      send({ index: 0, rel: 'a', lang: 'en', status: 'start' })
+      send({ index: 0, rel: 'a', lang: 'en', status: 'done' })
+      expect(store.syncPercent).toBe(25)
+      send({ index: 1, rel: 'a', lang: 'zh', status: 'start' })
+      send({ index: 1, rel: 'a', lang: 'zh', status: 'done' })
+      expect(store.syncPercent).toBe(50)
+      send({ index: 2, rel: 'b', lang: 'en', status: 'failed' })
+      expect(store.syncPercent).toBe(75)
+      finish({ success: true, done: ['a'], failed: [{ rel: 'b', lang: 'en', reason: 'agent_error' }], overflow: 0 })
+      await run
+    })
+
+    it('restores the unit progress of a run that is already active', async () => {
+      const store = useAiDocStore()
+      api.getIngestStatus.mockResolvedValue({ success: true, running: true, requestId: 'bg', index: 1, total: 4, rel: 'kb_source/a.md', lang: 'zh', status: 'start' })
+      store.setRoot('/a')
+      await vi.waitFor(() => expect(store.ingesting).toBe(true))
+      expect(store.ingestProgress).toMatchObject({ index: 1, total: 4, lang: 'zh' })
+      expect(store.syncPercent).toBe(25)
+    })
+  })
+
 })

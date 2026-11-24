@@ -119,11 +119,11 @@ describe('systemPromptBuilder AI Doc gating', () => {
     const baseline = build(productivity)
     try {
       await writeRegistry(registryFile, { version: 1, sources: {}, pages: {
-        'wiki/source.md': { hash: 'x', type: 'summary', updated: '2026-11-04' }
+        'wiki/en/source.md': { hash: 'x', type: 'summary', updated: '2026-11-04' }
       } })
       const on = build({ ...productivity, aiDocEnabled: true })
       expect(on).toContain('KNOWLEDGE BASE WIKI OVERVIEW')
-      expect(on).toContain(`${docRoot.replace(/\\/g, '/')}/wiki/index.md`)
+      expect(on).toContain(`${docRoot.replace(/\\/g, '/')}/wiki/en/index.md`)
       expect(on.indexOf('KNOWLEDGE BASE WIKI OVERVIEW')).toBeGreaterThan(on.indexOf('AI-maintained knowledge pages'))
       expect(on.indexOf('KNOWLEDGE BASE WIKI OVERVIEW')).toBeLessThan(on.indexOf('All readable documents live under'))
       expect(build(productivity)).toBe(on)
@@ -132,6 +132,41 @@ describe('systemPromptBuilder AI Doc gating', () => {
       expect(build(baseConfig)).not.toContain('wiki/index.md')
 
       await writeRegistry(registryFile, { version: 1, sources: {}, pages: {} })
+      expect(build(productivity)).toBe(baseline)
+    } finally {
+      fs.rmSync(registryFile, { force: true })
+    }
+  })
+
+  it('points the recall at the wiki language of the configured language, else the first available one', async () => {
+    const registryFile = registryPathFor(baseConfig.dataPath, docRoot)
+    const productivity = { ...baseConfig, mode: 'productivity' }
+    const posixRoot = docRoot.replace(/\\/g, '/')
+    const baseline = build(productivity)
+    const baselineZh = build({ ...productivity, language: 'zh' })
+    try {
+      await writeRegistry(registryFile, { version: 1, sources: {}, pages: {
+        'wiki/en/a.md': { hash: 'x', type: 'summary', updated: '2026-11-04' },
+        'wiki/zh/a.md': { hash: 'y', type: 'concept', updated: '2026-11-05' },
+        'wiki/zh/b.md': { hash: 'z', type: 'concept', updated: '2026-11-06' }
+      } })
+      const zh = build({ ...productivity, language: 'zh' })
+      expect(zh).toContain(`Location: ${posixRoot}/wiki/zh\n`)
+      expect(zh).toContain(`${posixRoot}/wiki/zh/index.md`)
+      expect(zh).toContain('Pages: 2 (concept: 2)')
+      expect(zh).not.toContain('/wiki/en/index.md')
+      const en = build(productivity)
+      expect(en).toContain(`${posixRoot}/wiki/en/index.md`)
+      expect(en).toContain('Pages: 1 (summary: 1)')
+
+      await writeRegistry(registryFile, { version: 1, sources: {}, pages: {
+        'wiki/zh/a.md': { hash: 'y', type: 'concept', updated: '2026-11-05' }
+      } })
+      expect(build(productivity)).toContain(`${posixRoot}/wiki/zh/index.md`)
+      expect(build({ ...productivity, aiDocEnabled: false })).not.toContain('KNOWLEDGE BASE WIKI OVERVIEW')
+
+      await writeRegistry(registryFile, { version: 1, sources: {}, pages: {} })
+      expect(build({ ...productivity, language: 'zh' })).toBe(baselineZh)
       expect(build(productivity)).toBe(baseline)
     } finally {
       fs.rmSync(registryFile, { force: true })
