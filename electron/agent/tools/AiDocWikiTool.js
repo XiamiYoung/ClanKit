@@ -122,7 +122,7 @@ function humanSize(bytes) {
 
 class AiDocWikiTool extends BaseTool {
   // lang: the wiki language this tool instance maintains. Wiki access is rooted at wiki/<lang>/.
-  constructor({ root, registry, sourceText, lang } = {}) {
+  constructor({ root, registry, sourceText, parallel, lang } = {}) {
     if (!isWikiLanguage(lang)) throw new Error(`Unsupported wiki language: ${lang}`)
     const wikiRoot = wikiLanguageRoot(lang)
     super(
@@ -135,6 +135,7 @@ class AiDocWikiTool extends BaseTool {
     this.root = root
     this.registry = registry || { version: 1, sources: {}, pages: {} }
     this.sourceText = sourceText
+    this.parallel = parallel
     this._touched = new Set()
     this._pages = new Map()
     // Hash of the last content this tool wrote per page, so its own writes never count as user edits.
@@ -330,7 +331,15 @@ class AiDocWikiTool extends BaseTool {
     }
     if (path.extname(target.rel).toLowerCase() !== '.md') return { ok: false, error: 'Only .md files can be written; the path must end with .md' }
     if (target.exists && !fs.statSync(target.abs).isFile()) return { ok: false, error: `Not a file: ${target.rel}` }
-    return { ok: true, target, isIndex: lower === `${this.wikiRoot.toLowerCase()}/index.md` }
+    const isIndex = lower === `${this.wikiRoot.toLowerCase()}/index.md`
+    if (this.parallel) {
+      if (isIndex) return { ok: false, error: 'The application updates index.md during parallel organization.' }
+      const owner = this.parallel.owners.get(target.rel)
+      if (owner && owner !== this) {
+        return { ok: false, error: 'Another batch is updating this page. Organize other pages first and read this page again before editing it.' }
+      }
+    }
+    return { ok: true, target, isIndex }
   }
 
   /** True when an existing page differs from what the app (or this tool) last wrote, or is not registered at all. */
@@ -338,7 +347,7 @@ class AiDocWikiTool extends BaseTool {
     // Once detected, a page stays protected for the whole run, whatever the tool writes later.
     if (this._userEdited.has(rel)) return true
     const pages = this.registry?.pages || {}
-    const entry = pages[rel] || pages[rel.replace(/^wiki\//, '')]
+    const entry = this.parallel?.committed.get(rel) || pages[rel] || pages[rel.replace(/^wiki\//, '')]
     const expected = this._lastHash.get(rel) || (entry && entry.hash)
     if (!entry?.handEdited && expected && expected === sha256Text(current)) return false
     this._userEdited.set(rel, current.length)
@@ -373,6 +382,7 @@ class AiDocWikiTool extends BaseTool {
       try { fs.rmSync(tmp, { force: true }) } catch { /* best effort */ }
       throw error
     }
+    this.parallel?.owners.set(target.rel, this)
     this._touched.add(target.rel)
     this._lastHash.set(target.rel, sha256Text(content))
     if (meta) this._pages.set(target.rel, meta)
@@ -388,6 +398,9 @@ class AiDocWikiTool extends BaseTool {
       return this._err(`content is too large (${content.length} chars, limit ${MAX_WIKI_WRITE_CHARS}). Split it into several pages.`)
     }
     if (target.exists && !isIndex) {
+      if (this.parallel) {
+        return this._err('Use read_wiki and edit_wiki to update an existing page during parallel organization.')
+      }
       const current = this._readExisting(target)
       if (current === null || this._isHandEdited(target.rel, current)) {
         return this._err(`${target.rel} contains edits made by the user (or was not created by the application) and cannot be overwritten. Call read_wiki first, then use edit_wiki to make minimal changes that preserve the user's content.`)
@@ -438,6 +451,12 @@ class AiDocWikiTool extends BaseTool {
     let hint = ''
     if (!isIndex) {
       const before = parseFrontmatter(current)
+      if (this.parallel && Array.isArray(before.data?.sources)) {
+        const after = parseFrontmatter(next).data?.sources
+        if (!Array.isArray(after) || before.data.sources.some(source => !after.includes(source))) {
+          return this._err('Keep the existing sources when editing a page during parallel organization.')
+        }
+      }
       if (!before.hasFrontmatter || !validateWikiFrontmatter(before.data).ok) {
         hint = ' This existing page has no valid frontmatter: the edit must add a complete frontmatter block (type, title, sources, updated) in the same edit, or the user must fix the page.'
       }
@@ -463,7 +482,7 @@ class AiDocWikiTool extends BaseTool {
     }
     const pages = this.registry?.pages || {}
     // target.rel is the canonical on-disk spelling, so case/alias variants hit the same registry entry.
-    const entry = pages[target.rel] || pages[target.rel.replace(/^wiki\//, '')]
+    const entry = this.parallel?.committed.get(target.rel) || pages[target.rel] || pages[target.rel.replace(/^wiki\//, '')]
     const expected = this._lastHash.get(target.rel) || entry?.hash
     const edited = this._userEdited.has(target.rel) || !!(entry?.handEdited || (expected && expected !== sha256Text(content)))
     return this._ok(edited ? `${USER_EDIT_NOTE}\n${content}` : content, { userEdited: edited })

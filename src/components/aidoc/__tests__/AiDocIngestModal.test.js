@@ -59,9 +59,21 @@ describe('AiDocIngestModal', () => {
     dialog.click()
     expect(store.cancelIngestPlan).not.toHaveBeenCalled()
     dialog.querySelector('[data-testid="aidoc-ingest-start"]').click()
-    expect(store.confirmIngest).toHaveBeenCalledExactlyOnceWith()
+    expect(store.confirmIngest).toHaveBeenCalledExactlyOnceWith(5)
     dialog.querySelector('[data-testid="aidoc-ingest-dismiss"]').click()
     expect(store.cancelIngestPlan).toHaveBeenCalledOnce()
+  })
+
+  it('offers 5 or 10 sources per model session and uses the chosen size', () => {
+    const dialog = open()
+    const select = dialog.querySelector('[data-testid="aidoc-ingest-batch-size"]')
+    expect(select.closest('label').textContent).toContain('aidoc.ingestBatchSizeLabel')
+    expect([...select.options].map(option => option.value)).toEqual(['5', '10'])
+    expect(select.value).toBe('5')
+    select.value = '10'
+    select.dispatchEvent(new Event('change'))
+    dialog.querySelector('[data-testid="aidoc-ingest-start"]').click()
+    expect(store.confirmIngest).toHaveBeenCalledExactlyOnceWith(10)
   })
 
   it('disables confirmation and displays the provider error', () => {
@@ -431,7 +443,7 @@ describe('AiDocIngestModal', () => {
       const dialog = open()
       expect(dialog.querySelector('[role="tree"] input[type="checkbox"]')).toBeNull()
       dialog.querySelector('[data-testid="aidoc-ingest-start"]').click()
-      expect(store.confirmIngest).toHaveBeenCalledExactlyOnceWith()
+      expect(store.confirmIngest).toHaveBeenCalledExactlyOnceWith(5)
     })
   })
 

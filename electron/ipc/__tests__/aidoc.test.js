@@ -152,7 +152,7 @@ it('allows only one run and a stop from the original renderer and root', async (
   const entered = new Promise(resolve => { taskEntered = resolve })
   const stop = vi.fn(() => release())
   const runAgent = vi.fn(({ active }) => {
-    active.loop = { stop }
+    active.loops.add({ stop })
     taskEntered()
     return new Promise(resolve => { release = resolve })
   })
@@ -172,7 +172,7 @@ it('reports the active run through ingest-status and pushes a final complete eve
   let taskEntered
   const entered = new Promise(resolve => { taskEntered = resolve })
   const runAgent = vi.fn(({ active }) => {
-    active.loop = { stop: () => release() }
+    active.loops.add({ stop: () => release() })
     taskEntered()
     return new Promise(resolve => { release = resolve })
   })
@@ -283,7 +283,7 @@ it('stops a running ingest and frees the busy flag when the owning window is des
   const entered = new Promise(resolve => { taskEntered = resolve })
   const stop = vi.fn(() => release())
   const runAgent = vi.fn(({ active }) => {
-    active.loop = { stop }
+    active.loops.add({ stop })
     taskEntered()
     return new Promise(resolve => { release = resolve })
   })
@@ -569,7 +569,7 @@ describe('ingest languages', () => {
     let taskEntered
     const entered = new Promise(resolve => { taskEntered = resolve })
     const runAgent = vi.fn(({ active }) => {
-      active.loop = { stop: () => release() }
+      active.loops.add({ stop: () => release() })
       taskEntered()
       return new Promise(resolve => { release = resolve })
     })
@@ -600,4 +600,26 @@ describe('ingest languages', () => {
     expect(wikiIds.every(id => id.startsWith('wiki/zh/'))).toBe(true)
     expect(graph.nodes.map(node => node.id)).toContain('kb_source/note.md')
   })
+})
+
+it('stops every active batch and validates batch size', async () => {
+  let notifyStarted
+  const started = new Promise(resolve => { notifyStarted = resolve })
+  const stops = []
+  const runAgent = vi.fn(({ active }) => new Promise(resolve => {
+    const stop = vi.fn(resolve)
+    const loop = { stop }
+    active.loops.add(loop)
+    stops.push(stop)
+    if (stops.length === 2) notifyStarted()
+  }))
+  const { root, invoke } = await ingestFixture(runAgent)
+  for (let i = 0; i < 5; i++) await fs.writeFile(path.join(root, 'kb_source', 'batch-' + i + '.md'), '# Source')
+  await expect(invoke('ingest-run', { batchSize: 6 })).resolves.toMatchObject({ success: false, code: 'invalid_batch_size' })
+  const run = invoke('ingest-run', { batchSize: 5 })
+  await started
+  await expect(invoke('ingest-stop')).resolves.toMatchObject({ success: true })
+  await expect(run).resolves.toMatchObject({ stopped: true, done: [] })
+  expect(runAgent).toHaveBeenCalledTimes(2)
+  for (const stop of stops) expect(stop).toHaveBeenCalledOnce()
 })

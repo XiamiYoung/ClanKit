@@ -126,7 +126,7 @@ describe('AI Doc store', () => {
     api.runIngest.mockImplementation(() => new Promise(resolve => { finish = resolve }))
     const run = store.confirmIngest()
     const opts = api.runIngest.mock.calls[0][0]
-    expect(opts).toMatchObject({ root: '/a', rels: [rel], force: true })
+    expect(opts).toMatchObject({ root: '/a', rels: [rel], force: true, batchSize: 5 })
     ingestProgress({ requestId: 'wrong', index: 5 })
     expect(store.ingestProgress).toBeNull()
     ingestProgress({ requestId: opts.requestId, index: 0, total: 1, rel, action: 'read_source' })
@@ -162,8 +162,8 @@ describe('AI Doc store', () => {
     await store.runSync()
     expect(store.ingestModel).toEqual({ providerId: 'p2', model: 'custom-id' })
     api.runIngest.mockResolvedValue({ success: true, done: [], failed: [], overflow: 0 })
-    await store.confirmIngest()
-    expect(api.runIngest.mock.calls[0][0]).toMatchObject({ providerId: 'p2', model: 'custom-id' })
+    await store.confirmIngest(10)
+    expect(api.runIngest.mock.calls[0][0]).toMatchObject({ providerId: 'p2', model: 'custom-id', batchSize: 10 })
     store.setRoot('/b')
     expect(store.ingestModel).toEqual({ providerId: 'p2', model: 'custom-id' })
   })
@@ -480,6 +480,20 @@ describe('AI Doc store', () => {
       finish({ success: true, done: ['a', 'c'], failed: [{ rel: 'b', reason: 'agent_error' }], overflow: 0 })
       await run
       expect(store.syncPercent).toBe(100)
+    })
+
+    it('counts finished units instead of the ordinal of out-of-order parallel batches', async () => {
+      const store = useAiDocStore()
+      const { send, finish, run } = await startIngest(store, 10)
+      send({ index: 5, rel: 'f', status: 'start', completed: 0 })
+      expect(store.syncPercent).toBe(0)
+      send({ index: 5, rel: 'f', status: 'done', completed: 1 })
+      expect(store.syncPercent).toBe(10)
+      send({ index: 0, rel: 'a', status: 'done', completed: 2 })
+      expect(store.syncPercent).toBe(20)
+      finish({ success: true, done: ['a', 'f'], failed: [], stopped: true, overflow: 0 })
+      await run
+      expect(store.syncPercent).toBe(20)
     })
 
     it('keeps the last percent for stopped, aborted or partial runs and shows 100 for complete ones', async () => {

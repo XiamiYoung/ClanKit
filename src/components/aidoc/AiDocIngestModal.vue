@@ -47,6 +47,18 @@
           <p class="ingest-detail ingest-language-hint" data-testid="aidoc-ingest-languages-hint">{{ t('aidoc.ingestLanguagesHint') }}</p>
         </fieldset>
 
+        <label v-if="confirming && store.ingestPlan.sources.length" class="ingest-field w-fit">
+          <span class="ingest-detail">{{ t('aidoc.ingestBatchSizeLabel') }}</span>
+          <select v-model="batchSize" class="ingest-input" data-testid="aidoc-ingest-batch-size"
+            :disabled="store.ingesting">
+            <option :value="5">5</option>
+            <option :value="10">10</option>
+          </select>
+          <span class="ingest-detail" data-testid="aidoc-ingest-batch-count">
+            {{ t('aidoc.ingestBatchCount', { n: Math.ceil(store.ingestPlan.sources.length / batchSize) }) }}
+          </span>
+        </label>
+
         <template v-if="store.ingestResult">
           <div class="ingest-summary" role="status">
             <div class="ingest-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"
@@ -102,7 +114,7 @@
           {{ t(confirming ? 'common.cancel' : 'common.close') }}
         </AppButton>
         <AppButton v-if="confirming" size="modal" type="button" data-testid="aidoc-ingest-start"
-          :disabled="!canStart || store.ingesting" @click="store.confirmIngest()">
+          :disabled="!canStart || store.ingesting" @click="store.confirmIngest(batchSize)">
           {{ t('aidoc.ingestStart') }}
         </AppButton>
         <AppButton v-else-if="modelErrorHint && hasModelChoice" size="modal" type="button" data-testid="aidoc-ingest-retry"
@@ -126,6 +138,7 @@ import { languageLabelKey } from '../../utils/aidocLanguages'
 const { t, locale } = useI18n()
 const store = useAiDocStore()
 const dialog = ref(null)
+const batchSize = ref(5)
 const confirming = computed(() => !!store.ingestPlan && !store.ingestResult)
 const providerMessage = computed(() => {
   const error = store.ingestPlan?.providerError

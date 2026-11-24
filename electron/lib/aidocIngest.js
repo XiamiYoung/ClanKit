@@ -123,20 +123,65 @@ function readSchemaText(root, lang) {
 }
 
 // A source runs once per language in source.langs (falling back to `languages`); each (source, language) pair is a unit.
-async function runIngest({ root, registryFile, sources, languages, runAgent, onProgress, shouldStop, now = () => new Date() }) {
+async function runIngest({ root, registryFile, sources, languages, batchSize, runAgent, onProgress, shouldStop, now = () => new Date() }) {
   const key = registryFileKey(registryFile)
   if (activeRuns.has(key)) {
     throw Object.assign(new Error('An ingest run is already in progress'), { code: 'INGEST_BUSY' })
   }
   activeRuns.add(key)
   try {
-    return await ingestSequentially({ root, registryFile, sources, languages, runAgent, onProgress, shouldStop, now })
+    const shared = { root, registryFile, languages, runAgent, shouldStop, now }
+    if (![5, 10].includes(batchSize) || sources.length <= batchSize) {
+      return await ingestSequentially({ ...shared, sources, onProgress })
+    }
+
+    // A batch is a sequential lane. Other lanes overlap model I/O, while shared wiki writes are coordinated.
+    const counts = sources.map(source => {
+      const langs = validateWikiLanguages(source.langs ?? languages)
+      if (!langs) throw invalidLanguages()
+      return langs.length
+    })
+    const total = counts.reduce((sum, count) => sum + count, 0)
+    const parallel = {
+      owners: new Map(),
+      committed: new Map(),
+      bookkeeping: Promise.resolve(),
+      agentErrorStreak: 0,
+      aborted: false,
+    }
+    const finished = new Set()
+    const progress = event => {
+      if (event.status === 'done' || event.status === 'failed') finished.add(event.index)
+      onProgress?.({ ...event, completed: finished.size })
+    }
+    const jobs = []
+    let offset = 0
+    for (let start = 0; start < sources.length; start += batchSize) {
+      const end = start + batchSize
+      jobs.push(ingestSequentially({
+        ...shared, sources: sources.slice(start, end), onProgress: progress, parallel, offset, runTotal: total,
+      }))
+      offset += counts.slice(start, end).reduce((sum, count) => sum + count, 0)
+    }
+    const settled = await Promise.allSettled(jobs)
+    const failure = settled.find(item => item.status === 'rejected')
+    if (failure) throw failure.reason
+    const results = settled.map(item => item.value)
+    const warnings = results.flatMap(result => result.warnings || [])
+    const aborted = results.find(result => result.aborted)?.aborted
+    return {
+      done: results.flatMap(result => result.done),
+      failed: results.flatMap(result => result.failed),
+      stopped: results.some(result => result.stopped),
+      ...(warnings.length ? { warnings } : {}),
+      ...(aborted ? { aborted } : {}),
+    }
   } finally {
     activeRuns.delete(key)
   }
 }
 
-async function ingestSequentially({ root, registryFile, sources, languages, runAgent, onProgress, shouldStop, now }) {
+async function ingestSequentially({ root, registryFile, sources, languages, runAgent, onProgress, shouldStop, now, parallel, offset = 0, runTotal }) {
   // Validate before anything is written.
   const queue = sources.map(source => {
     const langs = validateWikiLanguages(source.langs ?? languages)
@@ -151,9 +196,9 @@ async function ingestSequentially({ root, registryFile, sources, languages, runA
   }
   for (const lang of new Set(queue.flatMap(item => item.langs))) ensureWikiScaffold(root, lang)
   const result = { done: [], failed: [], stopped: false }
-  const total = queue.reduce((sum, item) => sum + item.langs.length, 0)
+  const total = runTotal ?? queue.reduce((sum, item) => sum + item.langs.length, 0)
   let agentErrorStreak = 0
-  let firstUnit = 0
+  let firstUnit = offset
   const stopRequested = () => {
     if (typeof shouldStop === 'function' && shouldStop()) result.stopped = true
     return result.stopped
@@ -167,7 +212,7 @@ async function ingestSequentially({ root, registryFile, sources, languages, runA
     const { rel } = source
     const base = firstUnit
     firstUnit += langs.length
-    if (stopRequested()) break
+    if (stopRequested() || parallel?.aborted) break
 
     // Progress is reported per unit: index counts (source, language) pairs across the whole run.
     const started = new Set()
@@ -224,60 +269,81 @@ async function ingestSequentially({ root, registryFile, sources, languages, runA
       }
       const previousPages = [...(registry.sources[rel]?.langs?.[lang]?.pages || [])]
       const handEditedPages = await handEditedOf(root, registry, previousPages)
-      const tool = new AiDocWikiTool({ root, registry, sourceText: { rel, loaded }, lang })
+      const tool = new AiDocWikiTool({ root, registry, sourceText: { rel, loaded }, parallel, lang })
 
-      if (stopRequested()) { halt(i); break sourceLoop }
       try {
-        await runAgent({
-          source, lang, wikiRoot: wikiLanguageRoot(lang), tool, previousPages, handEditedPages,
-          schemaText: readSchemaText(root, lang)
-        })
-      } catch (error) {
-        if (error?.name === 'AbortError' || stopRequested()) { result.stopped = true; halt(i); break sourceLoop }
-        failUnit(i, 'agent_error', errorMessage(error))
-        sourceDone = false
-        if (++agentErrorStreak >= MAX_CONSECUTIVE_AGENT_ERRORS) { result.aborted = 'consecutive_agent_errors'; break sourceLoop }
-        continue
-      }
-      agentErrorStreak = 0
-      if (stopRequested()) { halt(i); break sourceLoop }
-
-      let pages
-      let stamp
-      try {
-        pages = await collectWrittenPages(root, tool)
-        if (stopRequested()) { halt(i); break sourceLoop }
-        if (!pages.length) { failUnit(i, 'no_pages'); sourceDone = false; continue }
-        stamp = now()
-        // The registry write is the commit point; nothing else may run inside it.
-        const committed = await updateRegistry(registryFile, async latest => {
-          if (stopRequested()) return
-          // Union with earlier pages of this source that still exist, so a partial re-ingest does not forget them.
-          const keepPages = (latest.sources[rel]?.langs?.[lang]?.pages || []).filter(pageRel => {
-            const target = resolveWikiToolPath(root, pageRel)
-            return target.ok && target.area === 'wiki' && target.exists
+        if (stopRequested() || parallel?.aborted) { halt(i); break sourceLoop }
+        try {
+          await runAgent({
+            source, lang, wikiRoot: wikiLanguageRoot(lang), tool, previousPages, handEditedPages,
+            schemaText: readSchemaText(root, lang), progress: unit(i), parallel: Boolean(parallel)
           })
-          return recordIngested(latest, { rel, lang, ...snapshot, ingestedAt: stamp.toISOString(), pages, keepPages })
-        })
-        if (!committed) { halt(i); break sourceLoop }
-      } catch (error) {
-        failUnit(i, 'record_failed', errorMessage(error)); sourceDone = false; continue
-      }
+        } catch (error) {
+          if (error?.name === 'AbortError' || stopRequested()) { result.stopped = true; halt(i); break sourceLoop }
+          failUnit(i, 'agent_error', errorMessage(error))
+          sourceDone = false
+          const streak = parallel ? ++parallel.agentErrorStreak : ++agentErrorStreak
+          if (streak >= MAX_CONSECUTIVE_AGENT_ERRORS) {
+            result.aborted = 'consecutive_agent_errors'
+            if (parallel) parallel.aborted = true
+            break sourceLoop
+          }
+          continue
+        }
+        if (parallel) parallel.agentErrorStreak = 0
+        else agentErrorStreak = 0
+        if (stopRequested()) { halt(i); break sourceLoop }
 
-      // Best-effort follow-ups after the commit: the unit stays done and failures are reported as warnings.
-      const warnings = []
-      try {
-        await ensureIndexCoverage(root, lang, pages)
-      } catch (error) {
-        warnings.push({ rel, lang, step: 'index', detail: errorMessage(error) })
+        let pages
+        let stamp
+        try {
+          pages = await collectWrittenPages(root, tool)
+          if (stopRequested()) { halt(i); break sourceLoop }
+          if (!pages.length) { failUnit(i, 'no_pages'); sourceDone = false; continue }
+          stamp = now()
+          // The registry write is the commit point; nothing else may run inside it.
+          const committed = await updateRegistry(registryFile, async latest => {
+            if (stopRequested()) return
+            // Union with earlier pages of this source that still exist, so a partial re-ingest does not forget them.
+            const keepPages = (latest.sources[rel]?.langs?.[lang]?.pages || []).filter(pageRel => {
+              const target = resolveWikiToolPath(root, pageRel)
+              return target.ok && target.area === 'wiki' && target.exists
+            })
+            return recordIngested(latest, { rel, lang, ...snapshot, ingestedAt: stamp.toISOString(), pages, keepPages })
+          })
+          if (!committed) { halt(i); break sourceLoop }
+          if (parallel) for (const page of pages) parallel.committed.set(page.rel, page)
+        } catch (error) {
+          failUnit(i, 'record_failed', errorMessage(error)); sourceDone = false; continue
+        }
+
+        // Serialize index and log updates across lanes; page records are already committed.
+        const bookkeeping = async () => {
+          const warnings = []
+          try {
+            await ensureIndexCoverage(root, lang, pages)
+          } catch (error) {
+            warnings.push({ rel, lang, step: 'index', detail: errorMessage(error) })
+          }
+          try {
+            await appendLog(root, lang, { date: localDate(stamp), sourceRel: rel, pages: pages.map(p => path.basename(p.rel, '.md')) })
+          } catch (error) {
+            warnings.push({ rel, lang, step: 'log', detail: errorMessage(error) })
+          }
+          return warnings
+        }
+        const pending = parallel ? parallel.bookkeeping.then(bookkeeping) : bookkeeping()
+        if (parallel) parallel.bookkeeping = pending.catch(() => {})
+        const warnings = await pending
+        if (warnings.length) (result.warnings ||= []).push(...warnings)
+        emit({ ...unit(i), status: 'done', pages: pages.map(p => p.rel), ...(warnings.length ? { warnings } : {}) })
+      } finally {
+        if (parallel) {
+          for (const page of tool.getTouchedFiles()) {
+            if (parallel.owners.get(page) === tool) parallel.owners.delete(page)
+          }
+        }
       }
-      try {
-        await appendLog(root, lang, { date: localDate(stamp), sourceRel: rel, pages: pages.map(p => path.basename(p.rel, '.md')) })
-      } catch (error) {
-        warnings.push({ rel, lang, step: 'log', detail: errorMessage(error) })
-      }
-      if (warnings.length) (result.warnings ||= []).push(...warnings)
-      emit({ ...unit(i), status: 'done', pages: pages.map(p => p.rel), ...(warnings.length ? { warnings } : {}) })
     }
     // A source counts as done only when every language unit succeeded; partial results stay recorded per language.
     if (sourceDone) result.done.push(rel)

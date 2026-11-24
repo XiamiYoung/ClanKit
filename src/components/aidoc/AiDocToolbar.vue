@@ -154,6 +154,9 @@ const syncLabel = computed(() => t(store.ingesting ? 'aidoc.syncInProgress' : (s
 const ingestDetail = computed(() => {
   const info = store.ingestProgress
   if (!info?.total) return `${percent.value}%`
+  if (Number.isInteger(info.completed)) {
+    return t('aidoc.ingestBatchProgress', { done: info.completed, total: info.total, percent: percent.value })
+  }
   return t('aidoc.syncRunning', { i: info.index + 1, n: info.total, name: fileName(info.rel), percent: percent.value })
 })
 const syncTooltip = computed(() => {

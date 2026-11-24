@@ -8,6 +8,7 @@ const ERROR_KEYS = {
   busy: 'aidoc.ingestBusy',
   invalid_model: 'aidoc.ingestInvalidModel',
   invalid_language: 'aidoc.ingestInvalidLanguage',
+  invalid_batch_size: 'aidoc.ingestInvalidBatchSize',
 }
 
 function describeError(result, message, key) {
@@ -77,6 +78,12 @@ export const useAiDocStore = defineStore('aidoc', () => {
   }
 
   function trackIngestEvent(event) {
+    if (Number.isInteger(event.completed)) {
+      ingestCompleted = Math.max(ingestCompleted, event.completed)
+      ingestActions = 0
+      bumpIngestPercent(event.total)
+      return
+    }
     if (event.type === 'action') ingestActions++
     else if (event.status === 'start') { ingestCompleted = event.index; ingestActions = 0 }
     else if (event.status === 'done' || event.status === 'failed') { ingestCompleted = event.index + 1; ingestActions = 0 }
@@ -338,7 +345,7 @@ export const useAiDocStore = defineStore('aidoc', () => {
       resetPercent()
       if (snapshot.total) {
         ingestProgress.value = {
-          requestId: snapshot.requestId, status: snapshot.status, index: snapshot.index, total: snapshot.total, rel: snapshot.rel, lang: snapshot.lang,
+          requestId: snapshot.requestId, status: snapshot.status, index: snapshot.index, total: snapshot.total, rel: snapshot.rel, lang: snapshot.lang, completed: snapshot.completed,
         }
         trackIngestEvent(ingestProgress.value)
       }
@@ -346,7 +353,7 @@ export const useAiDocStore = defineStore('aidoc', () => {
     } catch { /* Without a snapshot the button simply stays idle. */ }
   }
 
-  async function confirmIngest() {
+  async function confirmIngest(batchSize = 5) {
     const api = window.electronAPI?.aidoc
     const plan = ingestPlan.value
     if (!api?.runIngest || ingesting.value || ingestPlanLoading.value || !plan?.providerReady || !plan.sources.length) return
@@ -363,7 +370,7 @@ export const useAiDocStore = defineStore('aidoc', () => {
     try {
       ensureIngestListener()
       const result = await api.runIngest({
-        root, requestId: id, force: plan.force, rels: plan.sources.map(source => source.rel),
+        root, requestId: id, force: plan.force, rels: plan.sources.map(source => source.rel), batchSize,
         ...(plan.languages ? { languages: [...ingestLanguages.value] } : {}),
         ...(plan.providers?.length ? { providerId: ingestModel.value.providerId, model: ingestModel.value.model } : {}),
       })

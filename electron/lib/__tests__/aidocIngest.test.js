@@ -757,3 +757,82 @@ describe('buildIngestPlan languages', () => {
     expect(notForced.sources.map(s => s.langs)).toEqual([['zh']])
   })
 })
+
+describe('parallel source batches', () => {
+  it.each([[5, 6], [10, 3]])('starts %s-source batches concurrently with %s lanes', async (batchSize, lanes) => {
+    const sources = Array.from({ length: 30 }, (_, index) => src('source-' + index + '.md'))
+    let signalStarted
+    let release
+    const started = new Promise(resolve => { signalStarted = resolve })
+    const gate = new Promise(resolve => { release = resolve })
+    const firstCalls = []
+    const progress = []
+    const agent = vi.fn(async ({ source, tool }) => {
+      firstCalls.push(source.rel)
+      if (firstCalls.length === lanes) signalStarted()
+      await gate
+      await write(tool, path.basename(source.rel, '.md'), source.rel)
+    })
+    const pending = run(sources, agent, { batchSize, onProgress: event => progress.push(event) })
+    await started
+    try {
+      expect(firstCalls.slice().sort()).toEqual(
+        sources.filter((_, index) => index % batchSize === 0).map(source => source.rel).sort(),
+      )
+    } finally {
+      release()
+    }
+    const completion = await pending
+    expect(completion).toEqual({ done: sources.map(source => source.rel), failed: [], stopped: false })
+    expect(progress.filter(event => event.status === 'done').map(event => event.completed))
+      .toEqual(Array.from({ length: 30 }, (_, index) => index + 1))
+    expect(wikiRead('log.md').match(/## .* ingest \|/g)).toHaveLength(30)
+    for (const source of sources) expect(wikiRead('index.md')).toContain('[[' + path.basename(source.rel, '.md') + ']]')
+  })
+
+  it('preserves shared page ownership, citations and the committed registry hash', async () => {
+    const sources = Array.from({ length: 6 }, (_, index) => src('doc-' + index + '.md'))
+    const first = sources[0].rel
+    const second = sources[5].rel
+    let notifyWritten, notifyConflict, notifyCommitted
+    const written = new Promise(resolve => { notifyWritten = resolve })
+    const conflict = new Promise(resolve => { notifyConflict = resolve })
+    const committed = new Promise(resolve => { notifyCommitted = resolve })
+    const agent = vi.fn(async ({ source, tool }) => {
+      if (source.rel === first) {
+        expect((await write(tool, 'Shared', first)).isError).toBeUndefined()
+        notifyWritten()
+        await conflict
+      }
+      if (source.rel === second) {
+        await written
+        try {
+          const busy = await write(tool, 'Shared', second)
+          expect(busy.isError).toBe(true)
+          expect(busy.content[0].text).toContain('Another batch')
+        } finally {
+          notifyConflict()
+        }
+        await committed
+        expect((await write(tool, 'Shared', second)).isError).toBe(true)
+        const target = 'wiki/en/Shared.md'
+        const edit = (oldText, newText) => tool.execute('edit', { operation: 'edit_wiki', path: target, oldText, newText })
+        expect((await edit('sources: [' + first + ']', 'sources: [' + second + ']')).isError).toBe(true)
+        expect((await edit('sources: [' + first + ']', 'sources: [' + first + ', ' + second + ']')).isError).toBeUndefined()
+        expect((await tool.execute('index', { operation: 'write_wiki', path: 'wiki/en/index.md', content: '# Overwrite' })).isError).toBe(true)
+      }
+      await write(tool, path.basename(source.rel, '.md'), source.rel)
+    })
+    const result = await run(sources, agent, {
+      batchSize: 5,
+      onProgress: event => { if (event.rel === first && event.status === 'done') notifyCommitted() },
+    })
+    expect(result.failed).toEqual([])
+    expect(result.done).toHaveLength(6)
+    const registry = await readRegistry(registryFile)
+    expect(registry.pages['wiki/en/Shared.md']).toMatchObject({
+      hash: sha256Text(wikiRead('Shared.md')), sources: [first, second],
+    })
+    expect(registry.pages['wiki/en/Shared.md'].handEdited).toBeUndefined()
+  })
+})
