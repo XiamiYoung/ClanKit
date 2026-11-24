@@ -22,15 +22,18 @@ const put = (rel, content) => {
 const run = params => tool.execute('t1', params)
 const text = res => res.content[0].text
 
-// A single blank-page PDF: parses fine but has no extractable text (acts like a scan).
-const BLANK_PDF = [
-  '%PDF-1.4',
-  '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj',
-  '2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj',
-  '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj',
-  'trailer<</Root 1 0 R/Size 4>>',
-  '%%EOF'
-].join('\n')
+// Creating links can fail on Windows without privileges; those cases are skipped, not faked.
+const tryLink = (target, linkPath) => {
+  for (const type of ['junction', 'dir']) {
+    try {
+      fs.symlinkSync(target, linkPath, type)
+      return true
+    } catch {
+      // try the next link type
+    }
+  }
+  return false
+}
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'aidoc-wikitool-'))
@@ -93,11 +96,13 @@ describe('list', () => {
     expect(q).not.toContain('beta')
   })
 
-  it('truncates at 300 entries and says so', async () => {
+  it('truncates at 300 entries and tells the agent to narrow with dir or query', async () => {
     for (let i = 0; i < 305; i++) put(`wiki/p${String(i).padStart(3, '0')}.md`, 'x')
     const res = await run({ operation: 'list', area: 'wiki' })
     expect(res.details.files).toHaveLength(300)
     expect(text(res)).toContain('truncated')
+    expect(text(res)).toContain('"dir"')
+    expect(text(res)).toContain('"query"')
   })
 
   it('rejects traversal in dir and unknown areas', async () => {
@@ -137,11 +142,33 @@ describe('read_source', () => {
     expect(collected).toBe(body)
   })
 
-  it('returns an error with the reason for a scanned pdf', async () => {
-    put('kb_source/scan.pdf', BLANK_PDF)
-    const res = await run({ operation: 'read_source', path: 'kb_source/scan.pdf' })
-    expect(res.isError).toBe(true)
-    expect(['scanned_pdf', 'extract_failed', 'empty']).toContain(res.details.reason)
+  // A real scanned pdf cannot be built here (pdf-parse's bundled pdf.js rejects hand-built files), so
+  // pdf-parse is stubbed through the require cache (vi.mock does not intercept CommonJS require).
+  it('returns the scanned_pdf reason for a pdf with almost no text', async () => {
+    put('kb_source/scan.pdf', 'stub')
+    const key = require.resolve('pdf-parse')
+    const real = require(key)
+    require.cache[key].exports = async () => ({ text: ' Hi \n', numpages: 3 })
+    try {
+      const res = await run({ operation: 'read_source', path: 'kb_source/scan.pdf' })
+      expect(res.isError).toBe(true)
+      expect(res.details.reason).toBe('scanned_pdf')
+      expect(text(res)).toContain('scanned')
+    } finally {
+      require.cache[key].exports = real
+    }
+  })
+
+  it('coerces numeric strings and rejects non-numeric offset/limit', async () => {
+    put('kb_source/n.md', 'x'.repeat(5000))
+    const ok = await run({ operation: 'read_source', path: 'kb_source/n.md', offset: '100', limit: '1000' })
+    expect(ok.isError).toBeUndefined()
+    expect(ok.details.nextOffset).toBe(1100)
+    for (const bad of [{ offset: 'abc' }, { limit: {} }, { offset: NaN }, { limit: '' }, { offset: true }]) {
+      const res = await run({ operation: 'read_source', path: 'kb_source/n.md', ...bad })
+      expect(res.isError).toBe(true)
+      expect(text(res)).toContain('must be a number')
+    }
   })
 
   it('errors for a missing file, an unsupported type and a wiki path', async () => {
@@ -188,6 +215,14 @@ describe('read_wiki', () => {
     expect((await run({ operation: 'read_wiki', path: 'wiki/big.md' })).isError).toBe(true)
   })
 
+  it('rejects an oversized page by byte size before reading it', async () => {
+    const abs = put('wiki/huge.md', '')
+    fs.truncateSync(abs, 800001)
+    const res = await run({ operation: 'read_wiki', path: 'wiki/huge.md' })
+    expect(res.isError).toBe(true)
+    expect(text(res)).toContain('too large')
+  })
+
   it('rejects kb_source paths', async () => {
     put('kb_source/a.md', 'x')
     expect((await run({ operation: 'read_wiki', path: 'kb_source/a.md' })).isError).toBe(true)
@@ -195,64 +230,66 @@ describe('read_wiki', () => {
 })
 
 describe('path confinement', () => {
+  // [input, expected error substring]; each category asserts its own specific reason.
   const attacks = [
-    '../general/x.md',
-    'wiki/../../x',
-    'wiki/../general/x.md',
-    'wiki/..\\..\\general\\x.md',
-    'kb_source/../wiki/a.md',
-    '/etc/passwd',
-    '\\etc\\passwd',
-    'C:\\x',
-    'C:/x',
-    'c:x',
-    '\\\\server\\share\\x',
-    '//server/share/x',
-    'wiki/a.md\0.png',
-    'general/x.md',
-    'general/a.md',
-    'Wiki/a.md',
-    'wiki',
-    'wiki/a.md:stream',
-    'wiki/a.md:$DATA',
-    'wiki/a.md.',
-    'wiki/a.md ',
-    'wiki/dir./a.md',
-    'wiki/%2e%2e/general/x.md',
-    '',
-    '   ',
-    null,
-    undefined,
-    42
+    ['../general/x.md', '".."'],
+    ['wiki/../../x', '".."'],
+    ['wiki/../general/x.md', '".."'],
+    ['wiki/..\\..\\general\\x.md', '".."'],
+    ['kb_source/../wiki/a.md', '".."'],
+    ['/etc/passwd', 'absolute'],
+    ['\\etc\\passwd', 'absolute'],
+    ['\\\\server\\share\\x', 'absolute'],
+    ['//server/share/x', 'absolute'],
+    ['C:\\x', 'drive'],
+    ['C:/x', 'drive'],
+    ['c:x', 'drive'],
+    ['wiki/a.md\0.png', 'NUL'],
+    ['general/x.md', 'must start with'],
+    ['general/a.md', 'must start with'],
+    ['Wiki/a.md', 'must start with'],
+    ['wiki/a.md:stream', '":"'],
+    ['wiki/a.md:$DATA', '":"'],
+    ['wiki/a.md.', 'dot or space'],
+    ['wiki/a.md ', 'dot or space'],
+    ['wiki/dir./a.md', 'dot or space'],
+    ['wiki/NUL.md', 'reserved device name'],
+    ['wiki/con', 'reserved device name'],
+    ['wiki/a/COM1.txt', 'reserved device name'],
+    ['wiki/Lpt9.x.y', 'reserved device name'],
+    ['wiki/a?.md', 'forbidden characters'],
+    ['', 'required'],
+    ['   ', 'required'],
+    [null, 'required'],
+    [undefined, 'required'],
+    [42, 'required']
   ]
 
-  it.each(attacks.map(a => [JSON.stringify(a), a]))('resolveWikiToolPath rejects %s', (_label, attack) => {
-    // 'wiki' alone is a valid area root for list, but a bare area is not a readable file.
-    if (attack === 'wiki') {
-      expect(resolveWikiToolPath(root, attack).ok).toBe(true)
-      return
-    }
-    // Percent-encoded dots are not decoded, so the segment is a harmless literal name.
-    if (attack === 'wiki/%2e%2e/general/x.md') {
-      const r = resolveWikiToolPath(root, attack)
-      expect(r.ok).toBe(true)
-      expect(r.exists).toBe(false)
-      return
-    }
-    expect(resolveWikiToolPath(root, attack).ok).toBe(false)
+  it.each(attacks.map(([a, e]) => [JSON.stringify(a), a, e]))('resolveWikiToolPath rejects %s', (_label, attack, expected) => {
+    const r = resolveWikiToolPath(root, attack)
+    expect(r.ok).toBe(false)
+    expect(r.error).toContain(expected)
   })
 
-  it.each(attacks.filter(a => typeof a === 'string' && a !== 'wiki' && !a.includes('%2e')))(
-    'read_wiki and read_source refuse %j',
-    async attack => {
+  it.each(attacks.filter(([a]) => typeof a === 'string').map(([a, e]) => [JSON.stringify(a), a, e]))(
+    'read_wiki and read_source refuse %s',
+    async (_label, attack, expected) => {
       const w = await run({ operation: 'read_wiki', path: attack })
       const s = await run({ operation: 'read_source', path: attack })
       expect(w.isError).toBe(true)
       expect(s.isError).toBe(true)
+      expect(text(w)).toContain(expected)
+      expect(text(s)).toContain(expected)
       expect(text(w)).not.toContain('secret')
-      expect(text(s)).not.toContain('secret')
     }
   )
+
+  it('treats a bare area as valid (for list) and percent-encoded dots as literal names', () => {
+    expect(resolveWikiToolPath(root, 'wiki').ok).toBe(true)
+    const r = resolveWikiToolPath(root, 'wiki/%2e%2e/general/x.md')
+    expect(r.ok).toBe(true)
+    expect(r.exists).toBe(false)
+  })
 
   it('rejects a path that does not match the operation area', async () => {
     put('kb_source/a.md', 'x')
@@ -272,21 +309,8 @@ describe('path confinement', () => {
     expect(r.exists).toBe(false)
     expect(r.rel).toBe('wiki/new/dir/page.md')
     expect(r.area).toBe('wiki')
-    expect(r.abs.startsWith(fs.realpathSync(path.join(root, 'wiki')))).toBe(true)
+    expect(r.abs.startsWith(fs.realpathSync.native(path.join(root, 'wiki')))).toBe(true)
   })
-
-  // Creating links can fail on Windows without privileges; those cases are skipped, not faked.
-  const tryLink = (target, linkPath) => {
-    for (const type of ['junction', 'dir']) {
-      try {
-        fs.symlinkSync(target, linkPath, type)
-        return true
-      } catch {
-        // try the next link type
-      }
-    }
-    return false
-  }
 
   it('refuses reads through a directory link that points outside wiki', async ctx => {
     fs.writeFileSync(path.join(outside, 'leak.md'), 'LEAKED')
@@ -299,7 +323,7 @@ describe('path confinement', () => {
     expect(resolveWikiToolPath(root, 'wiki/link').ok).toBe(false)
   })
 
-  it('refuses a wiki link that points into kb_source (stays inside root but outside the area)', async ctx => {
+  it('refuses a wiki link that points into kb_source (inside root but outside the area)', async ctx => {
     put('kb_source/a.md', 'SRC')
     if (!tryLink(path.join(root, 'kb_source'), path.join(root, 'wiki', 'srclink'))) return ctx.skip()
     expect((await run({ operation: 'read_wiki', path: 'wiki/srclink/a.md' })).isError).toBe(true)
@@ -334,5 +358,53 @@ describe('path confinement', () => {
       return ctx.skip()
     }
     expect(resolveWikiToolPath(root, 'wiki/dangling.md').ok).toBe(false)
+  })
+
+  it('refuses an area that is a junction pointing outside the root', async ctx => {
+    fs.rmSync(path.join(root, 'wiki'), { recursive: true })
+    fs.writeFileSync(path.join(outside, 'leak.md'), 'LEAKED')
+    if (!tryLink(outside, path.join(root, 'wiki'))) return ctx.skip()
+    const res = await run({ operation: 'read_wiki', path: 'wiki/leak.md' })
+    expect(res.isError).toBe(true)
+    expect(text(res)).not.toContain('LEAKED')
+    expect(resolveWikiToolPath(root, 'wiki/new.md').ok).toBe(false)
+    expect((await run({ operation: 'list', area: 'wiki' })).isError).toBe(true)
+  })
+})
+
+describe('canonical rel', () => {
+  // Case variants only alias the same file on case-insensitive filesystems.
+  const caseInsensitive = process.platform === 'win32' || process.platform === 'darwin'
+
+  it('returns the on-disk spelling for case variants and keeps the hand-edit NOTE', async ctx => {
+    if (!caseInsensitive) return ctx.skip()
+    put('wiki/entities/Alice.md', 'edited by user')
+    registry.pages['wiki/entities/Alice.md'] = { hash: sha256Text('original') }
+    const r = resolveWikiToolPath(root, 'wiki/Entities/alice.md')
+    expect(r.ok).toBe(true)
+    expect(r.rel).toBe('wiki/entities/Alice.md')
+    const out = text(await run({ operation: 'read_wiki', path: 'wiki/ENTITIES/ALICE.MD' }))
+    expect(out.startsWith('[NOTE:')).toBe(true)
+  })
+
+  it('keeps the canonical existing prefix and appends the new tail as given', ctx => {
+    if (!caseInsensitive) return ctx.skip()
+    fs.mkdirSync(path.join(root, 'wiki', 'Entities'))
+    const r = resolveWikiToolPath(root, 'wiki/entities/New.md')
+    expect(r.ok).toBe(true)
+    expect(r.exists).toBe(false)
+    expect(r.rel).toBe('wiki/Entities/New.md')
+  })
+})
+
+describe('error sanitising', () => {
+  it('strips the absolute root (both separator styles) from messages', async () => {
+    const cleaned = tool._clean(`ENOENT: '${root}\\wiki\\a.md' and '${root.split('\\').join('/')}/wiki/b.md'`)
+    expect(cleaned).not.toContain(root)
+    expect(cleaned).toContain('<root>')
+    put('kb_source/bad.docx', 'not a zip')
+    const res = await run({ operation: 'read_source', path: 'kb_source/bad.docx' })
+    expect(res.isError).toBe(true)
+    expect(text(res)).not.toContain(root)
   })
 })

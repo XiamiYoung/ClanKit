@@ -9,6 +9,9 @@ const { sha256Text } = require('../../lib/aidocFrontmatter')
 const AREAS = ['kb_source', 'wiki']
 const MAX_LIST = 300
 const MAX_WIKI_READ_CHARS = 200000
+// Byte cap checked before reading; generous (4 bytes per char) so only the char count decides near the limit.
+const MAX_WIKI_READ_BYTES = MAX_WIKI_READ_CHARS * 4
+const RESERVED_DEVICE_NAME = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i
 const USER_EDIT_NOTE = '[NOTE: this page contains edits made by the user; preserve their content]'
 
 const SOURCE_FAILURES = {
@@ -55,6 +58,7 @@ function resolveWikiToolPath(root, areaRel) {
     if (seg === '' || seg === '.') continue
     if (seg === '..') return bad('Invalid path: ".." is not allowed')
     if (seg.includes(':')) return bad('Invalid path: ":" is not allowed')
+    if (RESERVED_DEVICE_NAME.test(seg.split('.')[0].trim())) return bad('Invalid path: reserved device name')
     if (/[. ]$/.test(seg)) return bad('Invalid path: segments must not end with a dot or space')
     if (/[<>"|?*]/.test(seg)) return bad('Invalid path: contains forbidden characters')
     segments.push(seg)
@@ -62,12 +66,16 @@ function resolveWikiToolPath(root, areaRel) {
   const area = segments[0]
   if (!AREAS.includes(area)) return bad('Path must start with kb_source/ or wiki/')
 
+  // The native variant also returns the on-disk spelling (case, long names) of each component.
+  let realRoot
   let realArea
   try {
-    realArea = fs.realpathSync(path.join(root, area))
+    realRoot = fs.realpathSync.native(root)
+    realArea = fs.realpathSync.native(path.join(root, area))
   } catch {
     return bad(`Area "${area}" does not exist`)
   }
+  if (realArea === realRoot || !isInside(realRoot, realArea)) return bad('Area resolves outside the knowledge base root')
 
   const abs = path.join(root, ...segments)
   // Find the nearest ancestor that exists on disk (a dangling symlink counts as existing and is rejected).
@@ -80,12 +88,14 @@ function resolveWikiToolPath(root, areaRel) {
       if (parent === probe) return bad('Path could not be resolved')
       probe = parent
     }
-    const realProbe = fs.realpathSync(probe)
+    const realProbe = fs.realpathSync.native(probe)
     if (!isInside(realArea, realProbe)) return bad('Path escapes the allowed area')
+    // Canonical rel: on-disk spelling of the existing part, plus the not-yet-existing tail as given.
+    const existing = path.relative(realArea, realProbe).split(path.sep).filter(Boolean)
     return {
       ok: true,
       area,
-      rel: segments.join('/'),
+      rel: [area, ...existing, ...tail].join('/'),
       abs: path.join(realProbe, ...tail),
       exists: tail.length === 0
     }
@@ -149,8 +159,18 @@ class AiDocWikiTool extends BaseTool {
           return this._err(`Unknown operation: ${params.operation}`)
       }
     } catch (error) {
-      return this._err(error?.message || String(error))
+      return this._err(this._clean(error?.message || String(error)))
     }
+  }
+
+  /** Strip the absolute root path (either separator style) from messages shown to the model. */
+  _clean(message) {
+    let out = String(message)
+    if (typeof this.root === 'string' && this.root) {
+      const variants = new Set([this.root, this.root.split('\\').join('/'), this.root.split('/').join('\\')])
+      for (const variant of variants) out = out.split(variant).join('<root>')
+    }
+    return out
   }
 
   _list({ area, dir, query }) {
@@ -181,7 +201,7 @@ class AiDocWikiTool extends BaseTool {
     const shown = entries.slice(0, MAX_LIST)
     const lines = shown.map(e => `${e.rel} (${humanSize(e.size)})`)
     let text = lines.length ? lines.join('\n') : '(no files)'
-    if (entries.length > MAX_LIST) text += `\n... truncated: showing ${MAX_LIST} of ${entries.length} files`
+    if (entries.length > MAX_LIST) text += `\n... truncated: showing ${MAX_LIST} of ${entries.length} files. Narrow the listing with "dir" or "query".`
     return this._ok(text, { total: entries.length, files: shown.map(e => e.rel) })
   }
 
@@ -191,12 +211,20 @@ class AiDocWikiTool extends BaseTool {
     if (target.area !== 'kb_source') return this._err('read_source requires a path starting with kb_source/')
     if (!target.exists || !fs.statSync(target.abs).isFile()) return this._err(`File not found: ${target.rel}`)
 
+    const nums = {}
+    for (const [name, value] of [['offset', offset], ['limit', limit]]) {
+      if (value === undefined || value === null) continue
+      const n = typeof value === 'number' || (typeof value === 'string' && value.trim() !== '') ? Number(value) : NaN
+      if (!Number.isFinite(n)) return this._err(`${name} must be a number`)
+      nums[name] = n
+    }
+
     const loaded = await loadSourceText(target.abs)
     if (!loaded.ok) {
       const base = SOURCE_FAILURES[loaded.reason] || loaded.reason
-      return this._err(loaded.detail ? `${base}: ${loaded.detail}` : base, { reason: loaded.reason })
+      return this._err(this._clean(loaded.detail ? `${base}: ${loaded.detail}` : base), { reason: loaded.reason })
     }
-    const { chunk, totalChars, nextOffset } = readSourceChunk(loaded.text, offset, limit)
+    const { chunk, totalChars, nextOffset } = readSourceChunk(loaded.text, nums.offset, nums.limit)
     let text = chunk
     text += nextOffset === null
       ? `\n\n[End of document. totalChars=${totalChars}]`
@@ -210,11 +238,13 @@ class AiDocWikiTool extends BaseTool {
     if (target.area !== 'wiki') return this._err('read_wiki requires a path starting with wiki/')
     if (!target.exists || !fs.statSync(target.abs).isFile()) return this._err(`Page not found: ${target.rel}`)
 
+    if (fs.statSync(target.abs).size > MAX_WIKI_READ_BYTES) return this._err('Page is too large to read')
     const content = fs.readFileSync(target.abs, 'utf8')
     if (content.length > MAX_WIKI_READ_CHARS) {
       return this._err(`Page is too large to read (${content.length} chars, limit ${MAX_WIKI_READ_CHARS})`)
     }
     const pages = this.registry?.pages || {}
+    // target.rel is the canonical on-disk spelling, so case/alias variants hit the same registry entry.
     const entry = pages[target.rel] || pages[target.rel.replace(/^wiki\//, '')]
     const edited = !!(entry && entry.hash && entry.hash !== sha256Text(content))
     return this._ok(edited ? `${USER_EDIT_NOTE}\n${content}` : content, { userEdited: edited })
