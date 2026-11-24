@@ -30,9 +30,10 @@
         :aria-label="syncLabel"
         :loading="syncBusy"
         :disabled="store.ingesting"
+        :aria-disabled="store.ingesting ? 'true' : undefined"
         aria-haspopup="dialog"
         :aria-expanded="Boolean(showRebuild || showIngest)"
-        @click="store.runSync()"
+        @click="onSyncClick"
         @contextmenu.prevent="openRebuild"
         @keydown.shift.f10.prevent="openRebuild"
         @keydown.context-menu.prevent="openRebuild"
@@ -41,11 +42,29 @@
           <path d="M20 7v5h-5M4 17v-5h5" />
           <path d="M6 7a7 7 0 0 1 11.6-1L20 12M4 12l2.4 6A7 7 0 0 0 18 17" />
         </svg>
+        <span v-if="store.ingesting" class="sync-bar" aria-hidden="true" data-testid="aidoc-sync-bar">
+          <span class="sync-bar-fill" :style="{ width: percent + '%' }"></span>
+        </span>
+        <span v-if="resultBadge" class="sync-result" :class="'sync-result--' + resultBadge.variant" aria-hidden="true" data-testid="aidoc-sync-result">{{ resultBadge.text }}</span>
         <span v-if="pendingCount" class="sync-count" aria-hidden="true" data-testid="aidoc-sync-pending">{{ pendingCount }}</span>
         <span v-else-if="store.status?.indexStale" class="sync-dot" aria-hidden="true" data-testid="aidoc-sync-dot"></span>
       </AppButton>
     </AppTooltip>
     <span v-if="showPercent" class="sync-percent" data-testid="aidoc-sync-percent" aria-hidden="true">{{ percent }}%</span>
+    <AppTooltip v-if="store.ingesting" :text="stopLabel">
+      <AppButton
+        size="icon"
+        variant="danger"
+        data-testid="aidoc-sync-stop"
+        :aria-label="stopLabel"
+        :loading="store.ingestStopping"
+        @click="store.stopIngest()"
+      >
+        <svg v-if="!store.ingestStopping" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
+          <rect x="6" y="6" width="12" height="12" rx="1.5" />
+        </svg>
+      </AppButton>
+    </AppTooltip>
     <AppTooltip :text="t('aidoc.fullRebuild')">
       <AppButton
         size="icon"
@@ -90,7 +109,7 @@ defineEmits(['open-graph', 'open-wiki'])
 const { t } = useI18n()
 const store = useAiDocStore()
 const showRebuild = ref(false)
-const showIngest = computed(() => store.ingestPlan || store.ingesting || store.ingestResult)
+const showIngest = computed(() => store.ingestDialogVisible)
 const syncBusy = computed(() => store.updating || store.syncPreparing)
 const pendingCount = computed(() => {
   const { ingestAvailable, pending } = store.status || {}
@@ -117,16 +136,41 @@ const feedback = computed(() => {
 const percent = computed(() => store.syncPercent ?? 0)
 const showPercent = computed(() => syncBusy.value || store.ingesting)
 
-const syncLabel = computed(() => t(syncBusy.value ? 'aidoc.updating' : 'aidoc.sync'))
+const fileName = rel => String(rel || '').split('/').pop()
+const stopLabel = computed(() => t(store.ingestStopping ? 'aidoc.syncStopping' : 'aidoc.syncStop'))
+// The latest finished run, shown as a badge until the user opens and dismisses it.
+const resultBadge = computed(() => {
+  const result = store.ingestResult
+  if (!result || store.ingesting || store.ingestDialogVisible) return null
+  const done = result.done?.length || 0
+  const failed = result.failed?.length || 0
+  const params = { done, failed }
+  if (result.aborted) return { variant: 'warn', text: '!', tip: t('aidoc.syncResultAborted', params) }
+  if (result.stopped) return { variant: 'warn', text: '!', tip: t('aidoc.syncResultStopped', params) }
+  return { variant: failed || result.indexError ? 'warn' : 'ok', text: failed || result.indexError ? '!' : '✓' + done, tip: t('aidoc.syncResult', params) }
+})
+
+const syncLabel = computed(() => t(store.ingesting ? 'aidoc.syncInProgress' : (syncBusy.value ? 'aidoc.updating' : 'aidoc.sync')))
+const ingestDetail = computed(() => {
+  const info = store.ingestProgress
+  if (!info?.total) return `${percent.value}%`
+  return t('aidoc.syncRunning', { i: info.index + 1, n: info.total, name: fileName(info.rel), percent: percent.value })
+})
 const syncTooltip = computed(() => {
+  if (store.ingesting) return [syncLabel.value, ingestDetail.value].join(' · ')
   const detail = store.updating
     ? (store.progress && t('aidoc.indexProgress', store.progress))
     : syncText.value
-  const percentText = store.updating ? t('aidoc.indexPercent', { percent: percent.value }) : (store.ingesting ? `${percent.value}%` : '')
+  const percentText = store.updating ? t('aidoc.indexPercent', { percent: percent.value }) : ''
   const pending = pendingCount.value ? t('aidoc.syncPending', { n: pendingCount.value }) : ''
-  const options = syncBusy.value || store.ingesting ? '' : t('aidoc.syncOptionsHint')
-  return [syncLabel.value, detail, percentText, pending, feedback.value, options].filter(Boolean).join(' · ')
+  const options = syncBusy.value ? '' : t('aidoc.syncOptionsHint')
+  return [resultBadge.value?.tip || syncLabel.value, detail, percentText, pending, feedback.value, options].filter(Boolean).join(' · ')
 })
+
+function onSyncClick() {
+  if (resultBadge.value) store.openIngestResult()
+  else store.runSync()
+}
 
 function openRebuild() {
   if (!syncBusy.value && !showIngest.value) showRebuild.value = true
@@ -140,17 +184,49 @@ function rebuildIndex() {
 onMounted(() => {
   store.ensureIngestListener()
   store.refreshStatus()
+  store.restoreIngestStatus()
 })
 </script>
 
 <style scoped>
 .aidoc-toolbar {
   --aidoc-stale-badge: #ef4444;
+  --aidoc-result-ok: #16a34a;
+  --aidoc-result-warn: #d97706;
   display: flex;
   align-items: center;
   gap: 0.5rem;
 }
 .aidoc-sync { position: relative; }
+.sync-bar {
+  position: absolute;
+  inset-inline: 0.25rem;
+  inset-block-end: 0.125rem;
+  height: 0.125rem;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--border);
+}
+.sync-bar-fill {
+  display: block;
+  height: 100%;
+  background: currentColor;
+  transition: width 0.3s ease-out;
+}
+.sync-result {
+  position: absolute;
+  inset-block-end: -0.25rem;
+  inset-inline-end: -0.25rem;
+  min-width: 0.875rem;
+  padding: 0 0.1875rem;
+  border-radius: var(--radius-full);
+  color: #fff;
+  font-size: 0.625rem;
+  line-height: 0.875rem;
+  text-align: center;
+}
+.sync-result--ok { background: var(--aidoc-result-ok); }
+.sync-result--warn { background: var(--aidoc-result-warn); }
 .sync-percent {
   min-width: 2rem;
   color: var(--text-secondary);

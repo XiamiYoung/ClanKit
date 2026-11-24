@@ -323,7 +323,7 @@ function registerHandlers(ipcMain, ds, { runAgent = runIngestAgent } = {}) {
     }
     const only = readSelection(options)
     const owner = event.sender
-    const active = { owner, cacheFile, loop: null, stopRequested: false }
+    const active = { owner, cacheFile, root, requestId: options.requestId, snapshot: {}, loop: null, stopRequested: false }
     activeIngest = active
     const stopActive = () => {
       active.stopRequested = true
@@ -331,7 +331,27 @@ function registerHandlers(ipcMain, ds, { runAgent = runIngestAgent } = {}) {
     }
     // A closed window must not leave a run (and the busy flag) behind.
     owner.once?.('destroyed', stopActive)
-    const progress = data => send(owner, 'aidoc:ingest-progress', { root, requestId: options.requestId, ...data })
+    const progress = data => {
+      if (data.total) active.snapshot = { index: data.index, total: data.total, rel: data.rel, status: data.status }
+      send(owner, 'aidoc:ingest-progress', { root, requestId: options.requestId, ...data })
+    }
+    // A reloaded renderer lost its invoke promise, so the outcome is also pushed as an event.
+    let completed = false
+    const finish = result => {
+      completed = true
+      const done = result.done || []
+      const failed = result.failed || []
+      progress({
+        type: 'complete',
+        summary: {
+          done, failed, stopped: Boolean(result.stopped), aborted: result.aborted, warnings: result.warnings || [],
+          indexError: result.indexError, overflow: result.overflow || 0,
+          remaining: Math.max(0, sources.length - done.length - failed.length) + (result.overflow || 0),
+        },
+      })
+      return result
+    }
+    let sources = []
     try {
       const registryFile = registryPathFor(dataDir, root)
       let registry
@@ -341,10 +361,10 @@ function registerHandlers(ipcMain, ds, { runAgent = runIngestAgent } = {}) {
         return { success: false, code: 'registry_unreadable', error: error.message }
       }
       const plan = await buildIngestPlan({ root, registry, only, includeIngested: options.force === true })
-      const sources = plan.sources
+      sources = plan.sources
       const overflow = plan.overflow
       if (active.stopRequested || !sources.length) {
-        return { done: [], failed: [], stopped: active.stopRequested, overflow }
+        return finish({ done: [], failed: [], stopped: active.stopRequested, overflow })
       }
 
       let current = {}
@@ -375,11 +395,18 @@ function registerHandlers(ipcMain, ds, { runAgent = runIngestAgent } = {}) {
           if (result) result.indexError = error.message
         }
       }
-      return { ...result, overflow }
+      return finish({ ...result, overflow })
     } finally {
+      if (!completed) progress({ type: 'complete', error: true })
       owner.removeListener?.('destroyed', stopActive)
       activeIngest = null
     }
+  })
+
+  handle('ingest-status', async ({ root, event }) => {
+    const active = activeIngest
+    if (!active || active.root !== root || active.owner !== event.sender) return { running: false }
+    return { running: true, requestId: active.requestId, ...active.snapshot }
   })
 
   handle('ingest-stop', async ({ cacheFile, event }) => {

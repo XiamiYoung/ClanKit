@@ -67,40 +67,31 @@ describe('AiDocIngestModal', () => {
     expect(dialog.querySelector('[role="alert"]').textContent).toContain('Connection missing')
   })
 
-  it('shows progress and allows stopping once, keeping the dialog open', async () => {
+  it('has no running view: Start is disabled once a run is active and no stop control is rendered', async () => {
+    const dialog = open()
+    const start = dialog.querySelector('[data-testid="aidoc-ingest-start"]')
+    expect(start.disabled).toBe(false)
+    start.click()
+    expect(store.confirmIngest).toHaveBeenCalledOnce()
     store.ingesting = true
     store.ingestProgress = { index: 1, total: 3, rel: 'kb_source/report.md', action: 'read_source' }
-    const dialog = open()
-    expect(dialog.textContent).toContain('aidoc.progressPercent 0 2 3 report.md')
-    expect(dialog.textContent).toContain('kb_source/report.md')
-    expect(dialog.textContent).toContain('aidoc.actionReadSource')
-    dialog.dispatchEvent(new Event('cancel', { cancelable: true }))
-    expect(store.cancelIngestPlan).not.toHaveBeenCalled()
-    const stop = dialog.querySelector('[data-testid="aidoc-ingest-stop"]')
-    stop.click()
-    expect(store.stopIngest).toHaveBeenCalledOnce()
-    store.ingestStopping = true
     await nextTick()
-    expect(stop.disabled).toBe(true)
+    expect(start.disabled).toBe(true)
+    expect(dialog.querySelector('[data-testid="aidoc-ingest-stop"]')).toBeNull()
+    expect(dialog.querySelector('[data-testid="aidoc-ingest-percent"]')).toBeNull()
   })
 
-  it('renders a progressbar with the store percent and falls back to the raw action name', async () => {
-    store.ingesting = true
-    store.syncPercent = 42
-    store.ingestProgress = { index: 0, total: 3, rel: 'kb_source/sub/a.md', action: 'custom_op' }
+  it('renders the result view with a progressbar at the store percent', () => {
+    store.ingestPlan = null
+    store.syncPercent = 100
+    store.ingestResult = { done: [{ rel: 'kb_source/a.md' }], failed: [], remaining: 0 }
     const dialog = open()
     const bar = dialog.querySelector('[role="progressbar"]')
-    expect(bar.getAttribute('aria-valuenow')).toBe('42')
-    expect(bar.getAttribute('aria-valuemin')).toBe('0')
-    expect(bar.getAttribute('aria-valuemax')).toBe('100')
-    expect(bar.firstElementChild.style.width).toBe('42%')
-    expect(dialog.querySelector('[data-testid="aidoc-ingest-percent"]').textContent).toBe('aidoc.progressPercent 42 1 3 a.md')
-    expect(dialog.textContent).toContain('custom_op')
-    store.ingestProgress = null
-    store.syncPercent = 0
-    await nextTick()
-    expect(bar.getAttribute('aria-valuenow')).toBe('0')
-    expect(dialog.querySelector('[data-testid="aidoc-ingest-percent"]').textContent).toBe('0% · aidoc.ingestPreparing')
+    expect(bar.getAttribute('aria-valuenow')).toBe('100')
+    expect(bar.firstElementChild.style.width).toBe('100%')
+    expect(dialog.textContent).toContain('aidoc.ingestDone 1')
+    dialog.querySelector('[data-testid="aidoc-ingest-dismiss"]').click()
+    expect(store.cancelIngestPlan).toHaveBeenCalledOnce()
   })
 
   it('shows warnings, the registry_unreadable reason and the consecutive-error abort notice', () => {

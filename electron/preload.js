@@ -200,6 +200,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getIngestPlan: (options) => ipcRenderer.invoke('aidoc:ingest-plan', options),
     runIngest: (options) => ipcRenderer.invoke('aidoc:ingest-run', options),
     stopIngest: (options) => ipcRenderer.invoke('aidoc:ingest-stop', options),
+    getIngestStatus: (options) => ipcRenderer.invoke('aidoc:ingest-status', options),
     getSourceStates: (options) => ipcRenderer.invoke('aidoc:source-states', options),
     getWikiPages: (options) => ipcRenderer.invoke('aidoc:wiki-pages', options),
     getWikiPage: (options) => ipcRenderer.invoke('aidoc:wiki-page', options),

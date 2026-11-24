@@ -167,6 +167,37 @@ it('allows only one run and a stop from the original renderer and root', async (
   expect(stop).toHaveBeenCalledOnce()
 })
 
+it('reports the active run through ingest-status and pushes a final complete event', async () => {
+  let release
+  let taskEntered
+  const entered = new Promise(resolve => { taskEntered = resolve })
+  const runAgent = vi.fn(({ active }) => {
+    active.loop = { stop: () => release() }
+    taskEntered()
+    return new Promise(resolve => { release = resolve })
+  })
+  const { invoke, sender } = await ingestFixture(runAgent)
+  await expect(invoke('ingest-status')).resolves.toMatchObject({ success: true, running: false })
+  const work = invoke('ingest-run', { requestId: 'bg' })
+  await entered
+  await expect(invoke('ingest-status')).resolves.toMatchObject({
+    success: true, running: true, requestId: 'bg', index: 0, total: 1, rel: 'kb_source/note.md',
+  })
+  await expect(invoke('ingest-status', { root: path.join(os.tmpdir(), 'another-root') })).resolves.toMatchObject({ success: false, code: 'rootChanged' })
+  await expect(invoke('ingest-status', {}, { send: vi.fn() })).resolves.toMatchObject({ running: false })
+  await invoke('ingest-stop')
+  await expect(work).resolves.toMatchObject({ success: true, stopped: true })
+  await expect(invoke('ingest-status')).resolves.toMatchObject({ success: true, running: false })
+  const complete = sender.send.mock.calls.filter(([channel, payload]) => channel === 'aidoc:ingest-progress' && payload.type === 'complete')
+  expect(complete).toHaveLength(1)
+  expect(complete[0][1]).toMatchObject({
+    requestId: 'bg',
+    summary: { done: [], failed: [], stopped: true, warnings: [], remaining: 1, overflow: 0 },
+  })
+  expect(complete[0][1].summary).toHaveProperty('aborted')
+  expect(complete[0][1].summary).toHaveProperty('indexError')
+})
+
 const noteContent = ['---', 'type: summary', 'title: note', 'sources:', '  - kb_source/note.md', 'updated: 2026-11-24', '---', '', 'A wiki note.'].join('\n')
 const writeNote = async ({ tool }) => {
   await tool.execute('write', { operation: 'write_wiki', path: 'wiki/note.md', content: noteContent })

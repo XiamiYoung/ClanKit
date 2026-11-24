@@ -39,6 +39,8 @@ export const useAiDocStore = defineStore('aidoc', () => {
   const ingestStopping = ref(false)
   const syncPreparing = ref(false)
   const ingestNothing = ref(false)
+  // The confirmation or result dialog. The run itself never needs a dialog.
+  const ingestDialogVisible = ref(false)
   // Provider and model chosen for organizing. Global, so setRoot does not reset it.
   const ingestModel = ref({ providerId: '', model: '' })
   // Approximate percent bookkeeping; each value only moves forward within a run.
@@ -46,6 +48,9 @@ export const useAiDocStore = defineStore('aidoc', () => {
   const ingestPercent = ref(0)
   let ingestCompleted = 0
   let ingestActions = 0
+  // Id of the run whose result arrives through this renderer's own invoke promise.
+  let localIngestId = null
+  let finishingIngestId = null
 
   // Phase 1 shows index progress; phase 2 estimates progress from finished sources plus a
   // smoothed fraction of the in-flight one. 100 is only shown once the run result exists.
@@ -100,7 +105,10 @@ export const useAiDocStore = defineStore('aidoc', () => {
     ingestPlan.value = ingestResult.value = ingestProgress.value = null
     ingestError.value = ingestErrorKey.value = ''
     syncPreparing.value = ingestStopping.value = ingestNothing.value = false
+    ingestDialogVisible.value = false
+    localIngestId = null
     resetPercent()
+    void restoreIngestStatus()
   }
 
   async function read(method, output, { field, options, loading, silent } = {}) {
@@ -193,6 +201,7 @@ export const useAiDocStore = defineStore('aidoc', () => {
     ingestNothing.value = false
     ingestError.value = ingestErrorKey.value = ''
     ingestPlan.value = ingestResult.value = null
+    ingestDialogVisible.value = false
     try {
       if (!(await updateIndex()) || current !== generation) return
       const result = await api.getIngestPlan({ root, rels, force })
@@ -203,6 +212,7 @@ export const useAiDocStore = defineStore('aidoc', () => {
       }
       if (result.sources.length) {
         ingestPlan.value = { ...result, force }
+        ingestDialogVisible.value = true
         // Keep an in-session choice while its provider is still offered; otherwise use the remembered one.
         const kept = result.providers?.some(provider => provider.id === ingestModel.value.providerId)
         if (!kept && result.selected) ingestModel.value = { ...result.selected }
@@ -227,6 +237,11 @@ export const useAiDocStore = defineStore('aidoc', () => {
     unsubscribeIngest ??= api.onIngestProgress(event => {
       if (event.requestId !== ingestRequestId.value) return
       if (event.type === 'index-error') return
+      if (event.type === 'complete') {
+        // A run that this renderer started reports through its invoke promise instead.
+        if (localIngestId !== event.requestId) void finishRestoredIngest(event)
+        return
+      }
       ingestProgress.value = event
       trackIngestEvent(event)
     })
@@ -238,15 +253,75 @@ export const useAiDocStore = defineStore('aidoc', () => {
     if (!ingesting.value) { unsubscribeIngest?.(); unsubscribeIngest = undefined }
   }
 
+  async function refreshAfterIngest() {
+    await Promise.all([loadGraph(), loadWikiPages(), refreshStatus(), refreshSourceStates()])
+  }
+
+  function endIngest(id) {
+    if (id !== ingestRequestId.value) return
+    ingestRequestId.value = null
+    ingestStopping.value = false
+    if (localIngestId === id) localIngestId = null
+  }
+
+  // Completion of a run started before a renderer reload; there is no invoke promise to await.
+  async function finishRestoredIngest(event) {
+    const id = event.requestId
+    if (finishingIngestId === id) return
+    finishingIngestId = id
+    if (event.error) describeError({}, ingestError, ingestErrorKey)
+    else {
+      const summary = event.summary || {}
+      ingestResult.value = {
+        done: [], failed: [], warnings: [], overflow: 0, ...summary, remaining: summary.remaining || 0,
+      }
+    }
+    try {
+      await refreshAfterIngest()
+    } finally {
+      finishingIngestId = null
+      endIngest(id)
+      releaseIfDisposed()
+    }
+  }
+
+  // Picks up a run that is still active in the main process, e.g. after the renderer reloaded.
+  async function restoreIngestStatus() {
+    const api = window.electronAPI?.aidoc
+    if (typeof api?.getIngestStatus !== 'function' || !root || ingesting.value) return
+    const current = generation
+    try {
+      const snapshot = await api.getIngestStatus({ root })
+      if (current !== generation || ingesting.value || !snapshot?.success || !snapshot.running || !snapshot.requestId) return
+      ingestRequestId.value = snapshot.requestId
+      localIngestId = null
+      ingestDialogVisible.value = false
+      ingestPlan.value = ingestResult.value = null
+      ingestError.value = ingestErrorKey.value = ''
+      resetPercent()
+      if (snapshot.total) {
+        ingestProgress.value = {
+          requestId: snapshot.requestId, status: snapshot.status, index: snapshot.index, total: snapshot.total, rel: snapshot.rel,
+        }
+        trackIngestEvent(ingestProgress.value)
+      }
+      ensureIngestListener()
+    } catch { /* Without a snapshot the button simply stays idle. */ }
+  }
+
   async function confirmIngest() {
     const api = window.electronAPI?.aidoc
     const plan = ingestPlan.value
     if (!api?.runIngest || ingesting.value || !plan?.providerReady || !plan.sources.length) return
     const id = globalThis.crypto.randomUUID()
     ingestRequestId.value = id
+    localIngestId = id
+    // The run continues in the background; only a failure brings the dialog back.
+    ingestDialogVisible.value = false
     ingestProgress.value = ingestResult.value = null
     resetPercent()
     ingestError.value = ingestErrorKey.value = ''
+    let busy = false
     try {
       ensureIngestListener()
       const result = await api.runIngest({
@@ -255,26 +330,38 @@ export const useAiDocStore = defineStore('aidoc', () => {
       })
       if (id !== ingestRequestId.value) return
       if (!result.success) {
-        describeError(result, ingestError, ingestErrorKey)
+        busy = result.code === 'busy'
+        if (busy) ingestPlan.value = null
+        else {
+          describeError(result, ingestError, ingestErrorKey)
+          ingestDialogVisible.value = true
+        }
         return
       }
       const overflow = Math.max(result.overflow || 0, plan.overflow || 0)
       const remaining = Math.max(0, plan.sources.length - result.done.length - result.failed.length) + overflow
       ingestResult.value = { ...result, overflow, remaining }
-      await Promise.all([loadGraph(), loadWikiPages(), refreshStatus(), refreshSourceStates()])
+      await refreshAfterIngest()
     } catch (err) {
-      if (id === ingestRequestId.value) describeError({ error: err.message }, ingestError, ingestErrorKey)
-    } finally {
       if (id === ingestRequestId.value) {
-        ingestRequestId.value = null
-        ingestStopping.value = false
+        describeError({ error: err.message }, ingestError, ingestErrorKey)
+        ingestDialogVisible.value = true
       }
+    } finally {
+      endIngest(id)
       releaseIfDisposed()
     }
+    // Another run owns the backend lock; follow it instead of reporting an error.
+    if (busy) await restoreIngestStatus()
+  }
+
+  function openIngestResult() {
+    if (ingestResult.value && !ingesting.value) ingestDialogVisible.value = true
   }
 
   function cancelIngestPlan() {
     if (ingesting.value) return
+    ingestDialogVisible.value = false
     ingestPlan.value = ingestProgress.value = ingestResult.value = null
     ingestError.value = ingestErrorKey.value = ''
     resetPercent()
@@ -306,8 +393,8 @@ export const useAiDocStore = defineStore('aidoc', () => {
     status, graph, progress, updating, error, errorKey, stats,
     sourceStates, wikiPages, currentWikiPage, wikiLoading,
     ingestPlan, ingesting, ingestProgress, ingestResult, ingestError, ingestErrorKey,
-    ingestStopping, syncPreparing, ingestNothing, syncPercent, ingestModel,
+    ingestStopping, syncPreparing, ingestNothing, syncPercent, ingestModel, ingestDialogVisible,
     setRoot, refreshStatus, loadGraph, refreshSourceStates, loadWikiPages, openWikiPage,
-    updateIndex, runSync, ingestSingle, confirmIngest, cancelIngestPlan, stopIngest, ensureIngestListener, dispose,
+    updateIndex, runSync, ingestSingle, confirmIngest, cancelIngestPlan, stopIngest, ensureIngestListener, restoreIngestStatus, openIngestResult, dispose,
   }
 })

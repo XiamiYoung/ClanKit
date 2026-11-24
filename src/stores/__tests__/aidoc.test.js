@@ -19,6 +19,7 @@ describe('AI Doc store', () => {
       getIngestPlan: vi.fn(),
       runIngest: vi.fn(),
       stopIngest: vi.fn(async () => ({ success: true })),
+      getIngestStatus: vi.fn(async () => ({ success: true, running: false })),
       getSourceStates: vi.fn(async () => ({ success: true, states: { '/a/kb_source/a.md': 'new' } })),
       getWikiPages: vi.fn(async () => ({ success: true, pages: [{ rel: 'wiki/index.md' }] })),
       getWikiPage: vi.fn(async ({ rel }) => ({ success: true, page: { rel, body: '# Wiki' } })),
@@ -178,19 +179,20 @@ describe('AI Doc store', () => {
     expect(store.ingestErrorKey).toBe('aidoc.ingestInvalidModel')
   })
 
-  it('displays a localized busy error and keeps the confirmation available', async () => {
+  it('treats a backend busy response as a no-error state and follows the active run', async () => {
     const store = useAiDocStore()
     store.setRoot('/a')
     api.updateIndex.mockResolvedValue({ success: true })
     api.getIngestPlan.mockResolvedValue({ success: true, sources: [{ rel: 'kb_source/a.md' }], providerReady: true })
     api.runIngest.mockResolvedValue({ success: false, code: 'busy' })
+    api.getIngestStatus.mockResolvedValue({ success: true, running: false })
     await store.runSync()
     await store.confirmIngest()
-    expect(store.ingestErrorKey).toBe('aidoc.ingestBusy')
+    expect(store.ingestErrorKey).toBe('')
+    expect(store.ingestError).toBe('')
     expect(store.ingesting).toBe(false)
-    expect(store.ingestPlan).not.toBeNull()
-    store.cancelIngestPlan()
-    expect(store.ingestPlan).toBeNull()
+    expect(store.ingestDialogVisible).toBe(false)
+    expect(api.getIngestStatus).toHaveBeenCalled()
   })
 
   it('keeps receiving ingest progress after dispose while running and unsubscribes when idle', async () => {
@@ -280,6 +282,145 @@ describe('AI Doc store', () => {
     expect(store.ingestResult).toBeNull()
     expect(store.ingesting).toBe(false)
     expect(api.getWikiPages).not.toHaveBeenCalled()
+  })
+
+  describe('background sync', () => {
+    const rel = 'kb_source/a.md'
+    async function planned(store, root = '/a') {
+      store.setRoot(root)
+      api.updateIndex.mockResolvedValue({ success: true })
+      api.getIngestPlan.mockResolvedValue({ success: true, sources: [{ rel }], providerReady: true })
+      await store.runSync()
+    }
+    const never = () => new Promise(() => {})
+
+    it('closes the dialog at once, keeps running, and ignores a second start', async () => {
+      const store = useAiDocStore()
+      await planned(store)
+      expect(store.ingestDialogVisible).toBe(true)
+      let finish
+      api.runIngest.mockImplementation(() => new Promise(resolve => { finish = resolve }))
+      const run = store.confirmIngest()
+      expect(store.ingestDialogVisible).toBe(false)
+      expect(store.ingesting).toBe(true)
+      await store.confirmIngest()
+      await store.runSync()
+      expect(api.runIngest).toHaveBeenCalledOnce()
+      expect(api.getIngestPlan).toHaveBeenCalledOnce()
+      finish({ success: true, done: [rel], failed: [], overflow: 0 })
+      await run
+      expect(store.ingesting).toBe(false)
+      expect(store.ingestResult).toMatchObject({ remaining: 0 })
+      expect(store.ingestDialogVisible).toBe(false)
+      store.openIngestResult()
+      expect(store.ingestDialogVisible).toBe(true)
+      store.cancelIngestPlan()
+      expect(store.ingestDialogVisible).toBe(false)
+      expect(store.ingestResult).toBeNull()
+    })
+
+    it('does not open the result view while a run is active', async () => {
+      const store = useAiDocStore()
+      await planned(store)
+      api.runIngest.mockImplementation(never)
+      void store.confirmIngest()
+      store.openIngestResult()
+      expect(store.ingestDialogVisible).toBe(false)
+    })
+
+    it('brings the dialog back when starting fails with a real error', async () => {
+      const store = useAiDocStore()
+      await planned(store)
+      api.runIngest.mockResolvedValue({ success: false, code: 'providerMissing' })
+      await store.confirmIngest()
+      expect(store.ingestDialogVisible).toBe(true)
+      expect(store.ingestPlan).not.toBeNull()
+      expect(store.ingestErrorKey).toBe('aidoc.providerMissing')
+    })
+
+    it('restores a running state from the main-process snapshot and stops it', async () => {
+      const store = useAiDocStore()
+      api.getIngestStatus.mockResolvedValue({ success: true, running: true, requestId: 'r1', index: 1, total: 4, rel, status: 'start' })
+      store.setRoot('/a')
+      await store.restoreIngestStatus()
+      expect(api.getIngestStatus).toHaveBeenCalledWith({ root: '/a' })
+      expect(store.ingesting).toBe(true)
+      expect(store.ingestProgress).toMatchObject({ index: 1, total: 4, rel })
+      expect(store.syncPercent).toBeGreaterThanOrEqual(25)
+      expect(store.ingestDialogVisible).toBe(false)
+      await store.runSync()
+      expect(api.getIngestPlan).not.toHaveBeenCalled()
+      await store.stopIngest()
+      expect(api.stopIngest).toHaveBeenCalledWith({ root: '/a' })
+      expect(store.ingestStopping).toBe(true)
+    })
+
+    it('stays idle when the snapshot reports no active run', async () => {
+      const store = useAiDocStore()
+      store.setRoot('/a')
+      await store.restoreIngestStatus()
+      expect(store.ingesting).toBe(false)
+    })
+
+    it('completes a restored run from the complete event exactly once', async () => {
+      const store = useAiDocStore()
+      api.getIngestStatus.mockResolvedValue({ success: true, running: true, requestId: 'r1', index: 0, total: 1, rel, status: 'start' })
+      store.setRoot('/a')
+      await store.restoreIngestStatus()
+      const event = {
+        requestId: 'r1', type: 'complete',
+        summary: { done: [{ rel }], failed: [], stopped: false, remaining: 0, warnings: [] },
+      }
+      ingestProgress(event)
+      ingestProgress(event)
+      await vi.waitFor(() => expect(store.ingesting).toBe(false))
+      expect(store.ingestResult).toMatchObject({ remaining: 0 })
+      expect(store.ingestResult.done).toHaveLength(1)
+      expect(store.syncPercent).toBe(100)
+      expect(api.getGraph).toHaveBeenCalledTimes(1)
+      expect(store.ingestStopping).toBe(false)
+    })
+
+    it('ignores the complete event for a run that has its own invoke promise', async () => {
+      const store = useAiDocStore()
+      await planned(store)
+      let finish
+      api.runIngest.mockImplementation(() => new Promise(resolve => { finish = resolve }))
+      const run = store.confirmIngest()
+      const { requestId } = api.runIngest.mock.calls[0][0]
+      ingestProgress({ requestId, type: 'complete', summary: { done: [], failed: [], remaining: 0 } })
+      expect(store.ingestResult).toBeNull()
+      expect(store.ingesting).toBe(true)
+      finish({ success: true, done: [rel], failed: [], overflow: 0 })
+      await run
+      expect(store.ingestResult.done).toEqual([rel])
+      expect(api.getGraph).toHaveBeenCalledTimes(2)
+    })
+
+    it('reports a failed restored run as an error instead of a result', async () => {
+      const store = useAiDocStore()
+      api.getIngestStatus.mockResolvedValue({ success: true, running: true, requestId: 'r1' })
+      store.setRoot('/a')
+      await store.restoreIngestStatus()
+      ingestProgress({ requestId: 'r1', type: 'complete', error: true })
+      await vi.waitFor(() => expect(store.ingesting).toBe(false))
+      expect(store.ingestResult).toBeNull()
+      expect(store.ingestErrorKey).toBe('aidoc.requestFailed')
+    })
+
+    it('isolates a running state per root', async () => {
+      const store = useAiDocStore()
+      api.getIngestStatus.mockResolvedValue({ success: true, running: true, requestId: 'r1', index: 0, total: 1, rel, status: 'start' })
+      store.setRoot('/a')
+      await store.restoreIngestStatus()
+      expect(store.ingesting).toBe(true)
+      api.getIngestStatus.mockResolvedValue({ success: false, code: 'rootChanged' })
+      store.setRoot('/b')
+      expect(store.ingesting).toBe(false)
+      await vi.waitFor(() => expect(api.getIngestStatus).toHaveBeenLastCalledWith({ root: '/b' }))
+      ingestProgress({ requestId: 'r1', type: 'complete', summary: { done: [], failed: [] } })
+      expect(store.ingestResult).toBeNull()
+    })
   })
 
   describe('syncPercent', () => {

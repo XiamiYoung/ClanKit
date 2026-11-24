@@ -3,7 +3,7 @@
     <dialog ref="dialog" class="ingest-dialog" aria-modal="true" aria-labelledby="aidoc-ingest-title" @cancel.prevent="dismiss">
       <header class="ingest-header">
         <h2 id="aidoc-ingest-title">{{ t('aidoc.ingestTitle') }}</h2>
-        <AppTooltip v-if="!store.ingesting" :text="t('common.close')">
+        <AppTooltip :text="t('common.close')">
           <AppButton size="icon" variant="ghost" type="button" :aria-label="t('common.close')" @click="dismiss">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path d="m6 6 12 12M18 6 6 18" />
@@ -34,20 +34,7 @@
           <p class="ingest-detail ingest-model-hint">{{ t('aidoc.ingestModelHint') }}</p>
         </div>
 
-        <section v-if="store.ingesting" class="ingest-running" role="status">
-          <div class="ingest-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"
-            :aria-valuenow="percent" data-testid="aidoc-ingest-progress">
-            <div class="ingest-bar-fill" :style="{ width: percent + '%' }"></div>
-          </div>
-          <template v-if="store.ingestProgress?.total">
-            <p data-testid="aidoc-ingest-percent">{{ t('aidoc.progressPercent', { percent, i: store.ingestProgress.index + 1, n: store.ingestProgress.total, name: fileName(store.ingestProgress.rel) }) }}</p>
-            <p class="ingest-path">{{ store.ingestProgress.rel }}</p>
-            <p v-if="store.ingestProgress.action" class="ingest-detail">{{ actionText(store.ingestProgress.action) }}</p>
-          </template>
-          <p v-else data-testid="aidoc-ingest-percent">{{ percent }}% · {{ t('aidoc.ingestPreparing') }}</p>
-        </section>
-
-        <template v-else-if="store.ingestResult">
+        <template v-if="store.ingestResult">
           <div class="ingest-summary" role="status">
             <div class="ingest-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"
               :aria-valuenow="percent" data-testid="aidoc-ingest-progress">
@@ -96,24 +83,18 @@
       </div>
 
       <footer class="ingest-footer">
-        <AppButton v-if="store.ingesting" size="modal" variant="danger" type="button"
-          data-testid="aidoc-ingest-stop" :disabled="store.ingestStopping" @click="store.stopIngest()">
-          {{ t('aidoc.ingestStop') }}
+        <AppButton size="modal" :variant="confirming ? 'ghost' : 'primary'" type="button"
+          data-testid="aidoc-ingest-dismiss" @click="dismiss">
+          {{ t(confirming ? 'common.cancel' : 'common.close') }}
         </AppButton>
-        <template v-else>
-          <AppButton size="modal" :variant="confirming ? 'ghost' : 'primary'" type="button"
-            data-testid="aidoc-ingest-dismiss" @click="dismiss">
-            {{ t(confirming ? 'common.cancel' : 'common.close') }}
-          </AppButton>
-          <AppButton v-if="confirming" size="modal" type="button" data-testid="aidoc-ingest-start"
-            :disabled="!canStart" @click="store.confirmIngest()">
-            {{ t('aidoc.ingestStart') }}
-          </AppButton>
-          <AppButton v-else-if="modelErrorHint && hasModelChoice" size="modal" type="button" data-testid="aidoc-ingest-retry"
-            :disabled="!selectionComplete || store.syncPreparing" @click="retry">
-            {{ t('aidoc.ingestRetry') }}
-          </AppButton>
-        </template>
+        <AppButton v-if="confirming" size="modal" type="button" data-testid="aidoc-ingest-start"
+          :disabled="!canStart || store.ingesting" @click="store.confirmIngest()">
+          {{ t('aidoc.ingestStart') }}
+        </AppButton>
+        <AppButton v-else-if="modelErrorHint && hasModelChoice" size="modal" type="button" data-testid="aidoc-ingest-retry"
+          :disabled="!selectionComplete || store.syncPreparing" @click="retry">
+          {{ t('aidoc.ingestRetry') }}
+        </AppButton>
       </footer>
     </dialog>
   </Teleport>
@@ -137,7 +118,7 @@ const providerMessage = computed(() => {
 })
 
 const hasModelChoice = computed(() => Boolean(store.ingestPlan?.providers?.length && store.ingestModel))
-const showModelControls = computed(() => hasModelChoice.value && (confirming.value || store.ingesting || modelErrorHint.value))
+const showModelControls = computed(() => hasModelChoice.value && (confirming.value || modelErrorHint.value))
 const providerModels = computed(() => store.ingestPlan?.providers?.find(provider => provider.id === store.ingestModel?.providerId)?.models || [])
 const modelSourceKeys = {
   remembered: 'aidoc.ingestModelSourceRemembered',
@@ -185,16 +166,7 @@ const reasonKeys = {
   record_failed: 'aidoc.reasonRecordFailed',
   registry_unreadable: 'aidoc.reasonRegistryUnreadable'
 }
-const actionKeys = {
-  list: 'aidoc.actionList',
-  read_source: 'aidoc.actionReadSource',
-  read_wiki: 'aidoc.actionReadWiki',
-  write_wiki: 'aidoc.actionWriteWiki',
-  edit_wiki: 'aidoc.actionEditWiki'
-}
-const actionText = action => (actionKeys[action] ? t(actionKeys[action]) : action)
 const percent = computed(() => store.syncPercent ?? 0)
-const fileName = rel => String(rel || '').split('/').pop()
 
 const numberFormat = computed(() => new Intl.NumberFormat(locale?.value, { maximumFractionDigits: 1 }))
 function formatSize(bytes) {
