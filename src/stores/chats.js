@@ -106,6 +106,7 @@ export const useChatsStore = defineStore('chats', () => {
     if (chat.maxAgentRounds === undefined) chat.maxAgentRounds = null  // null = use default (10)
     if (chat.usage === undefined) chat.usage = null  // null = no usage data yet
     if (chat.mode === undefined) chat.mode = 'chat'
+    if (chat.useAiDoc === undefined) chat.useAiDoc = true
     if (chat.modeTransitions === undefined) chat.modeTransitions = []
     if (chat.modeTransitionPending === undefined) chat.modeTransitionPending = null
     if (chat.productivityModeNoticeShown === undefined) chat.productivityModeNoticeShown = false
@@ -439,6 +440,7 @@ export const useChatsStore = defineStore('chats', () => {
       groupAudienceAgentIds: [],
       workingPath: null,
       mode,
+      useAiDoc: true,
       modeTransitions: [],
       modeTransitionPending: null,
       productivityModeNoticeShown: false,
@@ -502,6 +504,7 @@ export const useChatsStore = defineStore('chats', () => {
       groupAudienceAgentIds: JSON.parse(JSON.stringify(source.groupAudienceAgentIds || [])),
       workingPath: source.workingPath || null,
       mode: source.mode || 'chat',
+      useAiDoc: source.useAiDoc !== false,
       modeTransitions: [],
       modeTransitionPending: null,
       productivityModeNoticeShown: false,
@@ -984,6 +987,7 @@ export const useChatsStore = defineStore('chats', () => {
     if ('chatAllowList' in settings) chat.chatAllowList = settings.chatAllowList
     if ('chatDangerOverrides' in settings) chat.chatDangerOverrides = settings.chatDangerOverrides
     if ('maxAgentRounds' in settings) chat.maxAgentRounds = settings.maxAgentRounds
+    if ('useAiDoc' in settings) chat.useAiDoc = settings.useAiDoc !== false
     chat.updatedAt = Date.now()
     // persistChat → store:save-chat already updates the index, no separate persistIndex needed
     await persistChat(chatId)
