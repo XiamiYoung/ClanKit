@@ -21,6 +21,7 @@ const ccmActiveTab = ref('general')
 // ── General tab draft state ──
 const draftMaxAgentRounds = ref(10)
 const draftWorkingPath = ref('')
+const draftUseAiDoc = ref(true)
 
 // ── Permissions tab draft state ──
 const draftPermissionMode = ref('inherit')
@@ -51,6 +52,8 @@ function removeChatDangerOverride(pattern) {
   if (idx !== -1) draftChatDangerOverrides.value.splice(idx, 1)
 }
 
+const isProductivityChat = computed(() => chatsStore.chats.find(c => c.id === props.chatId)?.mode === 'productivity')
+
 // Snapshot of draft state before modal opens (for cancel/revert)
 let _draftSnapshot = null
 
@@ -62,6 +65,7 @@ watch(() => props.visible, (open) => {
   // Snapshot for cancel
   _draftSnapshot = {
     workingPath: draftWorkingPath.value,
+    useAiDoc: draftUseAiDoc.value,
     maxAgentRounds: draftMaxAgentRounds.value,
     permissionMode: draftPermissionMode.value,
     chatAllowList: JSON.parse(JSON.stringify(draftChatAllowList.value)),
@@ -77,6 +81,7 @@ function saveChatSettings() {
   // Mode is configured via the ChatHeader dropdown — not here. Skip setMode.
   chatsStore.setChatSettings(chatId, {
     workingPath: draftWorkingPath.value || null,
+    useAiDoc: draftUseAiDoc.value,
     maxAgentRounds: clampedRounds,
     permissionMode: draftPermissionMode.value,
     chatAllowList: JSON.parse(JSON.stringify(draftChatAllowList.value)),
@@ -99,6 +104,7 @@ function cancelChatSettings() {
   // Revert draft to snapshot
   if (_draftSnapshot) {
     draftWorkingPath.value = _draftSnapshot.workingPath
+    draftUseAiDoc.value = _draftSnapshot.useAiDoc
     draftMaxAgentRounds.value = _draftSnapshot.maxAgentRounds
     draftPermissionMode.value = _draftSnapshot.permissionMode
     draftChatAllowList.value = _draftSnapshot.chatAllowList
@@ -120,6 +126,7 @@ function _loadDraftFromChat() {
   if (!chat) return
   // Working path
   draftWorkingPath.value = chat.workingPath || ''
+  draftUseAiDoc.value = chat.useAiDoc !== false
   // Max agent rounds (null in JSON = use default 10)
   draftMaxAgentRounds.value = chat.maxAgentRounds ?? 10
   // Permissions
@@ -167,12 +174,23 @@ function _loadDraftFromChat() {
           <div class="ccm-dark-section">
             <div class="ccm-dark-section-label">{{ t('chats.workingFolder') }}</div>
             <div class="ccm-working-path-row">
-              <input v-model="draftWorkingPath" type="text" :placeholder="configStore.config.DoCPath || `${configStore.config.dataPath}/clankit_doc`" class="ccm-working-path-input" />
+              <input v-model="draftWorkingPath" type="text" :placeholder="t('chats.workingFolderNone')" class="ccm-working-path-input" />
               <button class="ccm-working-path-browse" @click="browseWorkingPath" :title="t('chats.browseFolder')">
                 <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
               </button>
             </div>
             <span class="ccm-working-path-hint">{{ t('chats.workingFolderHint') }}</span>
+          </div>
+
+          <div v-if="isProductivityChat" class="ccm-dark-section ccm-use-aidoc">
+            <div class="ccm-use-aidoc-row">
+              <div class="ccm-dark-section-label">{{ t('chats.useAiDoc') }}</div>
+              <label class="ccm-toggle">
+                <input v-model="draftUseAiDoc" type="checkbox" />
+                <span class="ccm-toggle-track"><span class="ccm-toggle-thumb"></span></span>
+              </label>
+            </div>
+            <span class="ccm-working-path-hint">{{ t('chats.useAiDocHint') }}</span>
           </div>
 
           <!-- Mode radio -->
@@ -659,6 +677,8 @@ function _loadDraftFromChat() {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .ccm-item-row.enabled .ccm-row-desc { color: #6B7280; }
+
+.ccm-use-aidoc-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
 
 /* Toggle switch (dark) */
 .ccm-toggle {

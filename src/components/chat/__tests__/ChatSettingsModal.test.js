@@ -123,10 +123,11 @@ describe('working folder UI (mode is configured via the chat header dropdown)', 
     expect(wrapper.find('.ccm-coding-info-chip').exists()).toBe(false)
   })
 
-  it('working folder placeholder uses DoCPath', () => {
+  it('working folder placeholder no longer mentions clankit_doc', () => {
     const wrapper = mountModal()
     const input = wrapper.find('.ccm-working-path-input')
-    expect(input.attributes('placeholder')).toContain('clankit_doc')
+    expect(input.attributes('placeholder')).toBe('chats.workingFolderNone')
+    expect(input.attributes('placeholder')).not.toContain('clankit_doc')
   })
 
   it('artifactDirectory badge is gone', () => {
@@ -140,5 +141,30 @@ describe('working folder UI (mode is configured via the chat header dropdown)', 
     saveBtn.element.click()
     await wrapper.vm.$nextTick()
     expect(mockSetMode).not.toHaveBeenCalled()
+  })
+})
+
+describe('use AI Doc switch', () => {
+  it('is rendered and on by default for productivity chats', () => {
+    const wrapper = mountModal({ chatId: 'c2' })
+    const input = wrapper.find('.ccm-use-aidoc input[type="checkbox"]')
+    expect(input.exists()).toBe(true)
+    expect(input.element.checked).toBe(true)
+  })
+
+  it('saves useAiDoc: false after toggling', async () => {
+    const wrapper = mountModal({ chatId: 'c2' })
+    const el = wrapper.find('.ccm-use-aidoc input[type="checkbox"]').element
+    el.checked = false
+    el.dispatchEvent(new Event('change'))
+    await wrapper.vm.$nextTick()
+    wrapper.find('.ccm-save-btn').element.click()
+    await wrapper.vm.$nextTick()
+    expect(mockSetChatSettings).toHaveBeenCalledWith('c2', expect.objectContaining({ useAiDoc: false }))
+  })
+
+  it('is not rendered for chat-mode chats', () => {
+    const wrapper = mountModal({ chatId: 'c1' })
+    expect(wrapper.find('.ccm-use-aidoc').exists()).toBe(false)
   })
 })

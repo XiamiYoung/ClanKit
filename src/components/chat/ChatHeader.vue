@@ -989,7 +989,7 @@ const ragEnabledCount = computed(() => {
 })
 
 const effectiveWorkingPath = computed(() => {
-  return chat.value?.workingPath || configStore.config.artifactPath || `${configStore.config.dataPath}/artifact`
+  return chat.value?.workingPath || t('chats.workingFolderNone')
 })
 
 const effectiveAgentRounds = computed(() => {
