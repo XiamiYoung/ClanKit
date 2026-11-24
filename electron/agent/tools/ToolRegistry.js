@@ -146,6 +146,19 @@ class ToolRegistry {
     this.tools.set(name, tool)
   }
 
+  /** Replace every registered tool with exactly the given ones (name -> tool). */
+  useOnly(toolsByName) {
+    this.tools.clear()
+    this.addTools(toolsByName)
+  }
+
+  /** Register additional tools (name -> tool); same-name entries override. */
+  addTools(toolsByName) {
+    for (const [name, tool] of Object.entries(toolsByName || {})) {
+      this.registerTool(name, tool)
+    }
+  }
+
   /**
    * Compaction config setter — kept as a no-op for back-compat with callers
    * that still invoke it. Structured rows + retrieval replaced LLM-driven

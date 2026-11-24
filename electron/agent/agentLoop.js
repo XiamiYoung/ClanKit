@@ -606,6 +606,11 @@ class AgentLoop {
     return mc.buildConversationMessages(messages, currentAttachments)
   }
 
+  /** False only in exclusive mode for a tool name the model was never offered. */
+  _isToolAllowed(toolName) {
+    return !this._exclusiveToolNames || this._exclusiveToolNames.has(toolName)
+  }
+
   /**
    * Main entry point — runs the agentic loop.
    *
@@ -629,8 +634,17 @@ class AgentLoop {
     // Load tools for enabled agents
     this.toolRegistry.loadForAgents(enabledAgents || [], this.config.excludedToolNames || [])
 
+    // Optional caller-supplied tools. exclusiveTools restricts the run to exactly
+    // these tools (see _isToolAllowed / the final filter on allToolsAnthropic).
+    const _exclusiveTools = this.config.exclusiveTools === true
+    this._exclusiveToolNames = _exclusiveTools ? new Set(Object.keys(this.config.extraTools || {})) : null
+    if (this.config.extraTools) {
+      if (_exclusiveTools) this.toolRegistry.useOnly(this.config.extraTools)
+      else this.toolRegistry.addTools(this.config.extraTools)
+    }
+
     // Register agent-specific tools
-    if (this.config.memoryDir && agentPrompts?.systemAgentId) {
+    if (!_exclusiveTools && this.config.memoryDir && agentPrompts?.systemAgentId) {
       // For analysis chats, search the target agent's history instead of the analyzer's
       const searchTargetId = agentPrompts.analysisTargetAgentId || agentPrompts.systemAgentId
       this.toolRegistry.registerSearchHistoryTool(this.config.memoryDir, searchTargetId)
@@ -642,7 +656,7 @@ class AgentLoop {
     // electron/agent/builtin-skills/agent-recommendation/.)
 
     // Register dedicated analysis tool for analysis chats
-    if (this.config.memoryDir && agentPrompts?.analysisTargetAgentId) {
+    if (!_exclusiveTools && this.config.memoryDir && agentPrompts?.analysisTargetAgentId) {
       const { AnalyzeAgentTool } = require('./tools/AnalyzeAgentTool')
       const analysisTool = new AnalyzeAgentTool(
         this.config.memoryDir,
@@ -684,7 +698,7 @@ class AgentLoop {
     // ship a tool.js in its source directory alongside SKILL.md — the loader
     // requires it, instantiates the class with runtime context, and registers
     // it. agentLoop no longer needs to know about specific skill tools.
-    if (Array.isArray(enabledSkills) && enabledSkills.length > 0) {
+    if (!_exclusiveTools && Array.isArray(enabledSkills) && enabledSkills.length > 0) {
       try {
         const { loadSkillTools } = require('../lib/skillToolLoader')
         // Lazy-resolve store singletons so skill tools can read SQLite without
@@ -955,6 +969,7 @@ class AgentLoop {
 
     // Helper: load schemas for the given server configs and register them into mcpToolMap
     const _loadMcpTools = async (serverConfigs) => {
+      if (this._exclusiveToolNames) return []
       const discovered = await mcpManager.getToolSchemas(serverConfigs)
       const newTools = []
       for (const { serverId, serverName, tool } of discovered) {
@@ -1077,6 +1092,12 @@ class AgentLoop {
       }
       const counts = { http: httpToolMap.size, code: codeToolMap.size, prompt: promptToolMap.size, smtp: smtpToolMap.size }
       logger.agent('User tools injected', counts)
+    }
+
+    // Exclusive mode: the model sees exactly the caller-supplied tools, nothing else.
+    if (this._exclusiveToolNames) {
+      const kept = allToolsAnthropic.filter(t => this._exclusiveToolNames.has(t.name))
+      allToolsAnthropic.splice(0, allToolsAnthropic.length, ...kept)
     }
 
     // NOTE: allTools is computed fresh each iteration inside the while loop below
@@ -1458,7 +1479,9 @@ class AgentLoop {
               let result
               try {
                 // Route through the same tool execution paths as Anthropic/OpenAI
-                if (toolName === 'load_skill') {
+                if (!this._isToolAllowed(toolName)) {
+                  result = { success: false, error: `Tool not available in this run: ${toolName}` }
+                } else if (toolName === 'load_skill') {
                   const skillId = toolInput.skill_id
                   const prompt = this.skillPrompts.get(skillId)
                   if (prompt) {
@@ -2099,7 +2122,9 @@ class AgentLoop {
                   onChunk({ type: 'tool_call', name: toolName, input: toolInput, toolCallId: block.id })
 
                   let result
-                  if (toolName === 'load_skill') {
+                  if (!this._isToolAllowed(toolName)) {
+                    result = { success: false, error: `Tool not available in this run: ${toolName}` }
+                  } else if (toolName === 'load_skill') {
                     const skillId = toolInput.skill_id
                     const prompt = this.skillPrompts.get(skillId)
                     if (prompt) {
@@ -2732,7 +2757,9 @@ class AgentLoop {
 
                   let result
 
-                  if (toolName === 'load_skill') {
+                  if (!this._isToolAllowed(toolName)) {
+                    result = { success: false, error: `Tool not available in this run: ${toolName}` }
+                  } else if (toolName === 'load_skill') {
                     const skillId = toolInput.skill_id
                     const prompt = this.skillPrompts.get(skillId)
                     if (prompt) {
