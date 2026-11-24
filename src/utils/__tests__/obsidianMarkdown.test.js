@@ -56,4 +56,14 @@ describe('Obsidian Markdown preview', () => {
     expect(preview.querySelector('img').dataset.abspath).toBe('/vault/wiki/image.png')
     expect(preview.querySelector('script')).toBeNull()
   })
+
+  it('drops remote and relative images only when images are restricted', () => {
+    const md = '![a](https://x.test/a.png) ![b](//x.test/b.png) ![c](rel/c.png) ![d](data:image/png;base64,AAAA)'
+    const open = document.createElement('div')
+    open.innerHTML = renderObsidianMarkdown(md)
+    expect(open.querySelectorAll('img').length).toBeGreaterThan(1)
+    const restricted = document.createElement('div')
+    restricted.innerHTML = renderObsidianMarkdown(md, { restrictImages: true })
+    expect([...restricted.querySelectorAll('img')].map(img => img.getAttribute('src'))).toEqual(['data:image/png;base64,AAAA'])
+  })
 })

@@ -27,7 +27,7 @@
             <p>{{ t('aidoc.ingestDone', { n: store.ingestResult.done.length }) }}</p>
             <p>{{ t('aidoc.ingestFailed', { n: store.ingestResult.failed.length }) }}</p>
             <p v-if="store.ingestResult.stopped">{{ t('aidoc.ingestStopped') }}</p>
-            <p>{{ t('aidoc.ingestRemaining', { n: store.ingestResult.remaining ?? store.ingestResult.overflow }) }}</p>
+            <p v-if="(store.ingestResult.remaining ?? store.ingestResult.overflow) > 0">{{ t('aidoc.ingestRemaining', { n: store.ingestResult.remaining ?? store.ingestResult.overflow }) }}</p>
           </div>
           <ul v-if="store.ingestResult.failed.length" class="ingest-list">
             <li v-for="failure in store.ingestResult.failed" :key="failure.rel" class="ingest-failure">
@@ -100,6 +100,7 @@ const providerMessage = computed(() => {
 const stateKeys = { new: 'aidoc.stateNew', updated: 'aidoc.stateUpdated', ingested: 'aidoc.stateIngested' }
 const reasonKeys = {
   scanned_pdf: 'aidoc.reasonScannedPdf',
+  unsupported: 'aidoc.reasonUnsupported',
   empty: 'aidoc.reasonEmpty',
   extract_failed: 'aidoc.reasonExtractFailed',
   no_pages: 'aidoc.reasonNoPages',

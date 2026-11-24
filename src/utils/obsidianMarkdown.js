@@ -161,6 +161,16 @@ export function preprocessObsidian(md, { resolveLink, localImageBasePath } = {})
   return out.join('\n')
 }
 
+// Wiki reader only: keep inline data images, drop remote and unresolvable relative images.
+function dropUnsafeImages(html) {
+  const template = document.createElement('template')
+  template.innerHTML = html
+  for (const img of template.content.querySelectorAll('img')) {
+    if (!/^data:image\//i.test(img.getAttribute('src') || '')) img.remove()
+  }
+  return template.innerHTML
+}
+
 export function renderObsidianMarkdown(md, options = {}) {
   if (!md) return ''
   try {
@@ -168,10 +178,11 @@ export function renderObsidianMarkdown(md, options = {}) {
     const propsHtml = renderProperties(meta)
     const processed = preprocessObsidian(body, options)
     const raw = propsHtml + markdown.parse(processed, { localImageBasePath: options.localImageBasePath })
-    return DOMPurify.sanitize(raw, {
+    const clean = DOMPurify.sanitize(raw, {
       ALLOW_UNKNOWN_PROTOCOLS: true,
       USE_PROFILES: { html: true, svg: true, svgFilters: true, mathMl: true },
       ADD_ATTR: ['data-relpath', 'data-abspath', 'data-target', 'data-section', 'data-callout', 'data-rel', 'data-unresolved', 'style'],
     })
+    return options.restrictImages ? dropUnsafeImages(clean) : clean
   } catch { return '' }
 }

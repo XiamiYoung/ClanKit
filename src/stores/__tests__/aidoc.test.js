@@ -160,4 +160,92 @@ describe('AI Doc store', () => {
     expect(store.ingestPlan).toBeNull()
   })
 
+  it('keeps receiving ingest progress after dispose while running and unsubscribes when idle', async () => {
+    const unsubscribeIngest = vi.fn()
+    api.onIngestProgress.mockImplementation(listener => { ingestProgress = listener; return unsubscribeIngest })
+    const store = useAiDocStore()
+    store.setRoot('/a')
+    api.updateIndex.mockResolvedValue({ success: true })
+    api.getIngestPlan.mockResolvedValue({ success: true, sources: [{ rel: 'kb_source/a.md' }], providerReady: true })
+    let finish
+    api.runIngest.mockImplementation(() => new Promise(resolve => { finish = resolve }))
+    await store.runSync()
+    const run = store.confirmIngest()
+    store.dispose()
+    expect(unsubscribeIngest).not.toHaveBeenCalled()
+    store.ensureIngestListener()
+    store.ensureIngestListener()
+    expect(api.onIngestProgress).toHaveBeenCalledOnce()
+    const { requestId } = api.runIngest.mock.calls[0][0]
+    ingestProgress({ requestId, index: 0, total: 1, rel: 'kb_source/a.md' })
+    expect(store.ingestProgress.total).toBe(1)
+    finish({ success: true, done: ['kb_source/a.md'], failed: [], overflow: 0 })
+    await run
+    store.dispose()
+    expect(unsubscribeIngest).toHaveBeenCalledOnce()
+    store.ensureIngestListener()
+    expect(api.onIngestProgress).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not surface background source-state failures and clears its own read error on success', async () => {
+    const store = useAiDocStore()
+    store.setRoot('/a')
+    api.getSourceStates.mockResolvedValueOnce({ success: false, error: 'boom' })
+    await store.refreshSourceStates()
+    expect(store.error).toBe('')
+    expect(store.errorKey).toBe('')
+
+    api.getSyncStatus.mockResolvedValueOnce({ success: false, error: 'status down' })
+    await store.refreshStatus()
+    expect(store.error).toBe('status down')
+    await store.refreshStatus()
+    expect(store.error).toBe('')
+
+    api.updateIndex.mockResolvedValueOnce({ success: false, error: 'index broke' })
+    await store.updateIndex()
+    await store.refreshStatus()
+    expect(store.error).toBe('index broke')
+  })
+
+  it('ignores a second sync while one is preparing', async () => {
+    const store = useAiDocStore()
+    store.setRoot('/a')
+    let finish
+    api.updateIndex.mockReturnValue(new Promise(resolve => { finish = resolve }))
+    const first = store.runSync()
+    await store.runSync()
+    expect(api.updateIndex).toHaveBeenCalledOnce()
+    finish({ success: false, error: 'x' })
+    await first
+    expect(store.syncPreparing).toBe(false)
+  })
+
+  it('clears the nothing-to-organize notice when pending sources appear', async () => {
+    const store = useAiDocStore()
+    store.setRoot('/a')
+    api.updateIndex.mockResolvedValue({ success: true, stats: {} })
+    api.getIngestPlan.mockResolvedValue({ success: true, sources: [], providerReady: true })
+    await store.runSync()
+    expect(store.ingestNothing).toBe(true)
+    api.getSyncStatus.mockResolvedValueOnce({ ingestAvailable: true, pending: { new: 1, updated: 0 } })
+    await store.refreshStatus()
+    expect(store.ingestNothing).toBe(false)
+  })
+
+  it('drops ingest results that arrive after the root changed', async () => {
+    const store = useAiDocStore()
+    store.setRoot('/a')
+    api.updateIndex.mockResolvedValue({ success: true })
+    api.getIngestPlan.mockResolvedValue({ success: true, sources: [{ rel: 'kb_source/a.md' }], providerReady: true })
+    let finish
+    api.runIngest.mockImplementation(() => new Promise(resolve => { finish = resolve }))
+    await store.runSync()
+    const run = store.confirmIngest()
+    store.setRoot('/b')
+    finish({ success: true, done: ['kb_source/a.md'], failed: [], overflow: 0 })
+    await run
+    expect(store.ingestResult).toBeNull()
+    expect(store.ingesting).toBe(false)
+    expect(api.getWikiPages).not.toHaveBeenCalled()
+  })
 })

@@ -4,7 +4,9 @@
     class="aidoc-wiki-panel"
     data-testid="aidoc-wiki-panel"
     tabindex="-1"
-    :aria-label="t('aidoc.wiki')"
+    role="dialog"
+    aria-modal="true"
+    :aria-label="t('aidoc.wikiDialog')"
     @keydown.esc.stop="emit('close')"
     @mousedown.stop
     @mouseup.stop
@@ -34,7 +36,7 @@
             <circle cx="11" cy="11" r="6" />
             <path d="m16 16 4 4" />
           </svg>
-          <input v-model="query" type="search" :placeholder="t('aidoc.wikiSearch')" :aria-label="t('aidoc.wikiSearch')" />
+          <input v-model="query" type="search" @keydown.esc.stop.prevent="query = ''" :placeholder="t('aidoc.wikiSearch')" :aria-label="t('aidoc.wikiSearch')" />
         </div>
         <button v-if="home" type="button" class="wiki-nav-link" :aria-current="page?.rel === home.rel ? 'page' : undefined" @click="selectPage(home.rel)">
           {{ t('aidoc.wikiHome') }}
@@ -156,14 +158,26 @@ function isWikiRel(rel) {
     && !rel.split('/').some(segment => segment === '..' || segment === '.')
 }
 
-function resolveWikiLink(target) {
+function sourceForLink(target) {
   const links = page.value?.links
-  if (!links || !Object.hasOwn(links, target)) return null
-  const rel = links[target]
-  return isWikiRel(rel) ? rel : null
+  const rel = links && Object.hasOwn(links, target) ? links[target] : null
+  const name = String(target).toLowerCase()
+  return (page.value?.sources || []).find(source => {
+    if (!source.exists || !source.path) return false
+    if (rel) return source.rel === rel
+    const file = source.rel.split('/').at(-1).toLowerCase()
+    return file === name || file.replace(/\.[^.]+$/, '') === name
+  }) || null
 }
 
-const html = computed(() => renderObsidianMarkdown(page.value?.body, { resolveLink: resolveWikiLink }))
+function resolveWikiLink(target) {
+  const links = page.value?.links
+  const rel = links && Object.hasOwn(links, target) ? links[target] : null
+  if (isWikiRel(rel)) return rel
+  return sourceForLink(target)?.rel || null
+}
+
+const html = computed(() => renderObsidianMarkdown(page.value?.body, { resolveLink: resolveWikiLink, restrictImages: true }))
 
 function wikiDestination(anchor) {
   if (anchor.dataset.unresolved) return null
@@ -180,7 +194,9 @@ function followLink(event) {
   if (!anchor) return
   event.preventDefault()
   if (anchor.classList.contains('wikilink')) {
-    selectPage(wikiDestination(anchor))
+    const destination = wikiDestination(anchor)
+    if (destination?.startsWith('kb_source/')) openSource(sourceForLink(anchor.dataset.target))
+    else selectPage(destination)
     return
   }
   const href = anchor.getAttribute('href')

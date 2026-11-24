@@ -88,6 +88,10 @@ vi.mock('turndown-plugin-gfm', () => ({ gfm: vi.fn() }))
 
 vi.stubGlobal('window', {
   ...globalThis.window,
+  Event: globalThis.Event,
+  InputEvent: globalThis.InputEvent,
+  KeyboardEvent: globalThis.KeyboardEvent,
+  MouseEvent: globalThis.MouseEvent,
   addEventListener: vi.fn(),
   removeEventListener: vi.fn(),
   electronAPI: {
@@ -205,6 +209,49 @@ describe('DocsView', () => {
     expect(wrapper.find('[data-testid="aidoc-file-ingest"]').exists()).toBe(false)
     await rightClick('extra.md')
     expect(wrapper.find('[data-testid="aidoc-file-ingest"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('hides the organize action while a sync or ingest is in progress', async () => {
+    const aidoc = useAiDocStore()
+    const wrapper = mountSourceTree()
+    await flushPromises()
+    aidoc.syncPreparing = true
+    const row = wrapper.findAll('.doc-tree-panel .cursor-pointer').find(r => r.text() === 'draft.md')
+    row.element.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-testid="aidoc-file-ingest"]').exists()).toBe(false)
+    aidoc.syncPreparing = false
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-testid="aidoc-file-ingest"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('opens the wiki reader, opens a file from it and closes it; only one overlay at a time', async () => {
+    mockObsidianStore.vaultPath = '/some/vault'
+    const wrapper = shallowMount(DocsView, { global: { stubs: { Teleport: true } } })
+    const toolbar = () => wrapper.findComponent({ name: 'AiDocToolbar' })
+    const wiki = () => wrapper.findComponent({ name: 'AiDocWikiPanel' })
+    expect(wiki().exists()).toBe(false)
+    toolbar().vm.$emit('open-wiki')
+    await wrapper.vm.$nextTick()
+    expect(wiki().exists()).toBe(true)
+    toolbar().vm.$emit('open-graph')
+    await wrapper.vm.$nextTick()
+    expect(wiki().exists()).toBe(false)
+    expect(wrapper.findComponent({ name: 'AiDocGraphPanel' }).exists()).toBe(true)
+    toolbar().vm.$emit('open-wiki')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.findComponent({ name: 'AiDocGraphPanel' }).exists()).toBe(false)
+    wiki().vm.$emit('open-file', { path: '/some/vault/kb_source/a.md', name: 'a.md' })
+    await wrapper.vm.$nextTick()
+    expect(mockObsidianStore.openFile).toHaveBeenCalledWith('/some/vault/kb_source/a.md', 'a.md')
+    expect(wiki().exists()).toBe(false)
+    toolbar().vm.$emit('open-wiki')
+    await wrapper.vm.$nextTick()
+    wiki().vm.$emit('close')
+    await wrapper.vm.$nextTick()
+    expect(wiki().exists()).toBe(false)
     wrapper.unmount()
   })
 

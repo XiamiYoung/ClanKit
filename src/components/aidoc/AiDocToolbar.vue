@@ -41,7 +41,23 @@
           <path d="M20 7v5h-5M4 17v-5h5" />
           <path d="M6 7a7 7 0 0 1 11.6-1L20 12M4 12l2.4 6A7 7 0 0 0 18 17" />
         </svg>
-        <span v-if="store.status?.indexStale || pendingCount" class="sync-dot" aria-hidden="true" data-testid="aidoc-sync-dot"></span>
+        <span v-if="pendingCount" class="sync-count" aria-hidden="true" data-testid="aidoc-sync-pending">{{ pendingCount }}</span>
+        <span v-else-if="store.status?.indexStale" class="sync-dot" aria-hidden="true" data-testid="aidoc-sync-dot"></span>
+      </AppButton>
+    </AppTooltip>
+    <AppTooltip :text="t('aidoc.fullRebuild')">
+      <AppButton
+        size="icon"
+        data-testid="aidoc-rebuild"
+        :aria-label="t('aidoc.fullRebuild')"
+        :disabled="syncBusy || store.ingesting"
+        aria-haspopup="dialog"
+        @click="openRebuild"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <ellipse cx="12" cy="5" rx="8" ry="3" />
+          <path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" />
+        </svg>
       </AppButton>
     </AppTooltip>
     <span class="sr-only" :role="errorText ? 'alert' : 'status'">{{ feedback || syncTooltip }}</span>
@@ -116,7 +132,10 @@ function rebuildIndex() {
   store.updateIndex({ full: true })
 }
 
-onMounted(() => store.refreshStatus())
+onMounted(() => {
+  store.ensureIngestListener()
+  store.refreshStatus()
+})
 </script>
 
 <style scoped>
@@ -127,6 +146,19 @@ onMounted(() => store.refreshStatus())
   gap: 0.5rem;
 }
 .aidoc-sync { position: relative; }
+.sync-count {
+  position: absolute;
+  inset-block-start: -0.25rem;
+  inset-inline-end: -0.25rem;
+  min-width: 0.875rem;
+  padding: 0 0.1875rem;
+  border-radius: var(--radius-full);
+  background: var(--aidoc-stale-badge);
+  color: #fff;
+  font-size: 0.625rem;
+  line-height: 0.875rem;
+  text-align: center;
+}
 .sync-dot {
   position: absolute;
   inset-block-start: 0.25rem;

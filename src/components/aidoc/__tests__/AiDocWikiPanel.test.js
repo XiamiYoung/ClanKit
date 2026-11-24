@@ -138,4 +138,48 @@ describe('AiDocWikiPanel', () => {
     expect(store.openWikiPage).toHaveBeenCalledExactlyOnceWith(concept.rel)
     wrapper.unmount()
   })
+
+  it('is an aria modal dialog; Escape in search only clears it, elsewhere closes', async () => {
+    store.wikiPages = [home, concept]
+    const wrapper = await openPanel()
+    const panel = wrapper.get('[data-testid="aidoc-wiki-panel"]')
+    expect(panel.attributes('role')).toBe('dialog')
+    expect(panel.attributes('aria-modal')).toBe('true')
+    expect(panel.attributes('aria-label')).toBe('aidoc.wikiDialog')
+    const search = wrapper.get('input[type="search"]')
+    await search.setValue('beta')
+    await search.trigger('keydown.esc')
+    expect(search.element.value).toBe('')
+    expect(wrapper.emitted('close')).toBeUndefined()
+    await panel.trigger('keydown.esc')
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('opens a kb_source link as a source file instead of dimming it', async () => {
+    store.wikiPages = [home]
+    store.currentWikiPage = {
+      ...home,
+      body: '[[report]]',
+      links: { report: 'kb_source/report.md' },
+      sources: [{ rel: 'kb_source/report.md', path: 'D:/v/kb_source/report.md', exists: true }],
+    }
+    renderObsidianMarkdown.mockReturnValue(
+      '<a class="wikilink" data-target="report" data-rel="kb_source/report.md" href="#">report</a>')
+    const wrapper = await openPanel()
+    const link = wrapper.get('.wikilink')
+    expect(link.attributes('aria-disabled')).toBeUndefined()
+    store.openWikiPage.mockClear()
+    await link.trigger('click')
+    expect(store.openWikiPage).not.toHaveBeenCalled()
+    expect(wrapper.emitted('open-file')).toEqual([[{ path: 'D:/v/kb_source/report.md', name: 'report.md' }]])
+    wrapper.unmount()
+  })
+
+  it('renders pages with restricted images', async () => {
+    store.wikiPages = [home]
+    store.currentWikiPage = { ...home, body: 'x', links: {} }
+    await openPanel()
+    expect(renderObsidianMarkdown.mock.lastCall[1]).toMatchObject({ restrictImages: true })
+  })
 })

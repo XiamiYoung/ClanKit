@@ -39,7 +39,7 @@
             <p class="docs-catalog-subtitle">{{ t('notes.filesFromVault') }}</p>
           </div>
           <div class="flex items-center gap-2">
-            <AiDocToolbar :key="store.vaultPath" @open-graph="showGraph = true" />
+            <AiDocToolbar :key="store.vaultPath" @open-graph="openOverlay('graph')" @open-wiki="openOverlay('wiki')" />
             <AppButton size="icon" @click="refreshAll" v-tooltip="t('common.refresh')">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             </AppButton>
@@ -66,6 +66,7 @@
 
       <Teleport to="body">
         <AiDocGraphPanel v-if="showGraph" @close="showGraph = false" @open-file="openGraphFile" />
+        <AiDocWikiPanel v-if="showWiki" @close="showWiki = false" @open-file="openWikiFile" />
       </Teleport>
 
       <!-- Main content: file tree + editor -->
@@ -915,6 +916,7 @@ import { useObsidianStore } from '../stores/obsidian'
 import { useAiDocStore } from '../stores/aidoc'
 import AiDocToolbar from '../components/aidoc/AiDocToolbar.vue'
 import AiDocGraphPanel from '../components/aidoc/AiDocGraphPanel.vue'
+import AiDocWikiPanel from '../components/aidoc/AiDocWikiPanel.vue'
 import { useAgentsStore, BUILTIN_DOC_EDITOR_ID } from '../stores/agents'
 import { useConfigStore } from '../stores/config'
 import { useSkillsStore } from '../stores/skills'
@@ -942,8 +944,14 @@ const props = defineProps({ isEmbedded: { type: Boolean, default: false } })
 const store = useObsidianStore()
 const aidocStore = useAiDocStore()
 const showGraph = ref(false)
+const showWiki = ref(false)
+function openOverlay(kind) {
+  showGraph.value = kind === 'graph'
+  showWiki.value = kind === 'wiki'
+}
 watch(() => store.vaultPath, path => {
   showGraph.value = false
+  showWiki.value = false
   aidocStore.setRoot(path)
 }, { immediate: true })
 watch([() => store.vaultPath, () => store.fileTree], ([path]) => {
@@ -961,6 +969,11 @@ async function openAiDocFile(path, name) {
 
 async function openGraphFile({ path, name }) {
   showGraph.value = false
+  await openAiDocFile(path, name)
+}
+
+async function openWikiFile({ path, name }) {
+  showWiki.value = false
   await openAiDocFile(path, name)
 }
 const agentsStore = useAgentsStore()
@@ -1772,7 +1785,8 @@ const ctxIngest = computed(() => {
   const { targetPath, targetType } = ctxMenu.value
   const rel = getSourceRel(targetPath)
   const state = aidocStore.sourceStates[targetPath]
-  return targetType === 'file' && rel && state ? { rel, state } : null
+  const busy = aidocStore.ingesting || aidocStore.syncPreparing || aidocStore.updating
+  return targetType === 'file' && rel && state && !busy ? { rel, state } : null
 })
 
 function getSourceRel(filePath) {

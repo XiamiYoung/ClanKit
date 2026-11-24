@@ -100,4 +100,38 @@ describe('AiDocIngestModal', () => {
     expect(dialog.textContent).toContain('aidoc.ingestRemaining 3')
     expect(dialog.textContent).toContain('common.close')
   })
+
+  it('maps every failure reason to its own text and hides a zero remaining count', () => {
+    store.ingestPlan = null
+    const reasons = ['unsupported', 'no_pages', 'read_failed', 'record_failed']
+    store.ingestResult = {
+      done: [], stopped: false, overflow: 0, remaining: 0,
+      failed: reasons.map(reason => ({ rel: `kb_source/${reason}.md`, reason })),
+    }
+    const dialog = open()
+    for (const key of ['reasonUnsupported', 'reasonNoPages', 'reasonReadFailed', 'reasonRecordFailed']) {
+      expect(dialog.textContent).toContain(`aidoc.${key}`)
+    }
+    expect(dialog.textContent).not.toContain('aidoc.reasonAgentError')
+    expect(dialog.textContent).not.toContain('aidoc.ingestRemaining')
+  })
+
+  it('shows the index error after completion', () => {
+    store.ingestPlan = null
+    store.ingestResult = { done: [], failed: [], remaining: 0, indexError: 'disk full' }
+    const dialog = open()
+    const alert = dialog.querySelector('[role="alert"]')
+    expect(alert.textContent).toContain('aidoc.ingestIndexError')
+    expect(alert.textContent).toContain('disk full')
+  })
+
+  it('does not dismiss on a backdrop click or Escape while ingesting', () => {
+    store.ingesting = true
+    const dialog = open()
+    dialog.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    const cancel = new Event('cancel', { cancelable: true })
+    dialog.dispatchEvent(cancel)
+    expect(cancel.defaultPrevented).toBe(true)
+    expect(store.cancelIngestPlan).not.toHaveBeenCalled()
+  })
 })

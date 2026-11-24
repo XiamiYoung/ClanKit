@@ -1,4 +1,3 @@
-
 import { computed, ref, shallowRef } from 'vue'
 import { defineStore } from 'pinia'
 
@@ -45,6 +44,9 @@ export const useAiDocStore = defineStore('aidoc', () => {
   const sequences = new Map()
   let unsubscribe
   let unsubscribeIngest
+  let disposed = false
+  // Method whose failure currently owns the shared error; only that method's success clears it.
+  let readErrorOwner = ''
 
   function setRoot(value = '') {
     if (root === value) return
@@ -56,34 +58,52 @@ export const useAiDocStore = defineStore('aidoc', () => {
     sourceStates.value = {}
     requestId.value = ingestRequestId.value = null
     error.value = errorKey.value = ''
+    readErrorOwner = ''
     ingestPlan.value = ingestResult.value = ingestProgress.value = null
     ingestError.value = ingestErrorKey.value = ''
     syncPreparing.value = ingestStopping.value = ingestNothing.value = false
   }
 
-  async function read(method, output, { field, options, loading } = {}) {
+  async function read(method, output, { field, options, loading, silent } = {}) {
     const api = window.electronAPI?.aidoc
     if (typeof api?.[method] !== 'function') return
     const current = generation
     const latest = (sequences.get(method) || 0) + 1
     sequences.set(method, latest)
     const isCurrent = () => current === generation && sequences.get(method) === latest
+    const reportReadError = result => {
+      if (silent) return
+      describeError(result, error, errorKey)
+      readErrorOwner = method
+    }
+    const clearReadError = () => {
+      if (readErrorOwner !== method) return
+      error.value = errorKey.value = ''
+      readErrorOwner = ''
+    }
     if (loading) loading.value = true
     try {
       const result = await api[method]({ ...options, root })
       if (!isCurrent()) return
-      if (result.success === false) describeError(result, error, errorKey)
-      else output.value = field ? result[field] : result
+      if (result.success === false) reportReadError(result)
+      else {
+        output.value = field ? result[field] : result
+        clearReadError()
+      }
     } catch (err) {
-      if (isCurrent()) describeError({ error: err.message }, error, errorKey)
+      if (isCurrent()) reportReadError({ error: err.message })
     } finally {
       if (loading && isCurrent()) loading.value = false
     }
   }
 
-  const refreshStatus = () => read('getSyncStatus', status)
+  const refreshStatus = async () => {
+    await read('getSyncStatus', status)
+    const { ingestAvailable, pending } = status.value || {}
+    if (ingestAvailable && pending && pending.new + pending.updated > 0) ingestNothing.value = false
+  }
   const loadGraph = () => read('getGraph', graph)
-  const refreshSourceStates = () => read('getSourceStates', sourceStates, { field: 'states' })
+  const refreshSourceStates = () => read('getSourceStates', sourceStates, { field: 'states', silent: true })
   const loadWikiPages = () => read('getWikiPages', wikiPages, { field: 'pages' })
   const openWikiPage = rel => read('getWikiPage', currentWikiPage, {
     field: 'page', options: { rel }, loading: wikiLoading,
@@ -96,7 +116,9 @@ export const useAiDocStore = defineStore('aidoc', () => {
     requestId.value = id
     progress.value = stats.value = null
     error.value = errorKey.value = ''
+    readErrorOwner = ''
     try {
+      disposed = false
       unsubscribe ??= api.onIndexProgress(event => {
         if (event.requestId === requestId.value) {
           progress.value = { done: event.done, total: event.total }
@@ -109,6 +131,7 @@ export const useAiDocStore = defineStore('aidoc', () => {
         return false
       }
       stats.value = result.stats
+      ingestNothing.value = false
       await Promise.all([loadGraph(), refreshStatus(), refreshSourceStates()])
       return id === requestId.value
     } catch (err) {
@@ -116,6 +139,7 @@ export const useAiDocStore = defineStore('aidoc', () => {
       return false
     } finally {
       if (id === requestId.value) requestId.value = null
+      releaseIfDisposed()
     }
   }
 
@@ -149,6 +173,24 @@ export const useAiDocStore = defineStore('aidoc', () => {
     return runSync({ rels: [rel], force: true })
   }
 
+  // Idempotent: keeps exactly one ingest progress listener and cancels a pending dispose.
+  function ensureIngestListener() {
+    const api = window.electronAPI?.aidoc
+    if (typeof api?.onIngestProgress !== 'function') return
+    disposed = false
+    unsubscribeIngest ??= api.onIngestProgress(event => {
+      if (event.requestId !== ingestRequestId.value) return
+      if (event.type === 'index-error') return
+      ingestProgress.value = event
+    })
+  }
+
+  function releaseIfDisposed() {
+    if (!disposed) return
+    if (!updating.value) { unsubscribe?.(); unsubscribe = undefined }
+    if (!ingesting.value) { unsubscribeIngest?.(); unsubscribeIngest = undefined }
+  }
+
   async function confirmIngest() {
     const api = window.electronAPI?.aidoc
     const plan = ingestPlan.value
@@ -158,11 +200,7 @@ export const useAiDocStore = defineStore('aidoc', () => {
     ingestProgress.value = ingestResult.value = null
     ingestError.value = ingestErrorKey.value = ''
     try {
-      unsubscribeIngest ??= api.onIngestProgress(event => {
-        if (event.requestId !== ingestRequestId.value) return
-        if (event.type === 'index-error') return
-        ingestProgress.value = event
-      })
+      ensureIngestListener()
       const result = await api.runIngest({
         root, requestId: id, force: plan.force, rels: plan.sources.map(source => source.rel),
       })
@@ -182,6 +220,7 @@ export const useAiDocStore = defineStore('aidoc', () => {
         ingestRequestId.value = null
         ingestStopping.value = false
       }
+      releaseIfDisposed()
     }
   }
 
@@ -209,9 +248,8 @@ export const useAiDocStore = defineStore('aidoc', () => {
   }
 
   function dispose() {
-    unsubscribe?.()
-    unsubscribeIngest?.()
-    unsubscribe = unsubscribeIngest = undefined
+    disposed = true
+    releaseIfDisposed()
   }
 
   return {
@@ -220,6 +258,6 @@ export const useAiDocStore = defineStore('aidoc', () => {
     ingestPlan, ingesting, ingestProgress, ingestResult, ingestError, ingestErrorKey,
     ingestStopping, syncPreparing, ingestNothing,
     setRoot, refreshStatus, loadGraph, refreshSourceStates, loadWikiPages, openWikiPage,
-    updateIndex, runSync, ingestSingle, confirmIngest, cancelIngestPlan, stopIngest, dispose,
+    updateIndex, runSync, ingestSingle, confirmIngest, cancelIngestPlan, stopIngest, ensureIngestListener, dispose,
   }
 })
