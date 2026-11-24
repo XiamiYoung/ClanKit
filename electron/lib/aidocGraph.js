@@ -1,23 +1,11 @@
 'use strict'
 
-const fs = require('fs/promises')
-const path = require('path')
 const { AIDOC_FOLDERS } = require('./aidocLayout')
-const { rootHash } = require('./aidocIndex')
+const { readRegistry, registryPathFor } = require('./aidocRegistry')
 const { createLinkResolver } = require('./aidocLinkResolver')
 
 async function readIngestedSources(dataDir, root) {
-  try {
-    const file = path.join(dataDir, 'aidoc-ingest', rootHash(root) + '.json')
-    const { sources } = JSON.parse(await fs.readFile(file, 'utf8'))
-    if (!sources || typeof sources !== 'object' || Array.isArray(sources)) return {}
-    return Object.fromEntries(Object.entries(sources).filter(([, record]) =>
-      record && typeof record.hash === 'string' &&
-      typeof record.ingestedAt === 'string' && Array.isArray(record.pages)
-    ))
-  } catch {
-    return {}
-  }
+  return (await readRegistry(registryPathFor(dataDir, root))).sources
 }
 
 function buildGraph({ files, ingested }) {
