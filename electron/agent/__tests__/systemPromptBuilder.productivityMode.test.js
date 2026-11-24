@@ -131,7 +131,7 @@ describe('Working folder context (productivity mode)', () => {
     }
   })
 
-  it('productivity mode without explicit chatWorkingPath defaults to DoCPath', () => {
+  it('productivity mode without chatWorkingPath injects no WORKING FOLDER section', () => {
     const tmp = path.join(process.env.TEMP || '/tmp', `t9-default-${Date.now()}`)
     fs.mkdirSync(tmp, { recursive: true })
     fs.writeFileSync(path.join(tmp, 'doc.md'), 'x')
@@ -140,8 +140,7 @@ describe('Working folder context (productivity mode)', () => {
         { ...baseConfig, mode: 'productivity', DoCPath: tmp },
         [], [], [], [], baseAgent
       )
-      expect(out).toContain('WORKING FOLDER FOR THIS CHAT')
-      expect(out).toContain(tmp)
+      expect(out).not.toContain('WORKING FOLDER FOR THIS CHAT')
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true })
     }
