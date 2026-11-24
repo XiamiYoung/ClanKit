@@ -96,6 +96,18 @@ describe('loadSourceText', () => {
     }
   })
 
+  it('rejects an oversized pdf before reading it', async () => {
+    const file = await write('big.pdf', '')
+    await fs.truncate(file, 64 * 1024 * 1024 + 1)
+    expect(await loadSourceText(file)).toEqual({ ok: false, reason: 'extract_failed', detail: 'Document is too large' })
+  })
+
+  it('returns extract_failed for a directory named like a pdf', async () => {
+    const dir = path.join(root, 'dir.pdf')
+    await fs.mkdir(dir)
+    expect(await loadSourceText(dir)).toMatchObject({ ok: false, reason: 'extract_failed' })
+  })
+
   it('returns extract_failed for a corrupt pdf', async () => {
     const result = await loadSourceText(await write('c.pdf', 'garbage'))
     expect(result).toMatchObject({ ok: false, reason: 'extract_failed' })
@@ -141,6 +153,43 @@ describe('readSourceChunk', () => {
     const r = readSourceChunk(text, 0, 1000)
     expect(r.chunk).toBe('a'.repeat(950) + '\n')
     expect(r.nextOffset).toBe(951)
+  })
+
+  function readAll(text, limit) {
+    const chunks = []
+    let offset = 0
+    while (offset !== null) {
+      const r = readSourceChunk(text, offset, limit)
+      chunks.push(r.chunk)
+      offset = r.nextOffset
+    }
+    return chunks
+  }
+
+  it('never splits a surrogate pair at a hard cut', () => {
+    // One leading unit shifts every pair so a 1000-unit cut lands between a high and low surrogate.
+    const text = 'a' + '\u{1F600}'.repeat(2500)
+    const chunks = readAll(text, 1000)
+    expect(chunks.length).toBeGreaterThan(1)
+    for (const chunk of chunks) {
+      const last = chunk.charCodeAt(chunk.length - 1)
+      expect(last >= 0xd800 && last <= 0xdbff).toBe(false)
+    }
+    expect(chunks.join('')).toBe(text)
+  })
+
+  it('reassembles exactly across hard cuts without newlines', () => {
+    const text = 'abcdefghij'.repeat(1234)
+    const chunks = readAll(text, 1000)
+    expect(chunks.length).toBeGreaterThan(1)
+    expect(chunks.join('')).toBe(text)
+  })
+
+  it('reassembles CRLF text when a boundary falls between CR and LF', () => {
+    const text = 'a'.repeat(999) + '\r\n' + 'b'.repeat(1500) + '\r\n' + 'c'.repeat(300)
+    const chunks = readAll(text, 1000)
+    expect(chunks.length).toBeGreaterThan(1)
+    expect(chunks.join('')).toBe(text)
   })
 
   it('hard-cuts when no newline is near the end', () => {
