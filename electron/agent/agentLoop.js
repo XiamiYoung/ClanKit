@@ -24,6 +24,7 @@ const { SubAgentManager }  = require('./managers/SubAgentManager')
 const { TaskManager }      = require('./managers/TaskManager')
 const { mcpManager }       = require('./mcp/McpManager')
 const { PermissionGate }   = require('./tools/PermissionGate')
+const { runCodeTool, buildCodeToolDescription } = require('./tools/CodeToolRunner')
 
 // Extracted modules
 const spb = require('./systemPromptBuilder')
@@ -405,11 +406,12 @@ class AgentLoop {
     const RESTRICTED_KNOWLEDGE_OPS = ['create_knowledge_base', 'upload_file', 'add_text', 'delete_document']
     const isMcp = toolName.startsWith('mcp_')
 
-    // Only check: execute_shell, file_operation (write/append/delete/mkdir), knowledge_manage (write ops), mcp_*
+    // Only check: execute_shell, file_operation (write/append/delete/mkdir), knowledge_manage (write ops), mcp_*, code_*
     const needsCheck = toolName === 'execute_shell'
       || (toolName === 'file_operation' && RESTRICTED_FILE_OPS.includes(toolInput.operation))
       || (toolName === 'knowledge_manage' && RESTRICTED_KNOWLEDGE_OPS.includes(toolInput.operation))
       || isMcp
+      || toolName.startsWith('code_') // user-defined code tools run real JavaScript, so they are gated like execute_shell
 
     if (!needsCheck) return { decision: 'allow' }
 
@@ -606,6 +608,11 @@ class AgentLoop {
     return mc.buildConversationMessages(messages, currentAttachments)
   }
 
+  /** False only in exclusive mode for a tool name the model was never offered. */
+  _isToolAllowed(toolName) {
+    return !this._exclusiveToolNames || this._exclusiveToolNames.has(toolName)
+  }
+
   /**
    * Main entry point — runs the agentic loop.
    *
@@ -629,8 +636,17 @@ class AgentLoop {
     // Load tools for enabled agents
     this.toolRegistry.loadForAgents(enabledAgents || [], this.config.excludedToolNames || [])
 
+    // Optional caller-supplied tools. exclusiveTools restricts the run to exactly
+    // these tools (see _isToolAllowed / the final filter on allToolsAnthropic).
+    const _exclusiveTools = this.config.exclusiveTools === true
+    this._exclusiveToolNames = _exclusiveTools ? new Set(Object.keys(this.config.extraTools || {})) : null
+    if (this.config.extraTools) {
+      if (_exclusiveTools) this.toolRegistry.useOnly(this.config.extraTools)
+      else this.toolRegistry.addTools(this.config.extraTools)
+    }
+
     // Register agent-specific tools
-    if (this.config.memoryDir && agentPrompts?.systemAgentId) {
+    if (!_exclusiveTools && this.config.memoryDir && agentPrompts?.systemAgentId) {
       // For analysis chats, search the target agent's history instead of the analyzer's
       const searchTargetId = agentPrompts.analysisTargetAgentId || agentPrompts.systemAgentId
       this.toolRegistry.registerSearchHistoryTool(this.config.memoryDir, searchTargetId)
@@ -642,7 +658,7 @@ class AgentLoop {
     // electron/agent/builtin-skills/agent-recommendation/.)
 
     // Register dedicated analysis tool for analysis chats
-    if (this.config.memoryDir && agentPrompts?.analysisTargetAgentId) {
+    if (!_exclusiveTools && this.config.memoryDir && agentPrompts?.analysisTargetAgentId) {
       const { AnalyzeAgentTool } = require('./tools/AnalyzeAgentTool')
       const analysisTool = new AnalyzeAgentTool(
         this.config.memoryDir,
@@ -684,7 +700,7 @@ class AgentLoop {
     // ship a tool.js in its source directory alongside SKILL.md — the loader
     // requires it, instantiates the class with runtime context, and registers
     // it. agentLoop no longer needs to know about specific skill tools.
-    if (Array.isArray(enabledSkills) && enabledSkills.length > 0) {
+    if (!_exclusiveTools && Array.isArray(enabledSkills) && enabledSkills.length > 0) {
       try {
         const { loadSkillTools } = require('../lib/skillToolLoader')
         // Lazy-resolve store singletons so skill tools can read SQLite without
@@ -955,6 +971,7 @@ class AgentLoop {
 
     // Helper: load schemas for the given server configs and register them into mcpToolMap
     const _loadMcpTools = async (serverConfigs) => {
+      if (this._exclusiveToolNames) return []
       const discovered = await mcpManager.getToolSchemas(serverConfigs)
       const newTools = []
       for (const { serverId, serverName, tool } of discovered) {
@@ -1009,7 +1026,7 @@ class AgentLoop {
           codeToolMap.set(fullName, tool)
           allToolsAnthropic.push({
             name: fullName,
-            description: `[Code: ${tool.language || 'javascript'}] ${tool.description || tool.name}\n\nReference code:\n\`\`\`${tool.language || 'javascript'}\n${tool.code || ''}\n\`\`\``,
+            description: buildCodeToolDescription(tool),
             input_schema: {
               type: 'object',
               properties: {
@@ -1077,6 +1094,12 @@ class AgentLoop {
       }
       const counts = { http: httpToolMap.size, code: codeToolMap.size, prompt: promptToolMap.size, smtp: smtpToolMap.size }
       logger.agent('User tools injected', counts)
+    }
+
+    // Exclusive mode: the model sees exactly the caller-supplied tools, nothing else.
+    if (this._exclusiveToolNames) {
+      const kept = allToolsAnthropic.filter(t => this._exclusiveToolNames.has(t.name))
+      allToolsAnthropic.splice(0, allToolsAnthropic.length, ...kept)
     }
 
     // NOTE: allTools is computed fresh each iteration inside the while loop below
@@ -1458,7 +1481,9 @@ class AgentLoop {
               let result
               try {
                 // Route through the same tool execution paths as Anthropic/OpenAI
-                if (toolName === 'load_skill') {
+                if (!this._isToolAllowed(toolName)) {
+                  result = { success: false, error: `Tool not available in this run: ${toolName}` }
+                } else if (toolName === 'load_skill') {
                   const skillId = toolInput.skill_id
                   const prompt = this.skillPrompts.get(skillId)
                   if (prompt) {
@@ -1494,7 +1519,10 @@ class AgentLoop {
                   result = await this._executeSmtpTool(toolInput)
                 } else if (codeToolMap.has(toolName)) {
                   const codeTool = codeToolMap.get(toolName)
-                  result = { success: true, data: 'This is a reference code snippet. Use execute_shell to run similar code.', code: codeTool.code, language: codeTool.language || 'javascript' }
+                  const codePerm = await this._checkPermission(toolName, { input: toolInput.input, code: codeTool.code }, onChunk)
+                  result = (codePerm.decision === 'block' || codePerm.decision === 'reject')
+                    ? codePerm.result
+                    : await this._executeCodeTool(codeTool, toolInput, this._abortController.signal)
                 } else if (promptToolMap.has(toolName)) {
                   const promptTool = promptToolMap.get(toolName)
                   result = { success: true, data: promptTool.promptText || '' }
@@ -2099,7 +2127,9 @@ class AgentLoop {
                   onChunk({ type: 'tool_call', name: toolName, input: toolInput, toolCallId: block.id })
 
                   let result
-                  if (toolName === 'load_skill') {
+                  if (!this._isToolAllowed(toolName)) {
+                    result = { success: false, error: `Tool not available in this run: ${toolName}` }
+                  } else if (toolName === 'load_skill') {
                     const skillId = toolInput.skill_id
                     const prompt = this.skillPrompts.get(skillId)
                     if (prompt) {
@@ -2154,7 +2184,10 @@ class AgentLoop {
                     result = await this._executeSmtpTool(toolInput)
                   } else if (codeToolMap.has(toolName)) {
                     const codeTool = codeToolMap.get(toolName)
-                    result = { success: true, data: 'This is a reference code snippet. Use execute_shell to run similar code.', code: codeTool.code, language: codeTool.language || 'javascript' }
+                    const codePerm = await this._checkPermission(toolName, { input: toolInput.input, code: codeTool.code }, onChunk)
+                    result = (codePerm.decision === 'block' || codePerm.decision === 'reject')
+                      ? codePerm.result
+                      : await this._executeCodeTool(codeTool, toolInput, this._abortController.signal)
                   } else if (promptToolMap.has(toolName)) {
                     const promptTool = promptToolMap.get(toolName)
                     result = { success: true, data: promptTool.promptText || '' }
@@ -2732,7 +2765,9 @@ class AgentLoop {
 
                   let result
 
-                  if (toolName === 'load_skill') {
+                  if (!this._isToolAllowed(toolName)) {
+                    result = { success: false, error: `Tool not available in this run: ${toolName}` }
+                  } else if (toolName === 'load_skill') {
                     const skillId = toolInput.skill_id
                     const prompt = this.skillPrompts.get(skillId)
                     if (prompt) {
@@ -2788,7 +2823,10 @@ class AgentLoop {
                     result = await this._executeSmtpTool(toolInput)
                   } else if (codeToolMap.has(toolName)) {
                     const codeTool = codeToolMap.get(toolName)
-                    result = { success: true, data: 'This is a reference code snippet. Use execute_shell to run similar code.', code: codeTool.code, language: codeTool.language || 'javascript' }
+                    const codePerm = await this._checkPermission(toolName, { input: toolInput.input, code: codeTool.code }, onChunk)
+                    result = (codePerm.decision === 'block' || codePerm.decision === 'reject')
+                      ? codePerm.result
+                      : await this._executeCodeTool(codeTool, toolInput, this._abortController.signal)
                   } else if (promptToolMap.has(toolName)) {
                     const promptTool = promptToolMap.get(toolName)
                     result = { success: true, data: promptTool.promptText || '' }
@@ -2891,6 +2929,17 @@ class AgentLoop {
    * Execute an HTTP tool by making the configured HTTP request.
    * Merges agent-provided body with the tool's bodyTemplate.
    */
+  /** Run a user-defined code tool (JavaScript) in the sandboxed worker. The permission check happens at the call site. */
+  async _executeCodeTool(codeTool, toolInput, signal) {
+    const run = await runCodeTool({ code: codeTool.code, input: toolInput?.input, signal })
+    return {
+      success: run.ok,
+      ...(run.ok ? { result: run.result } : { error: run.error }),
+      ...(run.logs.length > 0 ? { logs: run.logs } : {}),
+      ...(run.truncated ? { truncated: true } : {}),
+    }
+  }
+
   async _executeHttpTool(tool, input) {
     return te.executeHttpTool(tool, input)
   }

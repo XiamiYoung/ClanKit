@@ -64,22 +64,14 @@ const {
   normalizeLoopConfig: _normalizeLoopConfig,
   validateLoopConfig: _validateLoopConfig,
   buildHeuristicSequentialDispatch: _buildHeuristicSequentialDispatch,
+  injectCachedModelMaxOutputTokens: _injectCachedModelMaxOutputTokensShared,
 } = require('./agentRuntimeUtils')
 const { withIsolatedAgentLoop } = require('../agent/runIsolatedAgentLoop')
 
 
 // Inject API-cached max_output_tokens from provider-models.json into loopConfig
 function _injectCachedModelMaxOutputTokens(loopConfig) {
-  try {
-    const modelCache = ds.readJSON(ds.paths().PROVIDER_MODELS_FILE, {})
-    const map = {}
-    for (const entry of Object.values(modelCache)) {
-      for (const m of (entry.models || [])) {
-        if (m.id && m.max_output_tokens) map[m.id] = m.max_output_tokens
-      }
-    }
-    if (Object.keys(map).length > 0) loopConfig._cachedModelMaxOutputTokens = map
-  } catch (_) { /* non-critical — fallback chain handles missing data */ }
+  _injectCachedModelMaxOutputTokensShared(loopConfig, ds)
 }
 
 // --- IPC: Agent Loop ---------------------------------------------------------
@@ -1193,6 +1185,7 @@ ipcMain.handle('agent:run-additional', async (event, {
     _attachContextDeps(loopConfig, groupCfg)
     loopConfig.mode                = meta.mode || 'chat'
     loopConfig.chatWorkingPath     = meta.chatWorkingPath || null
+    loopConfig.aiDocEnabled          = meta.aiDocEnabled !== false
     loopConfig.modeTransitionPending = meta.modeTransitionPending || null
     _injectCachedModelMaxOutputTokens(loopConfig)
 
@@ -2853,6 +2846,7 @@ ipcMain.handle('agent:send-message', async (event, {
       loopConfig.smtpConfig = fullCfg.smtp || null
       loopConfig.mode = targetChatMeta.mode || 'chat'
       loopConfig.chatWorkingPath = targetChatMeta.chatWorkingPath || null
+      loopConfig.aiDocEnabled = targetChatMeta.aiDocEnabled !== false
       loopConfig.modeTransitionPending = targetChatMeta.modeTransitionPending || null
       loopConfig.dataPath     = ds.paths().DATA_DIR
       loopConfig.artifactPath = fullCfg.artifactPath || fullCfg.artyfactPath || ''

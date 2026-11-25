@@ -137,6 +137,17 @@ describe('normalizeToolInput', () => {
     const out = normalizeToolInput({ name: 'x', type: 'code', code: 'x' })
     expect(out.language).toBe('javascript')
   })
+  it('code tools are always stored as javascript', () => {
+    expect(normalizeToolInput({ name: 'x', type: 'code', code: 'x', language: 'JavaScript' }).language).toBe('javascript')
+  })
+  it('rejects code tools in other languages', () => {
+    expect(validateToolInput({ name: 'x', type: 'code', code: 'print(1)', language: 'python' }))
+      .toBe('tool.language must be "javascript" for code tools')
+  })
+  it('accepts javascript in any letter case and when omitted', () => {
+    expect(validateToolInput({ name: 'x', type: 'code', code: 'return 1', language: 'JavaScript' })).toBeNull()
+    expect(validateToolInput({ name: 'x', type: 'code', code: 'return 1' })).toBeNull()
+  })
   it('smtp returns only base fields', () => {
     const out = normalizeToolInput({ name: 'x', type: 'smtp', description: 'd' })
     expect(out).toEqual({ name: 'x', description: 'd', category: '', type: 'smtp' })

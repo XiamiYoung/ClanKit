@@ -89,7 +89,8 @@ CREATE TABLE IF NOT EXISTS chats (
   chat_allow_list                 TEXT NOT NULL DEFAULT '[]',
   chat_danger_overrides           TEXT NOT NULL DEFAULT '[]',
   max_agent_rounds                INTEGER,
-  auto_title_eligible             INTEGER NOT NULL DEFAULT 0,
+  use_ai_doc                      INTEGER NOT NULL DEFAULT 1,
+  auto_title_eligible            INTEGER NOT NULL DEFAULT 0,
   auto_title_locked               INTEGER NOT NULL DEFAULT 0,
   auto_title_attempt_count        INTEGER NOT NULL DEFAULT 0,
   analysis_target_agent_id        TEXT,
@@ -228,6 +229,7 @@ function rowToChat(row) {
     chatAllowList: deserializeJsonField(row.chat_allow_list, []),
     chatDangerOverrides: deserializeJsonField(row.chat_danger_overrides, []),
     maxAgentRounds: row.max_agent_rounds === null || row.max_agent_rounds === undefined ? null : row.max_agent_rounds,
+    useAiDoc: row.use_ai_doc === undefined || row.use_ai_doc === null ? true : _01bool(row.use_ai_doc),
     autoTitleEligible: _01bool(row.auto_title_eligible),
     autoTitleLocked: _01bool(row.auto_title_locked),
     autoTitleAttemptCount: row.auto_title_attempt_count || 0,
@@ -269,6 +271,7 @@ function chatToRow(chat) {
     chat_allow_list: serializeJsonField(chat.chatAllowList) || '[]',
     chat_danger_overrides: serializeJsonField(chat.chatDangerOverrides) || '[]',
     max_agent_rounds: chat.maxAgentRounds === null || chat.maxAgentRounds === undefined ? null : chat.maxAgentRounds,
+    use_ai_doc: chat.useAiDoc === false ? 0 : 1,
     auto_title_eligible: _bool01(chat.autoTitleEligible),
     auto_title_locked: _bool01(chat.autoTitleLocked),
     auto_title_attempt_count: chat.autoTitleAttemptCount || 0,
@@ -385,6 +388,9 @@ class ChatStore {
     if (!chatCols.includes('running_summary_at')) {
       db.exec('ALTER TABLE chats ADD COLUMN running_summary_at INTEGER')
     }
+    if (!chatCols.includes('use_ai_doc')) {
+      db.exec('ALTER TABLE chats ADD COLUMN use_ai_doc INTEGER NOT NULL DEFAULT 1')
+    }
     db.pragma(`user_version = ${SCHEMA_VERSION}`)
     this._db = db
     return db
@@ -489,7 +495,7 @@ class ChatStore {
         is_group_chat, group_agent_ids, group_agent_overrides,
         group_audience_mode, group_audience_agent_ids,
         working_path, coding_mode, coding_provider,
-        permission_mode, chat_allow_list, chat_danger_overrides, max_agent_rounds,
+        permission_mode, chat_allow_list, chat_danger_overrides, max_agent_rounds, use_ai_doc,
         auto_title_eligible, auto_title_locked, auto_title_attempt_count,
         analysis_target_agent_id, is_pinned,
         mode, mode_transitions, mode_transition_pending, productivity_mode_notice_shown,
@@ -500,7 +506,7 @@ class ChatStore {
         @is_group_chat, @group_agent_ids, @group_agent_overrides,
         @group_audience_mode, @group_audience_agent_ids,
         @working_path, @coding_mode, @coding_provider,
-        @permission_mode, @chat_allow_list, @chat_danger_overrides, @max_agent_rounds,
+        @permission_mode, @chat_allow_list, @chat_danger_overrides, @max_agent_rounds, @use_ai_doc,
         @auto_title_eligible, @auto_title_locked, @auto_title_attempt_count,
         @analysis_target_agent_id, @is_pinned,
         @mode, @mode_transitions, @mode_transition_pending, @productivity_mode_notice_shown,
@@ -526,6 +532,7 @@ class ChatStore {
         chat_allow_list=excluded.chat_allow_list,
         chat_danger_overrides=excluded.chat_danger_overrides,
         max_agent_rounds=excluded.max_agent_rounds,
+        use_ai_doc=excluded.use_ai_doc,
         auto_title_eligible=excluded.auto_title_eligible,
         auto_title_locked=excluded.auto_title_locked,
         auto_title_attempt_count=excluded.auto_title_attempt_count,

@@ -314,21 +314,13 @@
             <!-- ── Code Snippet fields ──────────────────────────── -->
             <template v-else-if="form.type === 'code'">
               <div class="form-group">
-                <label class="form-label">{{ t('tools.language') }} *</label>
-                <select v-model="form.language" class="form-input">
-                  <option value="javascript">JavaScript</option>
-                  <option value="python">Python</option>
-                  <option value="bash">Bash</option>
-                </select>
-              </div>
-
-              <div class="form-group">
                 <label class="form-label">{{ t('tools.codeLabel') }} *</label>
                 <textarea
                   v-model="form.code"
                   class="form-textarea form-textarea-code"
                   rows="12"
-                  placeholder="// Paste your reference code here..."
+                  placeholder="// input is the text the agent passes. return the result.
+// Example: return input.toUpperCase()"
                 ></textarea>
                 <p class="form-hint">{{ t('tools.codeHint') }}</p>
               </div>
@@ -656,7 +648,7 @@ async function saveForm() {
     toolData.headers = headers
     toolData.bodyTemplate = form.value.bodyTemplate || '{}'
   } else if (type === 'code') {
-    toolData.language = form.value.language
+    toolData.language = 'javascript' // the only language ClanKit executes
     toolData.code = form.value.code
   } else if (type === 'prompt') {
     toolData.promptText = form.value.promptText

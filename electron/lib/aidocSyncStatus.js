@@ -1,0 +1,37 @@
+'use strict'
+
+const { AIDOC_FOLDERS } = require('./aidocLayout')
+const { pendingLanguages } = require('./aidocRegistry')
+
+const INGESTABLE_EXTS = new Set(['md', 'txt', 'html', 'htm', 'pdf', 'docx', 'pptx'])
+
+// languages: the wiki languages the user currently ingests into; an ingested source that lacks one of them counts as new.
+function computeSyncStatus({ scanned, cache, ingested, languages = [] }) {
+  const present = new Set(scanned.map(file => file.rel))
+  const pending = { new: 0, updated: 0, removed: 0 }
+  let staleCount = 0
+  let failedCount = 0
+
+  for (const { rel, ext, mtimeMs, size } of scanned) {
+    const cached = cache.files[rel]
+    if (!cached || cached.mtimeMs !== mtimeMs || cached.size !== size) staleCount++
+    if (cached?.error) failedCount++
+
+    if (!rel.startsWith(AIDOC_FOLDERS.KB_SOURCE + '/') || !INGESTABLE_EXTS.has(ext)) continue
+    const record = ingested[rel]
+    if (!record) pending.new++
+    else if (record.mtimeMs != null && (record.mtimeMs !== mtimeMs || record.size !== size)) pending.updated++
+    else if (pendingLanguages(record, languages).length) pending.new++
+  }
+
+  for (const rel of Object.keys(cache.files)) {
+    if (!present.has(rel)) staleCount++
+  }
+  for (const rel of Object.keys(ingested)) {
+    if (!present.has(rel)) pending.removed++
+  }
+
+  return { indexStale: staleCount > 0, staleCount, failedCount, pending, total: scanned.length }
+}
+
+module.exports = { computeSyncStatus }

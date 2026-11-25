@@ -439,10 +439,9 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, watch, watchEffect, onUpdated, onBeforeUnmount, toRaw, nextTick } from 'vue'
+import { ref, computed, reactive, watch, watchEffect, onUpdated, onBeforeUnmount, toRaw, nextTick, defineAsyncComponent } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import BabylonViewer from './BabylonViewer.vue'
 import PermissionPrompt from './PermissionPrompt.vue'
 import PlanCard from './PlanCard.vue'
 import { useRouter } from 'vue-router'
@@ -462,6 +461,9 @@ const obsidianStore = useObsidianStore()
 const toolsStore = useToolsStore()
 const focusModeStore = useFocusModeStore()
 const { t } = useI18n()
+
+const BabylonViewer = defineAsyncComponent(() =>
+  import('./BabylonViewer.vue').then(module => module.default))
 
 const props = defineProps({
   message:      { type: Object,   required: true },

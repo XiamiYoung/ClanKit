@@ -27,6 +27,8 @@ export default defineConfig({
   })],
   base: './',
   resolve: {
+    // 3d-force-graph, three-forcegraph and three-spritetext all import three; keep a single copy.
+    dedupe: ['three'],
     alias: {
       '@': resolve(__dirname, 'src')
     }

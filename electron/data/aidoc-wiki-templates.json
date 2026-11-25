@@ -1,0 +1,8 @@
+{
+  "zh": {
+    "schema": "# Wiki 规范\n\n本 Wiki 由 AI agent 根据用户的来源文档维护，请严格遵守以下规则。本 Wiki 位于 `{WIKI}/` 下，只能在该文件夹内读写，页面正文一律使用简体中文。\n\n## 页面类型\n\n每个页面只能有一种类型（类型名保持英文，不要翻译）：\n\n- `summary` - 来源摘要页。每个已整理的来源一页：来源讲了什么、要点和结论。\n- `entity` - 实体页，介绍在一个或多个来源中出现的人物、组织、产品或工具。\n- `concept` - 概念页，解释跨来源的想法、术语、方法或主题。\n- `comparison` - 对比页，并列比较两个或多个实体或概念。\n- `other` - 不属于以上任何类型的页面。\n\n## 页面格式\n\n每个页面是以 frontmatter 开头的 Markdown 文件（字段名保持英文）：\n\n```\n---\ntype: summary | entity | concept | comparison | other\ntitle: 页面标题\nsources: [kb_source/papers/attention.pdf, kb_source/notes/other-source.md]\nupdated: YYYY-MM-DD\n---\n```\n\n- `type` 必须是以下之一：summary、entity、concept、comparison、other。\n- `title` 必填且不能为空，必须等于去掉 `.md` 的页面文件名，这样 `[[标题]]` 链接才能解析。\n- `sources` 必填：非空列表，每项是相对文档根目录的来源路径，且以 `kb_source/` 开头。\n- `updated` 是最后修改日期，格式为 YYYY-MM-DD。\n- 用 `[[页面名]]` 链接到其他 Wiki 页面。\n- 在页面正文中引用来源文件时使用完整路径，例如 `[[kb_source/papers/attention.pdf]]`（含文件夹和扩展名）。\n\n## 文件名\n\n- 页面文件以标题命名：`页面标题.md`，保存在 `{WIKI}/` 下。\n- 不要使用文件名中非法的字符（\\ / : * ? \" < > |），也不要使用会破坏链接的字符（[ ] # ^）。\n- 名称要简短且稳定。优先复用已有页面，不要新建近似重复的页面。\n\n## index.md\n\n`index.md` 列出每一个 Wiki 页面，按类型分节（摘要、实体、概念、对比）。每个页面恰好一行：\n\n```\n- [[页面名]] — 一句话摘要\n```\n\n## 整理一个来源\n\n1. 先完整读完来源，再开始写。\n2. 写出该来源的摘要页；若已存在则更新。\n3. 为来源中提到的内容新建或补充实体页和概念页。\n4. 在相关页面之间双向添加链接。\n5. 更新 `index.md`，让每个新增或变更的页面都带一句话摘要出现在其中。\n\n## 规则\n\n- `{WIKI}/log.md` 和 `{WIKI}/SCHEMA.md` 由应用和用户维护。不要写入它们；日志由应用自己追加。\n- 你写入或修订的每个页面都必须列在 `index.md` 中。\n- 不要编造来源没有说的内容。\n- 如果新信息与已有页面冲突，两者都保留，并在页面内注明冲突及其来源，不要悄悄覆盖。\n- 不要编辑或删除用户的来源文件。\n",
+    "index": "# 索引\n\n按类型分组的全部 Wiki 页面目录。每个页面一行：`- [[页面名]] — 一句话摘要`。\n",
+    "log": "# 日志\n",
+    "uncategorized": "## 未分类"
+  }
+}

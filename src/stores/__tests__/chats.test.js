@@ -550,4 +550,36 @@ describe('chatsStore', () => {
       expect(chat.modeTransitions[0].afterMessageId).toBeNull()
     })
   })
+
+  describe('useAiDoc', () => {
+    it('normalizes a loaded chat lacking useAiDoc to true', async () => {
+      storage.getChatIndex.mockResolvedValue([{ type: 'chat', id: 'c1', title: 'T' }])
+      const store = useChatsStore()
+      await store.loadChats()
+      expect(store.chats.find(c => c.id === 'c1').useAiDoc).toBe(true)
+    })
+
+    it('new chat has useAiDoc true', async () => {
+      const store = useChatsStore()
+      const chat = await store.createChat('T')
+      expect(chat.useAiDoc).toBe(true)
+    })
+
+    it('setChatSettings sets useAiDoc and persists', async () => {
+      const store = useChatsStore()
+      const chat = await store.createChat('T')
+      storage.saveChat.mockClear()
+      await store.setChatSettings(chat.id, { useAiDoc: false })
+      expect(chat.useAiDoc).toBe(false)
+      expect(storage.saveChat).toHaveBeenCalled()
+    })
+
+    it('cloned chat copies useAiDoc', async () => {
+      const store = useChatsStore()
+      const chat = await store.createChat('T')
+      await store.setChatSettings(chat.id, { useAiDoc: false })
+      const clone = await store.createChatFromHistory(chat.id)
+      expect(clone.useAiDoc).toBe(false)
+    })
+  })
 })

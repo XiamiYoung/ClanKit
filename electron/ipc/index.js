@@ -17,6 +17,7 @@ function registerAll({ DEFAULT_CONFIG, imBridge, mcpManager } = {}) {
   require('./im').register({ imBridge })
   require('./files').register()
   require('./obsidian').register()
+  require('./aidoc').register()
   require('./window').register()
   require('./voice').register()
   require('./agentImport').register()

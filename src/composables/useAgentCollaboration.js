@@ -1,6 +1,7 @@
 import { useChatsStore } from '../stores/chats'
 import { useAgentsStore } from '../stores/agents'
 import { useConfigStore } from '../stores/config'
+import { isAiDocEnabledForChat } from '../utils/aidocMeta'
 
 /**
  * Minimal collaboration composable — provider credential helpers + _fireGroupAgentsDirect.
@@ -129,6 +130,7 @@ export function useAgentCollaboration({
       maxAgentRounds: targetChat.maxAgentRounds ?? 10,
       mode: targetChat.mode || 'chat',
       chatWorkingPath: (targetChat.mode === 'productivity' && targetChat.workingPath) ? targetChat.workingPath : null,
+      aiDocEnabled: isAiDocEnabledForChat(targetChat),
       modeTransitionPending: targetChat.modeTransitionPending ? JSON.parse(JSON.stringify(targetChat.modeTransitionPending)) : null,
       userAgentId: targetChat.userAgentId || null,
       systemAgentId: agentIds[0] || null,

@@ -264,6 +264,20 @@ export function useAuth() {
     return { ok: false, error: r.error || 'Session expired' }
   }
 
+  async function syncStartupSession() {
+    if (!accessToken.value) return
+    try {
+      const { env, apiBaseUrl } = await api.getBackendConfig()
+      // Skip automatic checks against the development backend. Explicit account actions still use it.
+      if (env !== 'prod' || !apiBaseUrl) return
+      const session = await ensureFreshAccessToken()
+      if (session.ok && !session.refreshed) await fetchMe()
+      else if (!session.ok) console.warn('[auth] startup session refresh failed:', session.error)
+    } catch (error) {
+      console.warn('[auth] startup session check failed:', error)
+    }
+  }
+
   // Hit GET /auth/me on startup to (a) confirm the cached access token is still
   // valid against the backend (catches jwt_secret rotation / account deletion
   // / local tampering — cases ensureFreshAccessToken can't), (b) refresh the
@@ -350,6 +364,7 @@ export function useAuth() {
     confirmPasswordReset,
     refreshAccessToken,
     ensureFreshAccessToken,
+    syncStartupSession,
     fetchMe,
     signOut,
     markAuthOnboarded,

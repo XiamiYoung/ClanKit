@@ -308,6 +308,7 @@ import ConfirmProductivityModal from './ConfirmProductivityModal.vue'
 import { parseMentions } from '../../utils/mentions'
 import { useI18n } from '../../i18n/useI18n'
 import { useInterrupt } from '../../composables/useInterrupt'
+import { isAiDocEnabledForChat } from '../../utils/aidocMeta'
 
 function filterByRequired(items, requiredIds) {
   if (!requiredIds || requiredIds.length === 0) return []
@@ -809,6 +810,7 @@ async function onMentionSend(text) {
         if (pModel) singleCfg.customModel = pModel
         singleCfg.mode = targetChat.mode || 'chat'
         singleCfg.chatWorkingPath = (targetChat.mode === 'productivity' && targetChat.workingPath) ? targetChat.workingPath : null
+        singleCfg.aiDocEnabled = isAiDocEnabledForChat(targetChat)
         singleCfg.modeTransitionPending = targetChat.modeTransitionPending ? JSON.parse(JSON.stringify(targetChat.modeTransitionPending)) : null
 
         const usrAgent = targetChat.userAgentId ? agentsStore.getAgentById(targetChat.userAgentId) : agentsStore.defaultUserAgent
@@ -926,6 +928,7 @@ async function onSend(text, pendingAttachments = [], longBlobs = {}) {
   if (targetChat.model) cfg.customModel = targetChat.model
   cfg.mode = targetChat.mode || 'chat'
   cfg.chatWorkingPath = (targetChat.mode === 'productivity' && targetChat.workingPath) ? targetChat.workingPath : null
+  cfg.aiDocEnabled = isAiDocEnabledForChat(targetChat)
   cfg.modeTransitionPending = targetChat.modeTransitionPending ? JSON.parse(JSON.stringify(targetChat.modeTransitionPending)) : null
   const sysAgent = targetChat.systemAgentId ? agentsStore.getAgentById(targetChat.systemAgentId) : agentsStore.defaultSystemAgent
   const usrAgent = targetChat.userAgentId ? agentsStore.getAgentById(targetChat.userAgentId) : agentsStore.defaultUserAgent

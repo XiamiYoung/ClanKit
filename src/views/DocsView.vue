@@ -1,8 +1,12 @@
 <template>
   <div class="h-full flex flex-col overflow-hidden" style="background-color: #F2F2F7;">
 
+    <div v-if="!store.vaultPath && (store.configStatus === 'idle' || store.configStatus === 'loading')"
+      class="flex-1 flex items-center justify-center">
+      <DocsLoadingOverlay :loading="true" variant="inline" :label="t('notes.loadingVault')" />
+    </div>
     <!-- ── NO VAULT SELECTED: Welcome screen ── -->
-    <div v-if="!store.vaultPath" class="flex-1 flex items-center justify-center">
+    <div v-else-if="!store.vaultPath" class="flex-1 flex items-center justify-center">
       <div class="text-center" style="max-width: 420px;">
         <!-- Vault icon -->
         <div
@@ -39,6 +43,8 @@
             <p class="docs-catalog-subtitle">{{ t('notes.filesFromVault') }}</p>
           </div>
           <div class="flex items-center gap-2">
+            <AiDocToolbar :key="store.vaultPath" @open-graph="openOverlay('graph')" @open-wiki="openWikiWindow" />
+            <p v-if="wikiWindowFailed" class="doc-move-feedback" role="alert">{{ t('aidoc.wikiWindowFailed') }}</p>
             <AppButton size="icon" @click="refreshAll" v-tooltip="t('common.refresh')">
               <svg style="width:14px;height:14px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             </AppButton>
@@ -63,6 +69,11 @@
         </div>
       </div>
 
+      <Teleport to="body">
+        <AiDocGraphPanel v-if="showGraph" @close="showGraph = false" @open-file="openGraphFile" />
+        <AiDocWikiPanel v-if="showWiki" @close="showWiki = false" @open-file="openWikiFile" />
+      </Teleport>
+
       <!-- Main content: file tree + editor -->
       <div class="flex-1 flex overflow-hidden">
 
@@ -77,9 +88,15 @@
             class="notes-resize-handle"
             @mousedown="startNotesResize"
           ></div>
-          <!-- Tree toolbar -->
-          <div class="px-3 py-2 flex items-center gap-1 shrink-0">
-            <span style="font-family:'Inter',sans-serif;font-size:var(--fs-caption);color:#9CA3AF;">{{ t('notes.dragDropHint') }}</span>
+          <div class="doc-space-toolbar">
+            <span>{{ t('aidoc.documents') }}</span>
+            <AppTooltip :text="t('aidoc.addDocument')">
+              <AppButton size="icon" variant="ghost" :aria-label="t('aidoc.addDocument')" @click="openAddMenu">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </AppButton>
+            </AppTooltip>
           </div>
 
           <!-- Search Filter -->
@@ -107,10 +124,16 @@
             @dragleave="onRootDragLeave"
             @drop.prevent="handleRootDrop"
             @paste="handleTreePaste"
-            @contextmenu.prevent="openContextMenu($event, store.vaultPath, '')"
+            @contextmenu.prevent="openContextMenu($event, sectionPath('general'), '')"
             :class="{ 'root-drag-over': rootDragOver }"
           >
-            <div v-if="store.fileTree.length === 0" class="px-4 py-8 text-center">
+            <div v-if="store.treeStatus === 'loading' && store.fileTree.length === 0" class="px-4 py-8" role="status">
+              <DocsLoadingOverlay :loading="true" variant="inline" :label="t('notes.loadingTree')" />
+            </div>
+            <div v-else-if="store.treeStatus === 'error' && store.fileTree.length === 0" class="px-4 py-8 text-center" role="alert">
+              <p style="font-size:var(--fs-secondary); color:var(--text-secondary);">{{ t('notes.treeLoadFailed') }}</p>
+            </div>
+            <div v-if="!docFilterQuery.trim() && store.treeStatus === 'ready' && store.fileTree.length === 0" class="px-4 py-8 text-center">
               <p style="font-family:'Inter',sans-serif; font-size:var(--fs-secondary); color:#9CA3AF;">{{ t('notes.noFilesFound') }}</p>
             </div>
 
@@ -129,33 +152,70 @@
               >
                 <component :is="fileTypeIcon(f.name, store.activeFile?.path === f.path ? '#fff' : '#9CA3AF', store.activeFile?.path === f.path)" />
                 <span class="doc-search-item-name">{{ f.name }}</span>
-                <span v-if="f.folderName" class="doc-folder-badge">{{ f.folderName }}</span>
+                <SourceStateDot :state="lookupSourceState(aidocStore.sourceStates, f.path)" />
+                <span v-if="f.folderName" class="doc-folder-badge">{{ t(sectionLabels[fileSection(f.path)]) }} · {{ f.folderName }}</span>
+                <span v-else class="doc-folder-badge">{{ t(sectionLabels[fileSection(f.path)]) }}</span>
               </div>
             </template>
 
-            <!-- Tree mode -->
-            <template v-else>
-              <TreeNode
-                v-for="(node, nodeIdx) in visibleFileTree"
-                :key="node.path"
-                :node="node"
-                :index="nodeIdx"
-                :depth="0"
-                :active-path="store.activeFile?.path"
-                :expanded-folders="store.expandedFolders"
-                @select-file="(p, n) => store.openFile(p, n)"
-                @toggle-folder="(p) => store.toggleFolder(p)"
-                @delete-item="handleDeleteItem"
-                @move-item="handleMoveItem"
-                @copy-files="(paths, dest) => copySystemFilesToDir(paths, dest)"
-                @context-menu="(e, node) => openContextMenu(e, node.path, node.type)"
-              />
+            <template v-else-if="store.treeStatus === 'ready' || store.fileTree.length">
+              <section
+                v-for="section in docSections"
+                :key="section.id"
+                class="doc-section"
+                :data-testid="'doc-section-' + section.id"
+                @dragover.stop.prevent="onSectionDragOver($event, section)"
+                @dragleave="onSectionDragLeave"
+                @drop.stop.prevent="handleSectionDrop($event, section)"
+                @paste.stop="handleTreePaste($event, section.path)"
+                @contextmenu.prevent.stop="section.id !== 'wiki' && openContextMenu($event, section.path, '')"
+              >
+                <button
+                  type="button"
+                  class="doc-section-heading"
+                  :class="{ 'doc-section-target': dropSection === section.id, 'doc-section-current': activeSection === section.id }"
+                  :aria-expanded="!collapsedSections[section.id]"
+                  @click="collapsedSections[section.id] = !collapsedSections[section.id]"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
+                    <path v-if="section.id === 'wiki'" d="M12 5v15m0-15C9 3 6 3 3 4v14c3-1 6-1 9 2 3-3 6-3 9-2V4c-3-1-6-1-9 1Z" />
+                    <path v-else d="M3 6h7l2 2h9v12H3Z" />
+                  </svg>
+                  <span class="doc-section-copy">
+                    <strong>{{ t(sectionLabels[section.id]) }}</strong>
+                    <span>{{ sectionHint(section.id) }}</span>
+                  </span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path :d="collapsedSections[section.id] ? 'm9 6 6 6-6 6' : 'm6 9 6 6 6-6'" />
+                  </svg>
+                </button>
+                <div v-if="!collapsedSections[section.id]">
+                  <TreeNode
+                    v-for="(node, nodeIdx) in section.nodes"
+                    :key="node.path"
+                    :node="node"
+                    :index="nodeIdx"
+                    :depth="0"
+                    :readonly="section.id === 'wiki'"
+                    :active-path="store.activeFile?.path"
+                    :expanded-folders="store.expandedFolders"
+                    :source-states="aidocStore.sourceStates"
+                    @select-file="(p, n) => store.openFile(p, n)"
+                    @toggle-folder="(p) => store.toggleFolder(p)"
+                    @drag-item="draggedPath = $event"
+                    @move-item="handleMoveItem"
+                    @copy-files="copySystemFilesToDir"
+                    @context-menu="(e, node) => openContextMenu(e, node.path, node.type)"
+                  />
+                </div>
+              </section>
             </template>
           </div>
+          <p v-if="moveFeedback" class="doc-move-feedback" role="status">{{ t(moveFeedback) }}</p>
         </div>
 
         <!-- ── RIGHT: Editor / Preview Panel ── -->
-        <div class="flex-1 flex flex-col overflow-hidden" style="background:#fff;position:relative;" @mouseup="onEditorMouseUp" @mousedown="onEditorMouseDown">
+        <div class="docs-display-panel flex-1 flex flex-col overflow-hidden" style="background:#fff;position:relative;" @mouseup="onEditorMouseUp" @mousedown="onEditorMouseDown">
           <!-- Hamburger toggle tab -->
           <button
             ref="hamburgerBtnRef"
@@ -163,7 +223,7 @@
             @click.capture="docHamburgerDrag.onClickCapture"
             @click="docTreeCollapsed = !docTreeCollapsed"
             :style="docHamburgerDrag.dynamicStyle.value"
-            class="doc-tree-expand-tab"
+            class="doc-tree-expand-tab document-tree-toggle"
             v-tooltip="docTreeCollapsed ? t('notes.expandTree') : t('notes.collapseTree')"
             :aria-label="docTreeCollapsed ? t('notes.expandTree') : t('notes.collapseTree')"
           >
@@ -229,6 +289,8 @@
                 {{ store.activeFile.name }}
               </span>
 
+              <span v-if="isWikiReadonly" class="doc-readonly-label">{{ t('aidoc.wikiReadonly') }}</span>
+
               <!-- Speak button (plays current document via TTS) -->
               <button
                 v-if="!isDrawio && !isImage && !isPptx && !isDocx && !isXlsx"
@@ -257,7 +319,7 @@
 
               <div class="ml-auto flex items-center gap-2">
                 <!-- Mode toggle (markdown and HTML) — iOS-style switch with state label -->
-                <div v-if="isMarkdown || isHtml" class="docs-mode-switch" @click="editMode = !editMode" v-tooltip="editMode ? t('notes.switchToFormatted') : t('notes.switchToSource')">
+                <div v-if="!isWikiReadonly && (isMarkdown || isHtml)" class="docs-mode-switch" @click="editMode = !editMode" v-tooltip="editMode ? t('notes.switchToFormatted') : t('notes.switchToSource')">
                   <span class="docs-mode-state-label">{{ editMode ? t('notes.source') : t('notes.formatted') }}</span>
                   <div class="docs-mode-track" :class="{ on: editMode }">
                     <span class="docs-mode-thumb"></span>
@@ -266,7 +328,7 @@
 
                 <!-- Open with external app -->
                 <button
-                  v-if="store.activeFile?.path"
+                  v-if="store.activeFile?.path && !isWikiReadonly"
                   @click="openWithExternalApp"
                   class="docs-hdr-btn"
                   v-tooltip="t('notes.openWithDefaultApp')"
@@ -301,7 +363,7 @@
 
                 <!-- Save button -->
                 <button
-                  v-if="!isDrawio && !isImage"
+                  v-if="!isWikiReadonly && !isDrawio && !isImage"
                   class="docs-hdr-btn"
                   :class="{ 'docs-hdr-btn--ok': saveStatus === 'ok', 'docs-hdr-btn--err': saveStatus === 'error' }"
                   @click="saveFile"
@@ -333,6 +395,7 @@
                     :text-content="isTextFile ? editorContent : null"
                     :textarea-el="activeTextarea"
                     :file-type="searchFileType"
+                    :readonly="isWikiReadonly"
                     @close="searchBarOpen = false"
                     @count-request="onSearchCountRequest"
                     @find-next="onSearchFindNext"
@@ -341,9 +404,14 @@
                     @replace-all-text="onSearchReplaceAll"
                   />
                 </div>
+                <template v-if="isWikiReadonly && !isMarkdown && !isImage">
+                  <textarea v-if="!store.activeFile.binary" class="notes-source-editor" :value="store.activeFile.content" readonly />
+                  <p v-else class="doc-move-feedback">{{ t('aidoc.wikiPreviewUnavailable') }}</p>
+                </template>
+
                 <!-- Draw.io editor panel -->
                 <DrawioEditor
-                  v-if="isDrawio"
+                  v-else-if="isDrawio"
                   :xml="store.activeFile.content"
                   :file-path="store.activeFile.path"
                   @save="onDrawioSave"
@@ -387,7 +455,7 @@
 
                 <!-- Markdown: Formatted mode (editable rich preview) -->
                 <div
-                  v-else-if="isMarkdown && !editMode"
+                  v-else-if="isMarkdown && (isWikiReadonly || !editMode)"
                   class="flex-1 overflow-y-auto py-6"
                   style=" display:flex; justify-content:center;"
                   @click="handlePreviewClick"
@@ -395,7 +463,7 @@
                   <div
                     ref="formattedEl"
                     class="prose-obsidian"
-                    contenteditable="true"
+                    :contenteditable="!isWikiReadonly"
                     spellcheck="false"
                     v-html="formattedHtml"
                     @input="onFormattedInput"
@@ -453,7 +521,7 @@
                     </button>
                     <div class="html-wv-urlbar">
                       <svg class="html-wv-url-icon" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                      <input class="html-wv-url-input" :value="htmlWvCurrentUrl" @keydown.enter="htmlWvNavigate($event.target.value)" spellcheck="false" />
+                      <input class="html-wv-url-input" :value="htmlAddressEditing ? htmlWvCurrentUrl : htmlDisplayAddress" @focus="htmlAddressEditing = true" @blur="htmlAddressEditing = false" @keydown.enter="htmlWvNavigate($event.target.value)" spellcheck="false" />
                       <div v-if="htmlWvIsLoading" class="html-wv-url-loader"></div>
                     </div>
                   </div>
@@ -516,7 +584,7 @@
     <!-- ── Floating AI Doc Panel (only rendered by the owning instance) ── -->
     <Teleport to="body">
       <div
-        v-if="isAiPanelOwner && aiDocEnabled && aiDocOpen"
+        v-if="isAiPanelOwner && aiDocEnabled && aiDocOpen && !isWikiReadonly"
         class="ai-doc-float"
         :style="{ left: aiPanel.x + 'px', top: aiPanel.y + 'px', width: aiPanel.w + 'px', height: aiPanel.h + 'px' }"
       >
@@ -747,7 +815,7 @@
         @click.stop
       >
         <!-- Create options: shown for dirs and background (no target) -->
-        <template v-if="ctxMenu.targetType !== 'file'">
+        <template v-if="ctxMenu.targetType !== 'file' && !ctxWikiReadonly">
           <button class="ctx-item" @click="startCtxAction('newFile', ctxMenu.targetPath)">
             <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
             {{ t('notes.newMarkdown') }}
@@ -773,20 +841,34 @@
 
         <!-- Item actions: shown when a specific file or folder is right-clicked -->
         <template v-if="ctxMenu.targetType">
+          <button
+            v-if="ctxIngest"
+            class="ctx-item"
+            data-testid="aidoc-file-ingest"
+            @click="ingestContextFile"
+          >
+            <svg width="14" height="14" class="shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M4 12a8 8 0 0 1 14-5l2 2m0-5v5h-5M20 12a8 8 0 0 1-14 5l-2-2m0 5v-5h5" />
+            </svg>
+            {{ t(ctxIngest.state === 'ingested' ? 'aidoc.reingestFile' : 'aidoc.ingestFile') }}
+          </button>
           <button class="ctx-item" @click="copyPathFromCtx(ctxMenu.targetPath)">
             <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
             {{ ctxPathCopied ? t('notes.copied') : t('notes.copyPath') }}
           </button>
-          <button class="ctx-item" @click="revealInExplorer(ctxMenu.targetPath); closeContextMenu()">
+          <button v-if="!ctxWikiReadonly" class="ctx-item" @click="revealInExplorer(ctxMenu.targetPath); closeContextMenu()">
             <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
             {{ t('notes.openInExplorer') }}
           </button>
-          <button class="ctx-item" @click="startCtxAction('rename', ctxMenu.targetPath)">
+          <button v-if="ctxMoveSection" class="ctx-item" @click="moveContextFile">
+            {{ t(ctxMoveSection === 'kb_source' ? 'aidoc.moveIntoScope' : 'aidoc.moveOutOfScope') }}
+          </button>
+          <button v-if="!ctxWikiReadonly" class="ctx-item" @click="startCtxAction('rename', ctxMenu.targetPath)">
             <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             {{ t('notes.rename') }}
           </button>
-          <div class="ctx-divider" />
-          <button class="ctx-item ctx-danger" @click="startCtxDelete(ctxMenu.targetPath, ctxMenu.targetType)">
+          <div v-if="!ctxWikiReadonly" class="ctx-divider" />
+          <button v-if="!ctxWikiReadonly" class="ctx-item ctx-danger" @click="startCtxDelete(ctxMenu.targetPath, ctxMenu.targetType)">
             <svg style="width:14px;height:14px;flex-shrink:0;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>
             {{ t('notes.delete') }}
           </button>
@@ -874,10 +956,14 @@
 </template>
 
 <script setup>
+import '../utils/proseObsidian.css'
 defineOptions({ inheritAttrs: false })
-import { ref, reactive, computed, watch, nextTick, onMounted, onActivated, onBeforeUnmount, defineComponent, h } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount, defineComponent, h } from 'vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
+import { documentRowGradient } from '../utils/documentTreeStyle'
+import '../components/aidoc/documentTree.css'
 import AppButton from '../components/common/AppButton.vue'
+import AppTooltip from '../components/common/AppTooltip.vue'
 import DrawioEditor from '../components/notes/DrawioEditor.vue'
 import CodeViewer from '../components/notes/CodeViewer.vue'
 import PptxEditor from '../components/notes/PptxEditor.vue'
@@ -886,18 +972,17 @@ import XlsxEditor from '../components/notes/XlsxEditor.vue'
 import DocsLoadingOverlay from '../components/notes/DocsLoadingOverlay.vue'
 import AiMagicPanel from '../components/notes/AiMagicPanel.vue'
 import SearchReplaceBar from '../components/notes/SearchReplaceBar.vue'
-import { marked } from 'marked'
-import hljs from 'highlight.js'
-import DOMPurify from 'dompurify'
+import { renderObsidianMarkdown, slugify } from '../utils/obsidianMarkdown'
 import TurndownService from 'turndown'
 import { gfm } from 'turndown-plugin-gfm'
-import mermaid from 'mermaid'
+import { renderDocumentDiagrams } from '../utils/mermaidDiagrams'
 import 'katex/dist/katex.min.css'
-import markedKatex from 'marked-katex-extension'
-import markedFootnote from 'marked-footnote'
 
-mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose', fontFamily: 'Inter, sans-serif' })
 import { useObsidianStore } from '../stores/obsidian'
+import { useAiDocStore } from '../stores/aidoc'
+import AiDocToolbar from '../components/aidoc/AiDocToolbar.vue'
+import AiDocGraphPanel from '../components/aidoc/AiDocGraphPanel.vue'
+import AiDocWikiPanel from '../components/aidoc/AiDocWikiPanel.vue'
 import { useAgentsStore, BUILTIN_DOC_EDITOR_ID } from '../stores/agents'
 import { useConfigStore } from '../stores/config'
 import { useSkillsStore } from '../stores/skills'
@@ -913,6 +998,7 @@ import { useVoiceStore } from '../stores/voice'
 import { useI18n } from '../i18n/useI18n'
 import PreviewLimitModal from '../components/common/PreviewLimitModal.vue'
 import { isLimitEnforced } from '../utils/guestLimits'
+import { lookupSourceState } from '../utils/sourceState'
 
 const { t } = useI18n()
 const showPreviewLimitModal = ref(false)
@@ -923,6 +1009,52 @@ const previewLimitMessage = ref('')
 const props = defineProps({ isEmbedded: { type: Boolean, default: false } })
 
 const store = useObsidianStore()
+const aidocStore = useAiDocStore()
+const showGraph = ref(false)
+const showWiki = ref(false)
+const wikiWindowFailed = ref(false)
+async function openWikiWindow() {
+  const open = window.electronAPI?.wikiWindow?.open
+  if (!open) return openOverlay('wiki')
+  wikiWindowFailed.value = false
+  try {
+    const result = await open()
+    wikiWindowFailed.value = result?.success === false
+  } catch {
+    wikiWindowFailed.value = true
+  }
+}
+function openOverlay(kind) {
+  showGraph.value = kind === 'graph'
+  showWiki.value = kind === 'wiki'
+}
+watch(() => store.vaultPath, path => {
+  showGraph.value = false
+  showWiki.value = false
+  aidocStore.setRoot(path)
+}, { immediate: true })
+watch([() => store.vaultPath, () => store.fileTree], ([path]) => {
+  if (path && store.treeStatus === 'ready') void aidocStore.refreshSourceStates()
+}, { immediate: true })
+onBeforeUnmount(() => aidocStore.dispose())
+
+async function openAiDocFile(path, name) {
+  if (/\.pdf$/i.test(name)) {
+    await window.electronAPI.openFile(path)
+  } else {
+    await store.openFile(path, name)
+  }
+}
+
+async function openGraphFile({ path, name }) {
+  showGraph.value = false
+  await openAiDocFile(path, name)
+}
+
+async function openWikiFile({ path, name }) {
+  showWiki.value = false
+  await openAiDocFile(path, name)
+}
 const agentsStore = useAgentsStore()
 const configStore = useConfigStore()
 const focusModeStore = useFocusModeStore()
@@ -950,7 +1082,65 @@ function _isNodeVisible(node) {
   if (node.type === 'dir') return true
   return store.probeCache[node.path] !== false
 }
-const visibleFileTree = computed(() => (store.fileTree || []).filter(_isNodeVisible))
+const sectionLabels = {
+  general: 'aidoc.myFiles',
+  kb_source: 'aidoc.knowledgeSources',
+  wiki: 'aidoc.knowledgePages',
+}
+const sectionHints = {
+  general: 'aidoc.myFilesHint',
+  kb_source: 'aidoc.knowledgeSourcesHint',
+  wiki: 'aidoc.knowledgePagesHint',
+}
+const normalizeDocPath = path => (path || '').replace(/\\/g, '/').replace(/\/+$/, '')
+function sectionPath(id) {
+  return normalizeDocPath(store.vaultPath) + '/' + id
+}
+function fileSection(path) {
+  const root = normalizeDocPath(store.vaultPath).toLowerCase()
+  const fullPath = normalizeDocPath(path).toLowerCase()
+  const first = root && fullPath.startsWith(root + '/') ? fullPath.slice(root.length + 1).split('/')[0] : ''
+  return first === 'wiki' || first === 'kb_source' ? first : 'general'
+}
+const activeSection = computed(() => store.activeFile?.path ? fileSection(store.activeFile.path) : null)
+const isWikiReadonly = computed(() => activeSection.value === 'wiki')
+const isSectionRoot = path => Object.keys(sectionLabels).some(id =>
+  normalizeDocPath(path).toLowerCase() === sectionPath(id).toLowerCase())
+const isWikiPath = path => fileSection(path) === 'wiki'
+
+const docSections = computed(() => {
+  const roots = store.fileTree || []
+  const legacy = roots.filter(node => !isSectionRoot(node.path))
+  return Object.keys(sectionLabels).map(id => {
+    const root = roots.find(node => node.type === 'dir' && normalizeDocPath(node.path).toLowerCase() === sectionPath(id).toLowerCase())
+    const nodes = root?.children || []
+    return {
+      id,
+      path: root?.path || sectionPath(id),
+      nodes: (id === 'general' ? [...nodes, ...legacy] : nodes).filter(_isNodeVisible),
+    }
+  })
+})
+const collapsedSections = ref({})
+const draggedPath = ref('')
+const dropSection = ref('')
+const moveFeedback = ref('')
+function sectionHint(id) {
+  if (dropSection.value === id) {
+    const from = draggedPath.value && fileSection(draggedPath.value)
+    if (id === 'kb_source' && from !== 'kb_source') return t('aidoc.dropIntoScope')
+    if (id === 'general' && from === 'kb_source') return t('aidoc.dropOutOfScope')
+  }
+  const pending = aidocStore.status?.pending
+  const count = (pending?.new ?? 0) + (pending?.updated ?? 0)
+  return id === 'kb_source' && count > 0
+    ? t('aidoc.knowledgeSourcesPendingHint', { count })
+    : t(sectionHints[id])
+}
+watch(() => store.vaultPath, () => {
+  collapsedSections.value = {}
+  moveFeedback.value = ''
+})
 
 // File search: flat list of matching files (case-insensitive substring on name).
 // Empty query -> tree mode; non-empty -> walk full tree, collect visible files,
@@ -969,7 +1159,7 @@ const flatFilteredFiles = computed(() => {
       }
     }
   }
-  walk(store.fileTree || [], '')
+  for (const section of docSections.value) walk(section.nodes, '')
   out.sort((a, b) => a.name.localeCompare(b.name))
   return out
 })
@@ -1218,6 +1408,7 @@ async function _reloadActiveTextFileFromDisk(opts = {}) {
 
 /** Wrap sendAiDoc to inject agent config from stores. */
 async function sendAiDoc(userText) {
+  if (isWikiReadonly.value) return
   const beforeMsgCount = aiDocMessages.value.length
   // Capture pre-turn content so we can offer a Revert for tool-based edits
   // (file_operation) that bypass the <replacement> flow.
@@ -1364,6 +1555,7 @@ async function _applyHistoryContent(entry, targetContent) {
 
 /** Returns true if our stack owns this undo (and has started consuming it). */
 function _tryUndoAiEdit() {
+  if (isWikiReadonly.value) return false
   if (_aiUndoStack.length === 0) return false
   const top = _aiUndoStack[_aiUndoStack.length - 1]
   // Only consume our undo entry when current content matches what we applied.
@@ -1379,6 +1571,7 @@ function _tryUndoAiEdit() {
 }
 
 function _tryRedoAiEdit() {
+  if (isWikiReadonly.value) return false
   if (_aiRedoStack.length === 0) return false
   const top = _aiRedoStack[_aiRedoStack.length - 1]
   if (_currentEditorContent() !== top.preContent) return false
@@ -1541,6 +1734,18 @@ const htmlWvCanGoBack = ref(false)
 const htmlWvCanGoForward = ref(false)
 const htmlWvIsLoading = ref(false)
 const htmlWvCurrentUrl = ref('')
+const htmlAddressEditing = ref(false)
+const htmlDisplayAddress = computed(() => {
+  if (!htmlWvCurrentUrl.value || htmlWvCurrentUrl.value !== htmlFileUrl.value) return htmlWvCurrentUrl.value
+  const file = normalizeDocPath(store.activeFile?.path)
+  const root = normalizeDocPath(store.vaultPath) + '/'
+  if (!file.toLowerCase().startsWith(root.toLowerCase())) return htmlWvCurrentUrl.value
+  const relative = file.slice(root.length)
+  const section = activeSection.value
+  const parts = relative.split('/')
+  if (parts[0]?.toLowerCase() === section) parts.shift()
+  return [t(sectionLabels[section || 'general']), ...parts].join(' › ')
+})
 let _htmlWvCleanup = []
 
 function _attachHtmlWvListeners() {
@@ -1728,6 +1933,43 @@ const imageDataUri = computed(() => {
 
 // ── Context menu state ──
 const ctxMenu = ref({ visible: false, x: 0, y: 0, targetPath: '', targetType: '' })
+const ctxWikiReadonly = computed(() => isWikiPath(ctxMenu.value.targetPath))
+const ctxMoveSection = computed(() => {
+  if (!ctxMenu.value.targetType || ctxWikiReadonly.value) return ''
+  return fileSection(ctxMenu.value.targetPath) === 'kb_source' ? 'general' : 'kb_source'
+})
+function moveContextFile() {
+  const path = ctxMenu.value.targetPath
+  const dest = ctxMoveSection.value
+  closeContextMenu()
+  if (dest) void handleMoveItem(path, sectionPath(dest))
+}
+function openAddMenu(event) {
+  const { left, bottom } = event.currentTarget.getBoundingClientRect()
+  openContextMenu({ clientX: left, clientY: bottom }, sectionPath('general'), '')
+}
+const ctxIngest = computed(() => {
+  const { targetPath, targetType } = ctxMenu.value
+  const rel = getSourceRel(targetPath)
+  const state = lookupSourceState(aidocStore.sourceStates, targetPath)
+  const busy = aidocStore.ingesting || aidocStore.syncPreparing || aidocStore.updating
+  return targetType === 'file' && rel && state && !busy ? { rel, state } : null
+})
+
+function getSourceRel(filePath) {
+  if (!store.vaultPath || !filePath) return ''
+  const root = normalizeDocPath(store.vaultPath)
+  const fullPath = normalizeDocPath(filePath)
+  return fileSection(fullPath) === 'kb_source' && fullPath.slice(root.length + 1).includes('/')
+    ? fullPath.slice(root.length + 1) : ''
+}
+
+function ingestContextFile() {
+  const rel = ctxIngest.value?.rel
+  closeContextMenu()
+  if (rel) void aidocStore.ingestSingle(rel)
+}
+
 const ctxAction = ref({ visible: false, type: '', parent: '', targetPath: '', x: 0, y: 0 })
 const ctxInputValue = ref('')
 const ctxInputRef = ref(null)
@@ -1876,6 +2118,7 @@ function onAiMagicButtonClick() {
 
 /** Toggle the AI Doc switch on/off. When turning on, auto-open panel. */
 function toggleAiDoc() {
+  if (isWikiReadonly.value) return
   if (isLimitEnforced() && !aiDocEnabled.value) {
     previewLimitMessage.value = t('limits.aiDocsAssistant')
     showPreviewLimitModal.value = true
@@ -1893,11 +2136,12 @@ function toggleAiDoc() {
  *  the tree. This is the sole user-visible "retry unopenable files" action. */
 async function refreshAll() {
   store.resetFailureCache()
-  await store.loadTree()
+  await store.loadTree({ fresh: true })
   if (store.activeFile?.path && !store.activeFile.binary) {
     await store.openFile(store.activeFile.path, store.activeFile.name)
     // HTML webview reload is handled by the content watch
   }
+  void aidocStore.refreshStatus()
 }
 
 async function openVaultInExplorer() {
@@ -1911,6 +2155,7 @@ async function openVaultInExplorer() {
 }
 
 async function saveFile() {
+  if (isWikiReadonly.value) return
   if (saveStatus.value === 'saving') return
   if (_saveStatusTimer) clearTimeout(_saveStatusTimer)
   saveStatus.value = 'saving'
@@ -1918,6 +2163,8 @@ async function saveFile() {
   try {
     await store.saveFile()
     saveStatus.value = 'ok'
+    void aidocStore.refreshStatus()
+    if (getSourceRel(store.activeFile?.path)) void aidocStore.refreshSourceStates()
   } catch {
     saveStatus.value = 'error'
   } finally {
@@ -1928,6 +2175,7 @@ async function saveFile() {
 
 /** Open AI Doc panel for current file, providing full content as context. */
 function _ensureAiDocPanel() {
+  if (isWikiReadonly.value) return
   if (!store.activeFile) return
   if (aiDocOpen.value) return // already open
 
@@ -1966,6 +2214,7 @@ function _openAiDocFromSelection() {
 const editorCtxMenu = ref({ visible: false, x: 0, y: 0, hasSelection: false })
 
 function onEditorContextMenu(e) {
+  if (isWikiReadonly.value) return
   // Only intercept for files that support AI Doc (text/markdown/code — not drawio/image/office binary)
   if (isDrawio.value || isImage.value || isPptx.value || isDocx.value || isXlsx.value || !store.activeFile) return
   e.preventDefault()
@@ -2004,6 +2253,7 @@ function onEditorCtxCopy() {
 
 /** Handle @ai-edit from DOCX/PPTX/XLSX/CodeViewer child components. */
 function handleEditorAiEdit({ selectedText, fullFileContent, replaceCallback }) {
+  if (isWikiReadonly.value) return
   _editorReplaceCallback = replaceCallback
   _ensureAiDocPanel()
   // Always use the complete file content so AI has full context
@@ -2054,6 +2304,7 @@ function handleSheetChanged({ sheetName, sheetIndex, totalSheets, text, fileName
 
 /** Apply AI replacement to the document. Stores a revert snapshot. */
 function onAiDocApply(msgId) {
+  if (isWikiReadonly.value) return
   const info = getReplacementInfo(msgId)
   if (!info) return
 
@@ -2085,6 +2336,7 @@ function onAiDocApply(msgId) {
 
 /** Revert a previously applied AI edit. */
 function onAiDocRevert(msgId) {
+  if (isWikiReadonly.value) return
   const snapshot = _revertSnapshots.get(msgId)
   if (snapshot === undefined) return
 
@@ -2107,6 +2359,7 @@ function onAiDocRevert(msgId) {
 
 /** Revert a file_operation tool-based AI edit. Restores pre-turn disk content. */
 async function onAiDocToolRevert(msgId) {
+  if (isWikiReadonly.value) return
   const msg = aiDocMessages.value.find(m => m.id === msgId)
   const te = msg?.toolEdit
   if (!te || te.reverted) return
@@ -2130,6 +2383,7 @@ async function onAiDocToolRevert(msgId) {
 
 /** Re-apply a previously reverted tool-based AI edit. */
 async function onAiDocToolReapply(msgId) {
+  if (isWikiReadonly.value) return
   const msg = aiDocMessages.value.find(m => m.id === msgId)
   const te = msg?.toolEdit
   if (!te || !te.reverted || !te.filePath) return
@@ -2162,6 +2416,7 @@ async function onAiDocToolReapply(msgId) {
  * Returns true on success, false when refused (e.g. stale selection not found).
  */
 function _applyReplacement(targetText, newText) {
+  if (isWikiReadonly.value) return false
   // 1) If there's an editor-provided callback (DOCX/PPTX/XLSX), use it.
   //    Do NOT null it out after use — the editor registers it per file open,
   //    and the user may apply multiple edits in one session.
@@ -2314,7 +2569,7 @@ function onGlobalKeydown(e) {
     openSearchBar()
   }
   // Ctrl+H — open search/replace bar
-  if (ctrl && e.key === 'h') {
+  if (ctrl && e.key === 'h' && !isWikiReadonly.value) {
     if (!store.activeFile || isDrawio.value || isImage.value) return
     e.preventDefault()
     openSearchBar()
@@ -2395,17 +2650,6 @@ watch(editorContent, (val) => {
 })
 
 
-// GitHub-style heading slug — lowercase, strip non-word chars, spaces to hyphens.
-// Matches the anchor format used in hand-written Markdown TOCs.
-function slugify(text) {
-  return text
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N} \-_]/gu, '')
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-}
-
 /**
  * Scan markdown content for internal anchor links ([text](#anchor)) and fix
  * any anchors that don't match an actual heading ID. External links are untouched.
@@ -2452,168 +2696,11 @@ function fixTocLinks(md) {
   })
 }
 
-// Markdown rendering — custom renderers for images and headings
-// marked 12.x passes positional args: (href, title, text)
-const renderer = new marked.Renderer()
-renderer.image = function (href, title, text) {
-  // For relative/local paths, store original path in data attributes for async base64 loading
-  if (href && !href.startsWith('http://') && !href.startsWith('https://') && !href.startsWith('data:')) {
-    const fileDir = store.activeFile?.path?.replace(/[/\\][^/\\]+$/, '') || store.vaultPath
-    const absPath = fileDir ? `${fileDir}/${href}` : href
-    return `<img src="" data-relpath="${href}" data-abspath="${absPath}" alt="${text || ''}"${title ? ` title="${title}"` : ''} />`
-  }
-  return `<img src="${href}" alt="${text || ''}"${title ? ` title="${title}"` : ''} />`
-}
-renderer.heading = function (text, level) {
-  const id = slugify(text.replace(/<[^>]+>/g, ''))
-  return `<h${level} id="${id}">${text}</h${level}>\n`
-}
-// Code renderer: intercept ```mermaid``` blocks; otherwise delegate to highlight.js when language is known.
-renderer.code = function (code, infostring) {
-  const lang = (infostring || '').trim().split(/\s+/)[0]
-  if (lang === 'mermaid') {
-    return `<pre class="mermaid">${_escapeHtml(code)}</pre>`
-  }
-  if (lang && hljs.getLanguage(lang)) {
-    try {
-      const out = hljs.highlight(code, { language: lang }).value
-      return `<pre><code class="hljs language-${lang}">${out}</code></pre>`
-    } catch {}
-  }
-  return `<pre><code>${_escapeHtml(code)}</code></pre>`
-}
-marked.use({ gfm: true, breaks: true, renderer })
-// strict:'ignore' silences KaTeX warnings about CJK chars / en-dashes / fullwidth
-// punctuation when content inside `$…$` isn't actually math (very common in
-// Chinese docs where `$` shows up as a literal). nonStandard already tolerates
-// these tokens; without strict:'ignore' KaTeX still floods the console.
-marked.use(markedKatex({ throwOnError: false, nonStandard: true, strict: 'ignore' }))
-marked.use(markedFootnote())
-
-function _escapeHtml(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-}
-function _escapeAttr(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
-
-// Strip leading YAML frontmatter and parse simple key:value lines.
-// Returns { meta: {key: value|array} | null, body: stripped markdown }.
-function _extractFrontmatter(md) {
-  const m = md.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/)
-  if (!m) return { meta: null, body: md }
-  const meta = {}
-  for (const line of m[1].split(/\r?\n/)) {
-    const km = line.match(/^([a-zA-Z0-9_-]+)\s*:\s*(.*)$/)
-    if (!km) continue
-    let v = km[2].trim()
-    if (/^\[.*\]$/.test(v)) {
-      v = v.slice(1, -1).split(',').map(s => s.trim().replace(/^["']|["']$/g, '')).filter(Boolean)
-    } else if (/^["'].*["']$/.test(v)) {
-      v = v.slice(1, -1)
-    }
-    meta[km[1]] = v
-  }
-  return { meta, body: md.slice(m[0].length) }
-}
-
-function _renderProperties(meta) {
-  if (!meta || Object.keys(meta).length === 0) return ''
-  const rows = Object.entries(meta).map(([k, v]) => {
-    let val
-    if (Array.isArray(v)) {
-      val = v.map(x => `<span class="prop-tag">${_escapeHtml(String(x))}</span>`).join('')
-    } else {
-      val = `<span class="prop-value">${_escapeHtml(String(v))}</span>`
-    }
-    return `<div class="prop-row"><div class="prop-key">${_escapeHtml(k)}</div><div class="prop-val">${val}</div></div>`
-  }).join('')
-  return `<div class="doc-properties">${rows}</div>\n\n`
-}
-
-// Convert Obsidian-only inline syntax: [[wikilinks]] and ==highlights==.
-// Skips content inside inline code spans (`...`).
-function _transformInline(text) {
-  // Split on inline code so we don't transform inside backticks.
-  const parts = text.split(/(`[^`\n]*`)/)
-  return parts.map((part, i) => {
-    if (i % 2 === 1) return part // odd parts = code spans, leave alone
-    let s = part
-    // [[Page#section|alias]] / [[Page|alias]] / [[Page]]
-    s = s.replace(/\[\[([^\]\n|#^]+)(?:#([^\]\n|]*))?(?:\^[^\]\n|]*)?(?:\|([^\]\n]+))?\]\]/g,
-      (_, target, section, alias) => {
-        const t = target.trim()
-        const display = (alias || target).trim()
-        const sec = section ? ` data-section="${_escapeAttr(section.trim())}"` : ''
-        return `<a class="wikilink" data-target="${_escapeAttr(t)}"${sec} href="#">${_escapeHtml(display)}</a>`
-      })
-    // ==highlight==
-    s = s.replace(/==([^=\n]+)==/g, '<mark>$1</mark>')
-    return s
-  }).join('')
-}
-
-// Obsidian callout: > [!type] Title \n > body...
-// Recognized types: note tip info abstract todo success warning failure danger error question example quote cite bug.
-// Emits pre-rendered HTML so marked passes through unchanged.
-function _preprocessObsidian(md) {
-  const lines = md.split(/\r?\n/)
-  const out = []
-  let inFence = false
-  let i = 0
-  while (i < lines.length) {
-    const line = lines[i]
-    if (/^```/.test(line) || /^~~~/.test(line)) {
-      inFence = !inFence
-      out.push(line); i++; continue
-    }
-    if (inFence) { out.push(line); i++; continue }
-    const calloutMatch = line.match(/^>\s*\[!([\w-]+)\][+-]?\s*(.*)$/)
-    if (calloutMatch) {
-      const type = calloutMatch[1].toLowerCase()
-      const rawTitle = calloutMatch[2].trim()
-      const title = rawTitle || (type.charAt(0).toUpperCase() + type.slice(1))
-      const bodyLines = []
-      i++
-      while (i < lines.length && /^>/.test(lines[i])) {
-        bodyLines.push(lines[i].replace(/^>\s?/, ''))
-        i++
-      }
-      const innerMd = _transformInline(bodyLines.join('\n'))
-      const innerHtml = marked.parse(innerMd)
-      out.push(`<div class="callout callout-${_escapeAttr(type)}" data-callout="${_escapeAttr(type)}">`)
-      out.push(`<div class="callout-title"><span class="callout-icon"></span>${_transformInline(_escapeHtml(title))}</div>`)
-      out.push(`<div class="callout-body">${innerHtml}</div>`)
-      out.push(`</div>`)
-      out.push('')
-      continue
-    }
-    out.push(_transformInline(line))
-    i++
-  }
-  return out.join('\n')
-}
-
-function renderToHtml(md) {
-  if (!md) return ''
-  try {
-    const { meta, body } = _extractFrontmatter(md)
-    const propsHtml = _renderProperties(meta)
-    const processed = _preprocessObsidian(body)
-    const raw = propsHtml + marked.parse(processed)
-    return DOMPurify.sanitize(raw, {
-      ALLOW_UNKNOWN_PROTOCOLS: true,
-      USE_PROFILES: { html: true, svg: true, svgFilters: true, mathMl: true },
-      ADD_ATTR: ['data-relpath', 'data-abspath', 'data-target', 'data-section', 'data-callout', 'style'],
-    })
-  } catch { return '' }
-}
-
 // Refresh the formatted HTML from the current markdown source.
 // Renders markdown to HTML, then asynchronously loads local images as data URLs.
 async function refreshFormattedHtml() {
-  // renderToHtml() already sanitizes via DOMPurify
-  const safeHtml = renderToHtml(editorContent.value)
+  const localImageBasePath = store.activeFile?.path?.replace(/[/\\][^/\\]+$/, '') || store.vaultPath || ''
+  const safeHtml = renderObsidianMarkdown(editorContent.value, { localImageBasePath })
   formattedHtml.value = safeHtml
   await nextTick()
   // v-html may silently skip updates on contenteditable divs that have been
@@ -2623,19 +2710,9 @@ async function refreshFormattedHtml() {
     formattedEl.value.insertAdjacentHTML('afterbegin', safeHtml) // re-insert DOMPurify-sanitized HTML
   }
   await loadLocalImages()
-  await renderMermaidBlocks()
-}
-
-// Render any <pre class="mermaid"> blocks emitted by the code renderer.
-// mermaid.run() rewrites each node's innerHTML with the rendered SVG.
-async function renderMermaidBlocks() {
-  if (!formattedEl.value) return
-  const nodes = formattedEl.value.querySelectorAll('pre.mermaid:not([data-processed="true"])')
-  if (nodes.length === 0) return
   try {
-    await mermaid.run({ nodes: Array.from(nodes) })
+    await renderDocumentDiagrams(formattedEl.value)
   } catch (err) {
-    // mermaid attaches its own error markup to failed nodes; nothing to do here
     console.warn('[mermaid] render failed', err)
   }
 }
@@ -2661,6 +2738,7 @@ async function loadLocalImages() {
 // When the user types in the contenteditable formatted view,
 // convert the edited HTML back to markdown via turndown.
 function onFormattedInput() {
+  if (isWikiReadonly.value) return
   if (!formattedEl.value) return
   const html = formattedEl.value.innerHTML
   const md = turndown.turndown(html)
@@ -2681,6 +2759,7 @@ function blobToBase64(blob) {
 
 // Save image base64 to vault, insert markdown at cursor position, save file, refresh display
 async function saveAndInsertImage(base64, ext, cursorOffset) {
+  if (isWikiReadonly.value) return
   if (!store.activeFile) return
 
   const fileName = `img-${Date.now()}.${ext}`
@@ -2738,6 +2817,7 @@ function getCursorMarkdownOffset() {
 
 // Handle image paste in formatted view
 async function onFormattedPaste(e) {
+  if (isWikiReadonly.value) return
   const items = e.clipboardData?.items
 
   // Capture cursor position before any async work
@@ -2816,8 +2896,10 @@ watch(editMode, async (val) => {
 // file I/O never happens during app launch — only when the user actually
 // opens the AI Doc page.
 async function onViewEnter() {
-  if (!store.vaultPath) return
+  const root = store.vaultPath
+  if (!root) return
   await store.loadTree()
+  if (store.vaultPath !== root) return
   if (!store.activeFile) {
     await store.restoreLastOpenedDoc()
   }
@@ -2826,7 +2908,9 @@ async function onViewEnter() {
   }
 }
 onMounted(onViewEnter)
-onActivated(onViewEnter)
+watch(() => store.vaultPath, (root, previous) => {
+  if (root && !previous) void onViewEnter()
+})
 
 // Auto-focus context action input when it appears
 watch(() => ctxAction.value.visible, async (v) => {
@@ -2834,6 +2918,7 @@ watch(() => ctxAction.value.visible, async (v) => {
 })
 
 async function openWithExternalApp() {
+  if (isWikiReadonly.value) return
   if (!store.activeFile?.path) return
   await window.electronAPI.openFile(store.activeFile.path)
 }
@@ -2871,6 +2956,7 @@ function onSearchFindPrev({ query, matchCase, wholeWord }) {
 }
 
 function onSearchReplaceOne({ search, replacement, matchCase, wholeWord, single, matchStart, matchEnd }) {
+  if (isWikiReadonly.value) return
   const opts = _makeOpts({ matchCase, wholeWord })
   if (isTextFile.value) {
     // For text: replace the currently highlighted match by position
@@ -2891,6 +2977,7 @@ function onSearchReplaceOne({ search, replacement, matchCase, wholeWord, single,
 }
 
 function onSearchReplaceAll({ search, replacement, matchCase, wholeWord }) {
+  if (isWikiReadonly.value) return
   const opts = _makeOpts({ matchCase, wholeWord })
   if (isTextFile.value) {
     const flags = matchCase ? 'g' : 'gi'
@@ -2960,27 +3047,45 @@ async function handlePreviewClick(e) {
   }
   if (!el) return
 
-  // Wikilink (Obsidian): resolve by basename match against the vault tree.
+  // Use the graph resolver inside the knowledge base and the vault tree elsewhere.
   if (el.classList.contains('wikilink')) {
     e.preventDefault()
     e.stopPropagation()
     const target = el.dataset.target
     const section = el.dataset.section
     if (!target) return
-    const file = _findVaultFileByName(store.fileTree, target)
+    const root = store.vaultPath
+    const fromPath = store.activeFile?.path
+    let resolved
+    try {
+      resolved = await window.electronAPI?.aidoc?.resolveLink({ root, fromPath, target })
+    } catch {
+      showLinkError(t('aidoc.linkFailed', { target }))
+      return
+    }
+    if (root !== store.vaultPath || fromPath !== store.activeFile?.path) return
+    if (resolved?.success === false) {
+      showLinkError(t('aidoc.linkFailed', { target }))
+      return
+    }
+    if (resolved?.kind === 'ambiguous') {
+      showLinkError(t('aidoc.linkAmbiguous', { target, candidates: resolved.candidates.join(', ') }))
+      return
+    }
+    const file = resolved?.kind === 'resolved' ? resolved : _findVaultFileByName(store.fileTree, target)
     if (file) {
       try {
-        await store.openFile(file.path, file.name)
+        await openAiDocFile(file.path, file.name)
         if (section) {
           await nextTick()
           const t = document.getElementById(slugify(section))
           if (t) t.scrollIntoView({ behavior: 'smooth' })
         }
       } catch (err) {
-        showLinkError(`Could not open note: ${target}`)
+        showLinkError(t('aidoc.linkFailed', { target }))
       }
     } else {
-      showLinkError(`Note not found in vault: ${target}`)
+      showLinkError(t('aidoc.linkMissing', { target }))
     }
     return
   }
@@ -3045,6 +3150,7 @@ async function handlePreviewClick(e) {
 }
 
 async function onDrawioSave(xml) {
+  if (isWikiReadonly.value) return
   store.updateContent(xml)
   saving.value = true
   await store.saveFile()
@@ -3052,24 +3158,28 @@ async function onDrawioSave(xml) {
 }
 
 async function onPptxSave(base64) {
+  if (isWikiReadonly.value) return
   saving.value = true
   await store.saveBinaryFile(base64)
   saving.value = false
 }
 
 async function onDocxSave(base64) {
+  if (isWikiReadonly.value) return
   saving.value = true
   await store.saveBinaryFile(base64)
   saving.value = false
 }
 
 async function onXlsxSave(base64) {
+  if (isWikiReadonly.value) return
   saving.value = true
   await store.saveBinaryFile(base64)
   saving.value = false
 }
 
 function onCodeContentChange(newContent) {
+  if (isWikiReadonly.value) return
   store.updateContent(newContent)
   editorContent.value = newContent
 }
@@ -3104,6 +3214,7 @@ function revealInExplorer(path) {
 }
 
 function startCtxAction(type, pathArg) {
+  if (isWikiPath(pathArg) || (type === 'rename' && isSectionRoot(pathArg))) return
   const pos = { x: ctxMenu.value.x, y: ctxMenu.value.y }
   closeContextMenu()
   // For rename: parent = folder containing the item, targetPath = item itself
@@ -3163,6 +3274,7 @@ const deleteError = ref('')
 // Called from both context menu and TreeNode delete-item events.
 // For directories: checks real disk emptiness before showing confirm dialog.
 async function startCtxDelete(itemPath, itemType) {
+  if (isWikiPath(itemPath) || isSectionRoot(itemPath)) return
   closeContextMenu()
   const parts = itemPath.split(/[/\\]/)
   const name = parts[parts.length - 1] || itemPath
@@ -3183,11 +3295,6 @@ async function startCtxDelete(itemPath, itemType) {
   }
 
   confirmDeleteTarget.value = { path: itemPath, name, isDir: itemType === 'dir', blocked: null }
-}
-
-// Legacy entry point kept for TreeNode @delete-item events (which only fire for files)
-function handleDeleteItem(itemPath) {
-  startCtxDelete(itemPath, 'file')
 }
 
 function closeDeleteDialog() {
@@ -3262,21 +3369,50 @@ function startNotesResize(e) {
 const rootDragOver = ref(false)
 
 async function handleMoveItem(sourcePath, destFolderPath) {
-  const fileName = sourcePath.split(/[/\\]/).pop()
-  const newPath = destFolderPath + '/' + fileName
-  // Don't move to the same location
-  if (sourcePath === newPath) return
+  if (!sourcePath || isSectionRoot(sourcePath) || isWikiPath(sourcePath) || isWikiPath(destFolderPath)) return
+  const source = normalizeDocPath(sourcePath)
+  const dest = normalizeDocPath(destFolderPath)
+  const newPath = dest + '/' + source.split('/').pop()
+  if (source === newPath || dest === source || dest.startsWith(source + '/')) return
+  const intoScope = fileSection(newPath) === 'kb_source'
+  const scopeChanged = intoScope !== (fileSection(sourcePath) === 'kb_source')
+  moveFeedback.value = ''
   try {
-    await store.renameItem(sourcePath, newPath)
+    const result = await store.renameItem(sourcePath, newPath)
+    if (result?.error) throw new Error(result.error)
+    if (scopeChanged) {
+      moveFeedback.value = intoScope ? 'aidoc.movedIntoScope' : 'aidoc.movedOutOfScope'
+      collapsedSections.value[fileSection(newPath)] = false
+      void aidocStore.refreshStatus()
+    }
   } catch (err) {
     console.error('Move failed:', err)
+    moveFeedback.value = 'aidoc.moveFailed'
   }
+}
+
+function onSectionDragOver(e, section) {
+  rootDragOver.value = false
+  const types = e.dataTransfer.types
+  const hasFiles = types.includes('Files')
+  const allowed = section.id !== 'wiki' && (hasFiles || types.includes('application/x-node-type'))
+  e.dataTransfer.dropEffect = allowed ? (hasFiles ? 'copy' : 'move') : 'none'
+  dropSection.value = allowed ? section.id : ''
+}
+
+function onSectionDragLeave(e) {
+  if (!e.currentTarget.contains(e.relatedTarget)) dropSection.value = ''
+}
+
+function handleSectionDrop(e, section) {
+  dropSection.value = ''
+  if (section.id !== 'wiki') return handleRootDrop(e, section.path)
 }
 
 // Copy system files (from OS drag-drop or paste) into a vault directory.
 // Accepts either a FileList/File[] (from drop/paste events) or a plain string[].
 async function copySystemFilesToDir(filesOrPaths, destDir) {
-  if (!filesOrPaths || filesOrPaths.length === 0) return
+  if (isWikiPath(destDir) || !filesOrPaths?.length) return
   let paths
   if (typeof filesOrPaths[0] === 'string') {
     paths = filesOrPaths.filter(Boolean)
@@ -3286,7 +3422,8 @@ async function copySystemFilesToDir(filesOrPaths, destDir) {
   if (paths.length === 0) return
   try {
     await window.electronAPI.obsidian.copyFilesToDir(paths, destDir)
-    await store.loadTree()
+    await store.loadTree({ fresh: true })
+    if (fileSection(destDir) === 'kb_source') void aidocStore.refreshStatus()
   } catch (err) {
     console.error('Copy failed:', err)
   }
@@ -3294,8 +3431,9 @@ async function copySystemFilesToDir(filesOrPaths, destDir) {
 
 function onRootDragOver(e) {
   const hasSystemFiles = e.dataTransfer.types.includes('Files')
-  e.dataTransfer.dropEffect = hasSystemFiles ? 'copy' : 'move'
-  rootDragOver.value = true
+  const internal = e.dataTransfer.types.includes('application/x-node-type')
+  e.dataTransfer.dropEffect = hasSystemFiles ? 'copy' : internal ? 'move' : 'none'
+  rootDragOver.value = hasSystemFiles || internal
 }
 
 function onRootDragLeave(e) {
@@ -3304,26 +3442,26 @@ function onRootDragLeave(e) {
   }
 }
 
-async function handleRootDrop(e) {
+async function handleRootDrop(e, dest = sectionPath('general')) {
   rootDragOver.value = false
   if (!store.vaultPath) return
   // System file drop (from OS file manager) — files have a .path property in Electron
   if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-    await copySystemFilesToDir(e.dataTransfer.files, store.vaultPath)
+    await copySystemFilesToDir(e.dataTransfer.files, dest)
     return
   }
   // Internal tree node move
   const sourcePath = e.dataTransfer.getData('text/plain')
   if (!sourcePath) return
-  handleMoveItem(sourcePath, store.vaultPath)
+  if (e.dataTransfer.types.includes('application/x-node-type')) await handleMoveItem(sourcePath, dest)
 }
 
-async function handleTreePaste(e) {
-  if (!store.vaultPath) return
+async function handleTreePaste(e, dest = sectionPath('general')) {
+  if (!store.vaultPath || isWikiPath(dest)) return
   const files = e.clipboardData?.files
   if (files && files.length > 0) {
     e.preventDefault()
-    await copySystemFilesToDir(files, store.vaultPath)
+    await copySystemFilesToDir(files, dest)
   }
 }
 
@@ -3425,28 +3563,23 @@ function fileTypeIcon(name, color, active = false) {
   ])
 }
 
-// Per-file hover palette (matches NewsView / Skills / Tools / MCP / Chat tree).
-const DOC_HOVER_GRADIENTS = [
-  'linear-gradient(135deg, #1E3A5F 0%, #2563EB 60%, #3B82F6 100%)',
-  'linear-gradient(135deg, #4C1D95 0%, #7C3AED 60%, #8B5CF6 100%)',
-  'linear-gradient(135deg, #065F46 0%, #059669 60%, #10B981 100%)',
-  'linear-gradient(135deg, #92400E 0%, #D97706 60%, #F59E0B 100%)',
-  'linear-gradient(135deg, #991B1B 0%, #DC2626 60%, #EF4444 100%)',
-  'linear-gradient(135deg, #164E63 0%, #0891B2 60%, #06B6D4 100%)',
-  'linear-gradient(135deg, #713F12 0%, #CA8A04 60%, #EAB308 100%)',
-  'linear-gradient(135deg, #831843 0%, #BE185D 60%, #EC4899 100%)',
-]
-function _docHoverGradient(pathOrIdx) {
-  // Sequential index → clean color cycle (no birthday-paradox clustering).
-  if (typeof pathOrIdx === 'number') {
-    return DOC_HOVER_GRADIENTS[((pathOrIdx % DOC_HOVER_GRADIENTS.length) + DOC_HOVER_GRADIENTS.length) % DOC_HOVER_GRADIENTS.length]
-  }
-  const path = pathOrIdx
-  if (!path) return DOC_HOVER_GRADIENTS[0]
-  let hash = 0
-  for (let i = 0; i < path.length; i++) hash = ((hash << 5) - hash + path.charCodeAt(i)) | 0
-  return DOC_HOVER_GRADIENTS[Math.abs(hash) % DOC_HOVER_GRADIENTS.length]
-}
+const SourceStateDot = defineComponent({
+  name: 'SourceStateDot',
+  props: { state: String },
+  setup(props) {
+    const { t } = useI18n()
+    return () => {
+      if (props.state !== 'new' && props.state !== 'updated') return null
+      const label = t(props.state === 'new' ? 'aidoc.stateNew' : 'aidoc.stateUpdated')
+      return h('span', {
+        class: ['aidoc-source-state', { 'aidoc-source-state--updated': props.state === 'updated' }],
+        role: 'img',
+        'aria-label': label,
+        title: label,
+      })
+    }
+  },
+})
 
 // ── TreeNode: recursive file tree component ──
 const TreeNode = defineComponent({
@@ -3456,9 +3589,11 @@ const TreeNode = defineComponent({
     depth: Number,
     activePath: String,
     expandedFolders: Object,
+    sourceStates: Object,
+    readonly: Boolean,
     index: { type: Number, default: 0 },
   },
-  emits: ['select-file', 'toggle-folder', 'delete-item', 'move-item', 'copy-files', 'context-menu'],
+  emits: ['select-file', 'toggle-folder', 'drag-item', 'move-item', 'copy-files', 'context-menu'],
   setup(props, { emit }) {
     const hovered = ref(false)
     const dragOver = ref(false)
@@ -3472,9 +3607,10 @@ const TreeNode = defineComponent({
       const children = []
 
       // Drag-and-drop event handlers
-      const dragEvents = {
+      const dragEvents = props.readonly ? {} : {
         draggable: true,
         onDragstart: (e) => {
+          emit('drag-item', props.node.path)
           e.dataTransfer.setData('text/plain', props.node.path)
           e.dataTransfer.setData('application/x-node-type', props.node.type)
           e.dataTransfer.effectAllowed = 'move'
@@ -3482,11 +3618,13 @@ const TreeNode = defineComponent({
         },
         onDragend: (e) => {
           e.currentTarget.classList.remove('tree-dragging')
+          emit('drag-item', '')
+          dropSection.value = ''
         },
       }
 
       // Drop target events (folders only)
-      if (isDir) {
+      if (isDir && !props.readonly) {
         dragEvents.onDragover = (e) => {
           e.preventDefault()
           const hasSystemFiles = e.dataTransfer.types.includes('Files')
@@ -3511,7 +3649,7 @@ const TreeNode = defineComponent({
           }
           // Internal tree node move
           const sourcePath = e.dataTransfer.getData('text/plain')
-          if (!sourcePath) return
+          if (!sourcePath || !e.dataTransfer.types.includes('application/x-node-type')) return
           // Prevent dropping onto self or into own subtree
           if (sourcePath === destFolder || destFolder.startsWith(sourcePath + '/')) return
           emit('move-item', sourcePath, destFolder)
@@ -3520,7 +3658,7 @@ const TreeNode = defineComponent({
 
       // Row background: drag-over highlight takes priority
       const isHovered = hovered.value && !isActive
-      let rowBg = (isActive || isHovered) ? _docHoverGradient(props.index) : 'transparent'
+      let rowBg = (isActive || isHovered) ? documentRowGradient(props.index) : 'transparent'
       if (dragOver.value && isDir) rowBg = 'rgba(0, 122, 255, 0.12)'
       const isDark = isActive || (isHovered && !(dragOver.value && isDir))
       const showRowBg = isActive || isHovered || (dragOver.value && isDir)
@@ -3531,7 +3669,7 @@ const TreeNode = defineComponent({
       // along the right edge of items in the prior implementation.
       children.push(
         h('div', {
-          class: 'flex items-center gap-2 py-1.5 pr-2 cursor-pointer group relative',
+          class: 'document-tree-row flex items-center gap-2 py-1.5 pr-2 cursor-pointer group relative',
           style: {
             paddingLeft: indent + 'px',
             color: isDark ? '#fff' : '#6B7280',
@@ -3592,6 +3730,7 @@ const TreeNode = defineComponent({
             class: 'truncate flex-1',
             style: { fontWeight: isDir ? '600' : '400' }
           }, props.node.name),
+          isDir ? null : h(SourceStateDot, { state: lookupSourceState(props.sourceStates, props.node.path) }),
         ])
       )
 
@@ -3607,9 +3746,11 @@ const TreeNode = defineComponent({
               depth: props.depth + 1,
               activePath: props.activePath,
               expandedFolders: props.expandedFolders,
+              sourceStates: props.sourceStates,
+              readonly: props.readonly,
               'onSelect-file': (p, n) => emit('select-file', p, n),
               'onToggle-folder': (p) => emit('toggle-folder', p),
-              'onDelete-item': (p) => emit('delete-item', p),
+              'onDrag-item': (p) => emit('drag-item', p),
               'onMove-item': (src, dest) => emit('move-item', src, dest),
               'onCopy-files': (paths, dest) => emit('copy-files', paths, dest),
               'onContext-menu': (e, node) => emit('context-menu', e, node),
@@ -3627,19 +3768,6 @@ defineExpose({ docTreeCollapsed })
 </script>
 
 <style>
-.prose-obsidian {
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-body);
-  line-height: 1.75;
-  color: #1A1A1A;
-  width: 95%;
-  max-width: 95%;
-  outline: none;
-  cursor: text;
-}
-.prose-obsidian:focus {
-  outline: none;
-}
 .html-wv-toolbar {
   display: flex;
   align-items: center;
@@ -3737,187 +3865,6 @@ defineExpose({ docTreeCollapsed })
   word-wrap: break-word;
   overflow-wrap: break-word;
 }
-.prose-obsidian h1 { font-family: 'Inter', serif; font-size: var(--fs-page-title); font-weight: 700; margin: 0 0 16px; color: #1A1A1A; border-bottom: 1px solid #E5E5EA; padding-bottom: 8px; }
-.prose-obsidian h2 { font-family: 'Inter', serif; font-size: var(--fs-section); font-weight: 600; margin: 28px 0 12px; color: #1A1A1A; }
-.prose-obsidian h3 { font-family: 'Inter', serif; font-size: var(--fs-subtitle); font-weight: 600; margin: 24px 0 8px; color: #1A1A1A; }
-.prose-obsidian p { margin: 0 0 12px; }
-.prose-obsidian ul, .prose-obsidian ol { margin: 0 0 12px; padding-left: 24px; }
-.prose-obsidian li { margin: 4px 0; }
-.prose-obsidian code {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 0.875em;
-  background: #F5F5F5;
-  padding: 2px 6px;
-  border-radius: 4px;
-  color: #5856D6;
-}
-.prose-obsidian pre {
-  background: #1C1C1E;
-  color: #E5E5EA;
-  padding: 16px;
-  border-radius: 12px;
-  overflow-x: auto;
-  margin: 0 0 16px;
-  font-size: var(--fs-secondary);
-  line-height: 1.5;
-}
-.prose-obsidian pre code {
-  background: none;
-  padding: 0;
-  color: inherit;
-  font-size: inherit;
-}
-.prose-obsidian blockquote {
-  border-left: 3px solid #007AFF;
-  margin: 0 0 12px;
-  padding: 8px 16px;
-  color: #6B7280;
-  background: #F2F2F7;
-  border-radius: 0 8px 8px 0;
-}
-.prose-obsidian a { color: #007AFF; text-decoration: none; }
-.prose-obsidian a:hover { text-decoration: underline; }
-.prose-obsidian hr { border: none; border-top: 1px solid #E5E5EA; margin: 24px 0; }
-.prose-obsidian table { border-collapse: collapse; margin: 0 0 16px; width: 100%; font-size: var(--fs-body); }
-.prose-obsidian th, .prose-obsidian td { border: 1px solid #E5E5EA; padding: 8px 12px; text-align: left; vertical-align: top; }
-.prose-obsidian th { background: #F9F9F9; font-weight: 600; }
-.prose-obsidian tbody tr:nth-child(even) td { background: #FAFAFA; }
-.prose-obsidian img { max-width: 100%; border-radius: 8px; }
-
-/* ── Properties (YAML frontmatter) ── */
-.prose-obsidian .doc-properties {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 4px 16px;
-  padding: 12px 16px;
-  margin: 0 0 24px;
-  border: 1px solid #E5E5EA;
-  border-radius: 8px;
-  background: #FAFAFA;
-  font-size: var(--fs-secondary);
-}
-.prose-obsidian .doc-properties .prop-row { display: contents; }
-.prose-obsidian .doc-properties .prop-key { color: #6B7280; font-weight: 500; }
-.prose-obsidian .doc-properties .prop-val { color: #1A1A1A; display: flex; flex-wrap: wrap; gap: 4px; }
-.prose-obsidian .doc-properties .prop-tag {
-  display: inline-block;
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: #E0EBFF;
-  color: #1E40AF;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-/* ── Wikilinks ── */
-.prose-obsidian a.wikilink {
-  color: #6F4FB8;
-  text-decoration: none;
-  border-bottom: 1px dashed #C7B7E8;
-  cursor: pointer;
-}
-.prose-obsidian a.wikilink:hover { background: #F4EEFB; border-bottom-style: solid; }
-
-/* ── Highlights (==text==) ── */
-.prose-obsidian mark { background: #FEF08A; color: inherit; padding: 0 2px; border-radius: 2px; }
-
-/* ── Mermaid container ── */
-.prose-obsidian pre.mermaid {
-  background: transparent;
-  border: 1px solid #E5E5EA;
-  border-radius: 10px;
-  padding: 16px;
-  margin: 0 0 16px;
-  text-align: center;
-  overflow-x: auto;
-}
-.prose-obsidian pre.mermaid svg { max-width: 100%; height: auto; }
-
-/* ── Callouts (Obsidian-style) ── */
-.prose-obsidian .callout {
-  border: 1px solid;
-  border-left-width: 4px;
-  border-radius: 8px;
-  padding: 10px 14px;
-  margin: 0 0 14px;
-  background: var(--cb-bg, #F2F6FB);
-  border-color: var(--cb-border, #BFD7F0);
-}
-.prose-obsidian .callout-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  color: var(--cb-fg, #1E40AF);
-  margin-bottom: 4px;
-}
-.prose-obsidian .callout-body { color: #1A1A1A; }
-.prose-obsidian .callout-body > :first-child { margin-top: 0; }
-.prose-obsidian .callout-body > :last-child { margin-bottom: 0; }
-.prose-obsidian .callout-icon {
-  width: 16px; height: 16px; flex-shrink: 0;
-  background-color: currentColor;
-  -webkit-mask-position: center; mask-position: center;
-  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
-  -webkit-mask-size: contain; mask-size: contain;
-}
-.prose-obsidian .callout-note,
-.prose-obsidian .callout-info { --cb-bg:#EFF4FB; --cb-border:#9EC1EA; --cb-fg:#1D4ED8; }
-.prose-obsidian .callout-tip,
-.prose-obsidian .callout-hint,
-.prose-obsidian .callout-success,
-.prose-obsidian .callout-check,
-.prose-obsidian .callout-done { --cb-bg:#E8F8EE; --cb-border:#86CFA1; --cb-fg:#15803D; }
-.prose-obsidian .callout-warning,
-.prose-obsidian .callout-caution,
-.prose-obsidian .callout-attention { --cb-bg:#FEF7E6; --cb-border:#F5C97D; --cb-fg:#B45309; }
-.prose-obsidian .callout-danger,
-.prose-obsidian .callout-error,
-.prose-obsidian .callout-failure,
-.prose-obsidian .callout-fail,
-.prose-obsidian .callout-bug { --cb-bg:#FEEBEB; --cb-border:#F1A1A1; --cb-fg:#B91C1C; }
-.prose-obsidian .callout-abstract,
-.prose-obsidian .callout-summary,
-.prose-obsidian .callout-tldr { --cb-bg:#EAF6F8; --cb-border:#7DC9D1; --cb-fg:#0E7490; }
-.prose-obsidian .callout-question,
-.prose-obsidian .callout-help,
-.prose-obsidian .callout-faq { --cb-bg:#FFF7E6; --cb-border:#F1C56B; --cb-fg:#9A6700; }
-.prose-obsidian .callout-example { --cb-bg:#F3EAFC; --cb-border:#C4A5E8; --cb-fg:#6B21A8; }
-.prose-obsidian .callout-quote,
-.prose-obsidian .callout-cite { --cb-bg:#F4F4F5; --cb-border:#A1A1AA; --cb-fg:#3F3F46; }
-.prose-obsidian .callout-todo { --cb-bg:#EFF4FB; --cb-border:#9EC1EA; --cb-fg:#1D4ED8; }
-
-/* Callout icons (encoded SVGs as CSS masks). */
-.prose-obsidian .callout-note .callout-icon,
-.prose-obsidian .callout-info .callout-icon,
-.prose-obsidian .callout-todo .callout-icon { -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='12' y1='16' x2='12' y2='12'/><line x1='12' y1='8' x2='12.01' y2='8'/></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='12' y1='16' x2='12' y2='12'/><line x1='12' y1='8' x2='12.01' y2='8'/></svg>"); }
-.prose-obsidian .callout-tip .callout-icon,
-.prose-obsidian .callout-hint .callout-icon,
-.prose-obsidian .callout-success .callout-icon,
-.prose-obsidian .callout-check .callout-icon,
-.prose-obsidian .callout-done .callout-icon { -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>"); }
-.prose-obsidian .callout-warning .callout-icon,
-.prose-obsidian .callout-caution .callout-icon,
-.prose-obsidian .callout-attention .callout-icon { -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><path d='M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'/><line x1='12' y1='9' x2='12' y2='13'/><line x1='12' y1='17' x2='12.01' y2='17'/></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><path d='M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'/><line x1='12' y1='9' x2='12' y2='13'/><line x1='12' y1='17' x2='12.01' y2='17'/></svg>"); }
-.prose-obsidian .callout-danger .callout-icon,
-.prose-obsidian .callout-error .callout-icon,
-.prose-obsidian .callout-failure .callout-icon,
-.prose-obsidian .callout-fail .callout-icon,
-.prose-obsidian .callout-bug .callout-icon { -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='15' y1='9' x2='9' y2='15'/><line x1='9' y1='9' x2='15' y2='15'/></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='15' y1='9' x2='9' y2='15'/><line x1='9' y1='9' x2='15' y2='15'/></svg>"); }
-.prose-obsidian .callout-abstract .callout-icon,
-.prose-obsidian .callout-summary .callout-icon,
-.prose-obsidian .callout-tldr .callout-icon { -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><line x1='8' y1='6' x2='21' y2='6'/><line x1='8' y1='12' x2='21' y2='12'/><line x1='8' y1='18' x2='21' y2='18'/><line x1='3' y1='6' x2='3.01' y2='6'/><line x1='3' y1='12' x2='3.01' y2='12'/><line x1='3' y1='18' x2='3.01' y2='18'/></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><line x1='8' y1='6' x2='21' y2='6'/><line x1='8' y1='12' x2='21' y2='12'/><line x1='8' y1='18' x2='21' y2='18'/><line x1='3' y1='6' x2='3.01' y2='6'/><line x1='3' y1='12' x2='3.01' y2='12'/><line x1='3' y1='18' x2='3.01' y2='18'/></svg>"); }
-.prose-obsidian .callout-question .callout-icon,
-.prose-obsidian .callout-help .callout-icon,
-.prose-obsidian .callout-faq .callout-icon { -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><path d='M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3'/><line x1='12' y1='17' x2='12.01' y2='17'/></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><path d='M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3'/><line x1='12' y1='17' x2='12.01' y2='17'/></svg>"); }
-.prose-obsidian .callout-example .callout-icon { -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><polygon points='12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2'/></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><polygon points='12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2'/></svg>"); }
-.prose-obsidian .callout-quote .callout-icon,
-.prose-obsidian .callout-cite .callout-icon { -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'><path d='M9 7H5a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2v2a4 4 0 0 1-4 4v2a6 6 0 0 0 6-6V9a2 2 0 0 0-2-2zm12 0h-4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2v2a4 4 0 0 1-4 4v2a6 6 0 0 0 6-6V9a2 2 0 0 0-2-2z'/></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'><path d='M9 7H5a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2v2a4 4 0 0 1-4 4v2a6 6 0 0 0 6-6V9a2 2 0 0 0-2-2zm12 0h-4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2v2a4 4 0 0 1-4 4v2a6 6 0 0 0 6-6V9a2 2 0 0 0-2-2z'/></svg>"); }
-
-/* ── Footnote refs/section ── */
-.prose-obsidian sup.footnote-ref a { color: #007AFF; text-decoration: none; font-size: 0.78em; }
-.prose-obsidian section.footnotes { margin-top: 32px; padding-top: 16px; border-top: 1px solid #E5E5EA; font-size: var(--fs-secondary); color: #4B5563; }
-.prose-obsidian section.footnotes ol { padding-left: 20px; }
 
 /* ── Context menu ── */
 .notes-ctx-overlay {
@@ -4158,6 +4105,17 @@ defineExpose({ docTreeCollapsed })
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.aidoc-source-state {
+  flex-shrink: 0;
+  width: 0.4375rem;
+  height: 0.4375rem;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-full);
+  background: var(--accent);
+}
+.aidoc-source-state--updated {
+  background: transparent;
+}
 .doc-folder-badge {
   flex-shrink: 0;
   padding: 0.125rem 0.4375rem;
@@ -4212,33 +4170,6 @@ defineExpose({ docTreeCollapsed })
 .doc-tree-icon-btn:hover {
   background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
 }
-.doc-tree-expand-tab {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  transform: translateY(-50%);
-  /* Sit above the doc header so the toggle stays clickable whether the user
-     is in standard or focus mode. Modal backdrops (200+) still cover it. */
-  z-index: 50;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.5rem;
-  height: 3rem;
-  border: none;
-  border-radius: 0 0.5rem 0.5rem 0;
-  background: linear-gradient(135deg, #0F0F0F 0%, #1A1A1A 40%, #374151 100%);
-  color: #FFFFFF;
-  cursor: grab;
-  box-shadow: 2px 0 8px rgba(0,0,0,0.12);
-  transition: width 0.15s ease, background 0.15s ease;
-}
-.doc-tree-expand-tab:active { cursor: grabbing; }
-.doc-tree-expand-tab:hover {
-  width: 1.875rem;
-  background: linear-gradient(135deg, #1A1A1A 0%, #2D2D2D 40%, #4B5563 100%);
-}
-
 /* ── AI Doc toggle button ── */
 .ai-doc-toggle-btn {
   display: inline-flex;
@@ -4599,5 +4530,82 @@ defineExpose({ docTreeCollapsed })
 .ai-edit-highlight-fade {
   background: transparent;
   border-color: transparent;
+}
+</style>
+
+<style scoped>
+.doc-space-toolbar,
+.doc-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.doc-space-toolbar {
+  justify-content: space-between;
+  padding: 0.375rem 0.65rem;
+  color: var(--text-primary);
+  font-size: var(--fs-body);
+  font-weight: 600;
+}
+
+.doc-section {
+  margin: 0 0.5rem;
+  padding: 0.3rem 0;
+}
+
+.doc-section + .doc-section {
+  border-top: 1px solid var(--border);
+}
+
+.doc-section-heading {
+  width: 100%;
+  padding: 0.45rem 0.35rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  text-align: start;
+  color: var(--text-primary);
+  font-size: var(--fs-secondary);
+}
+
+.doc-section-heading > svg {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.doc-section-heading:hover {
+  background: var(--bg-hover);
+}
+
+.doc-section-current,
+.doc-section-current > svg,
+.doc-section-target,
+.doc-section-target > svg {
+  color: var(--accent-hover);
+}
+
+.doc-section-target {
+  background: var(--accent-light);
+  border-color: var(--accent);
+}
+
+.doc-section-copy {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.doc-section-copy > span,
+.doc-readonly-label,
+.doc-move-feedback {
+  color: var(--text-secondary);
+  font-size: var(--fs-small);
+}
+
+.doc-move-feedback {
+  padding: 0.55rem 0.7rem;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
 }
 </style>

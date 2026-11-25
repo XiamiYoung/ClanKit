@@ -1,4 +1,4 @@
-import { defineConfig, mergeConfig } from 'vitest/config'
+import { configDefaults, defineConfig, mergeConfig } from 'vitest/config'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import viteConfig from './vite.config.js'
@@ -18,6 +18,7 @@ export default mergeConfig(
   viteConfig,
   defineConfig({
     test: {
+      exclude: [...configDefaults.exclude, '**/.claude/worktrees/**', '**/.worktrees/**'],
       // Hook Module.prototype.require BEFORE every test file's top-level body
       // so `require('electron')` is intercepted regardless of whether it goes
       // through Vitest's transformer, Node's native CJS loader, or a

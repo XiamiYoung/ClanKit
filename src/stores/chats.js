@@ -6,6 +6,7 @@ import { en, zh } from '../i18n'
 import { parseToolLogBlock, deduplicateToolSegments } from '../utils/parseToolLog'
 import { mergeContextMetrics } from '../utils/contextMetricsMerge'
 import { PREVIEW_LIMITS, isLimitEnforced } from '../utils/guestLimits'
+import { isAiDocEnabledForChat } from '../utils/aidocMeta'
 
 const NEW_CHAT_TITLES = new Set([
   en.chats.newChat,
@@ -106,6 +107,7 @@ export const useChatsStore = defineStore('chats', () => {
     if (chat.maxAgentRounds === undefined) chat.maxAgentRounds = null  // null = use default (10)
     if (chat.usage === undefined) chat.usage = null  // null = no usage data yet
     if (chat.mode === undefined) chat.mode = 'chat'
+    if (chat.useAiDoc === undefined) chat.useAiDoc = true
     if (chat.modeTransitions === undefined) chat.modeTransitions = []
     if (chat.modeTransitionPending === undefined) chat.modeTransitionPending = null
     if (chat.productivityModeNoticeShown === undefined) chat.productivityModeNoticeShown = false
@@ -439,6 +441,7 @@ export const useChatsStore = defineStore('chats', () => {
       groupAudienceAgentIds: [],
       workingPath: null,
       mode,
+      useAiDoc: true,
       modeTransitions: [],
       modeTransitionPending: null,
       productivityModeNoticeShown: false,
@@ -502,6 +505,7 @@ export const useChatsStore = defineStore('chats', () => {
       groupAudienceAgentIds: JSON.parse(JSON.stringify(source.groupAudienceAgentIds || [])),
       workingPath: source.workingPath || null,
       mode: source.mode || 'chat',
+      useAiDoc: source.useAiDoc !== false,
       modeTransitions: [],
       modeTransitionPending: null,
       productivityModeNoticeShown: false,
@@ -984,6 +988,7 @@ export const useChatsStore = defineStore('chats', () => {
     if ('chatAllowList' in settings) chat.chatAllowList = settings.chatAllowList
     if ('chatDangerOverrides' in settings) chat.chatDangerOverrides = settings.chatDangerOverrides
     if ('maxAgentRounds' in settings) chat.maxAgentRounds = settings.maxAgentRounds
+    if ('useAiDoc' in settings) chat.useAiDoc = settings.useAiDoc !== false
     chat.updatedAt = Date.now()
     // persistChat → store:save-chat already updates the index, no separate persistIndex needed
     await persistChat(chatId)
@@ -1569,6 +1574,7 @@ export const useChatsStore = defineStore('chats', () => {
         maxAgentRounds: targetChat.maxAgentRounds ?? 10,
         mode: targetChat.mode || 'chat',
         chatWorkingPath: (targetChat.mode === 'productivity' && targetChat.workingPath) ? targetChat.workingPath : null,
+        aiDocEnabled: isAiDocEnabledForChat(targetChat),
         modeTransitionPending: targetChat.modeTransitionPending ? JSON.parse(JSON.stringify(targetChat.modeTransitionPending)) : null,
         userAgentId: targetChat.userAgentId || null,
         systemAgentId: isGroup ? null : (groupIds[0] || null),

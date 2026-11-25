@@ -277,6 +277,7 @@ ShellTool.execute(toolCallId, params, signal, onUpdate)
 - All spacing uses `rem` not `px` (exceptions: `1px` borders, SVG attributes, scrollbar width)
 - Modals are **true modals** — never close on backdrop click, always use `<Teleport to="body">`
 - Page action buttons must use `<AppButton size="compact">`, not custom CSS classes
+- AI Doc icon controls use `<AppButton size="icon">` with a 14 by 14 SVG, a tooltip, and an accessible name. Keep visible text off the buttons, including Close in the graph. In the document toolbar, place Graph before Rebuild index. Use a single rebuild entry with a red badge only while the wiki index is stale. Open the white graph overlay centered in the application viewport, with its initial size based on that viewport. Prioritize hovered and search-matched node labels when avoiding label overlap. Keep text inside nodes legible at supported zoom levels. Let it move and resize across the application viewport. Drag by the title bar, resize from the lower right, and close from the top right.
 
 ---
 

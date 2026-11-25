@@ -9,6 +9,7 @@ import { parseMentions } from '../utils/mentions'
 import { mergeContextMetrics } from '../utils/contextMetricsMerge'
 import { useI18n } from '../i18n/useI18n'
 import { useInterrupt } from './useInterrupt'
+import { isAiDocEnabledForChat } from '../utils/aidocMeta'
 
 /**
  * Build a tool execution log string from tool segments.
@@ -492,6 +493,7 @@ export function useSendMessage({
           maxAgentRounds: targetChat.maxAgentRounds ?? 10,
           mode: targetChat.mode || 'chat',
           chatWorkingPath: (targetChat.mode === 'productivity' && targetChat.workingPath) ? targetChat.workingPath : null,
+          aiDocEnabled: isAiDocEnabledForChat(targetChat),
           modeTransitionPending: targetChat.modeTransitionPending ? JSON.parse(JSON.stringify(targetChat.modeTransitionPending)) : null,
           userAgentId: targetChat.userAgentId || null,
           systemAgentId: isGroup ? null : (activeSystemAgentIds.value[0] || targetChat.systemAgentId || null),
@@ -763,6 +765,7 @@ export function useSendMessage({
         maxAgentRounds: targetChat.maxAgentRounds ?? 10,
         mode: targetChat.mode || 'chat',
         chatWorkingPath: (targetChat.mode === 'productivity' && targetChat.workingPath) ? targetChat.workingPath : null,
+        aiDocEnabled: isAiDocEnabledForChat(targetChat),
         modeTransitionPending: targetChat.modeTransitionPending ? JSON.parse(JSON.stringify(targetChat.modeTransitionPending)) : null,
         userAgentId: targetChat.userAgentId || null,
         systemAgentId: isGroup ? null : (activeSystemAgentIds.value[0] || targetChat.systemAgentId || null),

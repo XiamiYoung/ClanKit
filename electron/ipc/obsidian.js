@@ -11,6 +11,7 @@ const { logger } = require('../logger')
 const ds = require('../lib/dataStore')
 const winRef = require('../lib/windowRef')
 const fh = require('../lib/fileHelpers')
+const { AIDOC_FOLDERS, resolveAiDocRoot, classifyAiDocPath, ensureAiDocLayout } = require('../lib/aidocLayout')
 
 // Normalize path separators
 function toLinuxPath(p) {
@@ -111,12 +112,36 @@ async function _probeSingle(rawPath) {
     : { openable: false, reason: 'binary_content', size: stat.size }
 }
 
-function register() {
-  const p = () => ds.paths()
+// Best-effort: a bad path must never fail the config save/get.
+function _ensureLayoutSafe(docPath, dataPath) {
+  try {
+    ensureAiDocLayout(resolveAiDocRoot({ DoCPath: docPath, dataPath }))
+  } catch (err) {
+    logger.warn('[obsidian] ensureAiDocLayout failed:', err.message)
+  }
+}
+
+function registerHandlers(ipc, dataStore) {
+  const p = () => dataStore.paths()
+
+  function assertDocMutationAllowed(target, protectRoots = false) {
+    const paths = p()
+    const config = dataStore.readJSON(paths.CONFIG_FILE, {}) || {}
+    const root = resolveAiDocRoot({ DoCPath: config.DoCPath, dataPath: paths.DATA_DIR })
+    if (!root) return
+    const section = classifyAiDocPath(root, target)
+    if (section === AIDOC_FOLDERS.WIKI) throw new Error('Knowledge pages are read-only')
+    if (protectRoots && section) {
+      const relative = path.relative(path.resolve(root), path.resolve(target)).toLowerCase()
+      if (!relative || Object.values(AIDOC_FOLDERS).includes(relative)) {
+        throw new Error('This document section is managed by AI Doc')
+      }
+    }
+  }
 
   // Config persistence — DoCPath stored in config.json
-  ipcMain.handle('obsidian:get-config', async () => {
-    const cfg = await ds.readJSONAsync(p().CONFIG_FILE, {})
+  ipc.handle('obsidian:get-config', async () => {
+    const cfg = await dataStore.readJSONAsync(p().CONFIG_FILE, {})
     let vaultPath = cfg.DoCPath || ''
     // Auto-initialize to default aidoc path if not set
     if (!vaultPath) {
@@ -126,25 +151,27 @@ function register() {
         try { fs.mkdirSync(vaultPath, { recursive: true }) } catch {}
         // Persist so it's used next time
         cfg.DoCPath = vaultPath
-        ds.writeJSON(p().CONFIG_FILE, cfg)
+        dataStore.writeJSON(p().CONFIG_FILE, cfg)
       }
     }
+    if (vaultPath) _ensureLayoutSafe(vaultPath, p().DATA_DIR)
     return { vaultPath, lastOpenedDoc: cfg.docsLastOpenedDoc || null }
   })
 
-  ipcMain.handle('obsidian:save-config', async (_, config) => {
-    const existing = ds.readJSON(p().CONFIG_FILE, {})
+  ipc.handle('obsidian:save-config', async (_, config) => {
+    const existing = dataStore.readJSON(p().CONFIG_FILE, {})
     if ('vaultPath' in config) existing.DoCPath = config.vaultPath || ''
     if ('lastOpenedDoc' in config) {
       if (config.lastOpenedDoc) existing.docsLastOpenedDoc = config.lastOpenedDoc
       else delete existing.docsLastOpenedDoc
     }
-    ds.writeJSON(p().CONFIG_FILE, existing)
+    dataStore.writeJSON(p().CONFIG_FILE, existing)
+    if ('vaultPath' in config) _ensureLayoutSafe(existing.DoCPath, p().DATA_DIR)
     return true
   })
 
   // Folder picker
-  ipcMain.handle('obsidian:pick-folder', async () => {
+  ipc.handle('obsidian:pick-folder', async () => {
     if (fh.isFilePickerOpen()) return null
     fh.setFilePickerOpen(true)
     try {
@@ -160,18 +187,21 @@ function register() {
   })
 
   // Read directory tree (recursive)
-  ipcMain.handle('obsidian:read-tree', (_, rawDir) => {
+  ipc.handle('obsidian:read-tree', async (_, rawDir) => {
     const dir = toLinuxPath(rawDir)
+    if (!dir) return []
     const SKIP_DIRS = new Set(['$RECYCLE.BIN', 'System Volume Information', '$WinREAgent', 'Recovery', 'node_modules'])
     const MAX_DEPTH = 10
 
-    function readDir(dirPath, depth) {
+    async function readDir(dirPath, depth) {
       if (depth > MAX_DEPTH) return []
       let entries
       try {
-        if (!fs.existsSync(dirPath)) return []
-        entries = fs.readdirSync(dirPath, { withFileTypes: true })
-      } catch { return [] }
+        entries = await fsp.readdir(dirPath, { withFileTypes: true })
+      } catch (err) {
+        if (depth > 0) return []
+        throw err
+      }
       const items = []
       const sorted = entries
         .filter(e => !e.name.startsWith('.') && !SKIP_DIRS.has(e.name))
@@ -183,7 +213,7 @@ function register() {
       for (const entry of sorted) {
         const fullPath = path.join(dirPath, entry.name)
         if (entry.isDirectory()) {
-          const children = readDir(fullPath, depth + 1)
+          const children = await readDir(fullPath, depth + 1)
           items.push({ name: entry.name, path: fullPath, type: 'dir', children })
         } else {
           // All files are returned. The renderer filters the tree by probing
@@ -195,16 +225,13 @@ function register() {
       return items
     }
 
-    try { return readDir(dir, 0) } catch (err) {
-      logger.error('obsidian:read-tree error', err.message)
-      return []
-    }
+    return readDir(dir, 0)
   })
 
   // Async read with 20MB stat precheck. Sync readFileSync used to block the
   // main process event loop on slow/stub files (OneDrive placeholders, hangs),
   // defeating the renderer-side timeout. Async + stat guard fixes both.
-  ipcMain.handle('obsidian:read-file', async (_, rawPath) => {
+  ipc.handle('obsidian:read-file', async (_, rawPath) => {
     try {
       const fp = toLinuxPath(rawPath)
       const stat = await fsp.stat(fp)
@@ -214,12 +241,16 @@ function register() {
     } catch (err) { return { error: err.message, code: 'io_error' } }
   })
 
-  ipcMain.handle('obsidian:write-file', (_, rawPath, content) => {
-    try { fs.writeFileSync(toLinuxPath(rawPath), content, 'utf8'); return { success: true } }
+  ipc.handle('obsidian:write-file', (_, rawPath, content) => {
+    try {
+      assertDocMutationAllowed(rawPath)
+      fs.writeFileSync(toLinuxPath(rawPath), content, 'utf8')
+      return { success: true }
+    }
     catch (err) { return { error: err.message } }
   })
 
-  ipcMain.handle('obsidian:read-file-binary', async (_, rawPath) => {
+  ipc.handle('obsidian:read-file-binary', async (_, rawPath) => {
     try {
       const fp = toLinuxPath(rawPath)
       const stat = await fsp.stat(fp)
@@ -229,11 +260,11 @@ function register() {
     } catch (err) { return { error: err.message, code: 'io_error' } }
   })
 
-  ipcMain.handle('obsidian:probe-file', async (_, rawPath) => _probeSingle(rawPath))
+  ipc.handle('obsidian:probe-file', async (_, rawPath) => _probeSingle(rawPath))
 
   // Batch probe — returns a dict keyed by path. Runs probes in parallel but
   // caps concurrency to avoid saturating the libuv threadpool on large vaults.
-  ipcMain.handle('obsidian:probe-files', async (_, rawPaths) => {
+  ipc.handle('obsidian:probe-files', async (_, rawPaths) => {
     if (!Array.isArray(rawPaths) || rawPaths.length === 0) return {}
     const result = {}
     const CONCURRENCY = 16
@@ -251,12 +282,16 @@ function register() {
     return result
   })
 
-  ipcMain.handle('obsidian:write-file-binary', (_, rawPath, base64) => {
-    try { fs.writeFileSync(toLinuxPath(rawPath), Buffer.from(base64, 'base64')); return { success: true } }
+  ipc.handle('obsidian:write-file-binary', (_, rawPath, base64) => {
+    try {
+      assertDocMutationAllowed(rawPath)
+      fs.writeFileSync(toLinuxPath(rawPath), Buffer.from(base64, 'base64'))
+      return { success: true }
+    }
     catch (err) { return { error: err.message } }
   })
 
-  ipcMain.handle('obsidian:read-image-base64', (_, rawPath) => {
+  ipc.handle('obsidian:read-image-base64', (_, rawPath) => {
     try {
       const filePath = toLinuxPath(rawPath)
       if (!fs.existsSync(filePath)) return { error: 'File not found' }
@@ -268,12 +303,14 @@ function register() {
     } catch (err) { return { error: err.message } }
   })
 
-  ipcMain.handle('obsidian:save-image', (_, rawDir, fileName, base64Data) => {
+  ipc.handle('obsidian:save-image', (_, rawDir, fileName, base64Data) => {
     try {
       const dir = toLinuxPath(rawDir)
       const assetsDir = path.join(dir, 'assets')
-      if (!fs.existsSync(assetsDir)) fs.mkdirSync(assetsDir, { recursive: true })
       const filePath = path.join(assetsDir, fileName)
+      assertDocMutationAllowed(dir)
+      assertDocMutationAllowed(filePath)
+      if (!fs.existsSync(assetsDir)) fs.mkdirSync(assetsDir, { recursive: true })
       const buf = Buffer.from(base64Data, 'base64')
       fs.writeFileSync(filePath, buf)
       logger.info('Saved image:', filePath, `(${buf.length} bytes)`)
@@ -284,29 +321,32 @@ function register() {
     }
   })
 
-  ipcMain.handle('obsidian:create-file', (_, rawDir, name) => {
+  ipc.handle('obsidian:create-file', (_, rawDir, name) => {
     try {
       const safeName = name.endsWith('.md') ? name : name + '.md'
       const filePath = path.join(toLinuxPath(rawDir), safeName)
+      assertDocMutationAllowed(filePath)
       if (fs.existsSync(filePath)) return { error: 'File already exists' }
       fs.writeFileSync(filePath, '', 'utf8')
       return { success: true, path: filePath }
     } catch (err) { return { error: err.message } }
   })
 
-  ipcMain.handle('obsidian:create-folder', (_, rawDir, name) => {
+  ipc.handle('obsidian:create-folder', (_, rawDir, name) => {
     try {
       const folderPath = path.join(toLinuxPath(rawDir), name)
+      assertDocMutationAllowed(folderPath)
       if (fs.existsSync(folderPath)) return { error: 'Folder already exists' }
       fs.mkdirSync(folderPath, { recursive: true })
       return { success: true, path: folderPath }
     } catch (err) { return { error: err.message } }
   })
 
-  ipcMain.handle('obsidian:create-drawio', (_, rawDir, name) => {
+  ipc.handle('obsidian:create-drawio', (_, rawDir, name) => {
     try {
       const safeName = name.endsWith('.drawio') ? name : name + '.drawio'
       const filePath = path.join(toLinuxPath(rawDir), safeName)
+      assertDocMutationAllowed(filePath)
       if (fs.existsSync(filePath)) return { error: 'File already exists' }
       const blankXml = '<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/></root></mxGraphModel>'
       fs.writeFileSync(filePath, blankXml, 'utf8')
@@ -314,10 +354,11 @@ function register() {
     } catch (err) { return { error: err.message } }
   })
 
-  ipcMain.handle('obsidian:create-docx', async (_, rawDir, name) => {
+  ipc.handle('obsidian:create-docx', async (_, rawDir, name) => {
     try {
       const safeName = name.endsWith('.docx') ? name : name + '.docx'
       const filePath = path.join(toLinuxPath(rawDir), safeName)
+      assertDocMutationAllowed(filePath)
       if (fs.existsSync(filePath)) return { error: 'File already exists' }
       const { Document, Packer, Paragraph } = require('docx')
       const doc = new Document({ sections: [{ children: [new Paragraph('')] }] })
@@ -327,10 +368,11 @@ function register() {
     } catch (err) { return { error: err.message } }
   })
 
-  ipcMain.handle('obsidian:create-xlsx', async (_, rawDir, name) => {
+  ipc.handle('obsidian:create-xlsx', async (_, rawDir, name) => {
     try {
       const safeName = name.endsWith('.xlsx') ? name : name + '.xlsx'
       const filePath = path.join(toLinuxPath(rawDir), safeName)
+      assertDocMutationAllowed(filePath)
       if (fs.existsSync(filePath)) return { error: 'File already exists' }
       const ExcelJS = require('exceljs')
       const workbook = new ExcelJS.Workbook()
@@ -341,11 +383,12 @@ function register() {
     } catch (err) { return { error: err.message } }
   })
 
-  ipcMain.handle('drawio:get-frame-path', () => path.join(__dirname, '..', 'drawio-frame.html'))
-  ipcMain.handle('drawio:get-preload-path', () => path.join(__dirname, '..', 'drawio-preload.js'))
+  ipc.handle('drawio:get-frame-path', () => path.join(__dirname, '..', 'drawio-frame.html'))
+  ipc.handle('drawio:get-preload-path', () => path.join(__dirname, '..', 'drawio-preload.js'))
 
-  ipcMain.handle('obsidian:delete-file', (_, rawPath) => {
+  ipc.handle('obsidian:delete-file', (_, rawPath) => {
     try {
+      assertDocMutationAllowed(rawPath, true)
       const fp = toLinuxPath(rawPath)
       const stat = fs.statSync(fp)
       if (stat.isDirectory()) fs.rmdirSync(fp)
@@ -354,7 +397,7 @@ function register() {
     } catch (err) { return { error: err.message } }
   })
 
-  ipcMain.handle('obsidian:is-dir-empty', (_, rawPath) => {
+  ipc.handle('obsidian:is-dir-empty', (_, rawPath) => {
     try {
       const fp = toLinuxPath(rawPath)
       const stat = fs.statSync(fp)
@@ -364,19 +407,22 @@ function register() {
     } catch (err) { return { error: err.message } }
   })
 
-  ipcMain.handle('obsidian:rename', (_, rawOld, rawNew) => {
+  ipc.handle('obsidian:rename', (_, rawOld, rawNew) => {
     try {
       const op = toLinuxPath(rawOld)
       const np = toLinuxPath(rawNew)
+      assertDocMutationAllowed(op, true)
+      assertDocMutationAllowed(np, true)
       if (fs.existsSync(np)) return { error: 'Target already exists' }
       fs.renameSync(op, np)
       return { success: true }
     } catch (err) { return { error: err.message } }
   })
 
-  ipcMain.handle('obsidian:copy-files-to-dir', (_, sourcePaths, rawDestDir) => {
+  ipc.handle('obsidian:copy-files-to-dir', (_, sourcePaths, rawDestDir) => {
     const results = []
     const destDir = toLinuxPath(rawDestDir)
+    try { assertDocMutationAllowed(destDir) } catch (err) { return [{ error: err.message }] }
     if (!fs.existsSync(destDir)) {
       try { fs.mkdirSync(destDir, { recursive: true }) } catch (err) { return [{ error: err.message }] }
     }
@@ -403,4 +449,8 @@ function register() {
   })
 }
 
-module.exports = { register }
+function register() {
+  registerHandlers(ipcMain, ds)
+}
+
+module.exports = { register, registerHandlers }

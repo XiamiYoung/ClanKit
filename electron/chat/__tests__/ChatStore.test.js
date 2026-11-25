@@ -165,6 +165,24 @@ describe('rowToChat / chatToRow round-trip', () => {
     expect(back.isPinned).toBe(true)
   })
 
+  it('defaults useAiDoc to true when the column is missing', () => {
+    const row = chatToRow({ id: 'x', title: 'T', createdAt: 0, updatedAt: 0 })
+    delete row.use_ai_doc
+    expect(rowToChat(row).useAiDoc).toBe(true)
+  })
+
+  it('maps useAiDoc to use_ai_doc 0/1', () => {
+    const base = { id: 'x', title: 'T', createdAt: 0, updatedAt: 0 }
+    expect(chatToRow({ ...base, useAiDoc: false }).use_ai_doc).toBe(0)
+    expect(chatToRow({ ...base, useAiDoc: true }).use_ai_doc).toBe(1)
+    expect(chatToRow(base).use_ai_doc).toBe(1)
+  })
+
+  it('round-trips useAiDoc false', () => {
+    const chat = { id: 'x', title: 'T', createdAt: 0, updatedAt: 0, useAiDoc: false }
+    expect(rowToChat(chatToRow(chat)).useAiDoc).toBe(false)
+  })
+
   it('rowToChat returns null for null', () => {
     expect(rowToChat(null)).toBeNull()
   })

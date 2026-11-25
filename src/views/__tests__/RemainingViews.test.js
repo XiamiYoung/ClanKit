@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { shallowMount } from '@vue/test-utils'
-import { ref } from 'vue'
+import { shallowMount, mount } from '@vue/test-utils'
+import { ref, nextTick } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 
 // ── Shared mocks ──
@@ -199,6 +199,20 @@ describe('ToolsView', () => {
   it('renders the tools page container', () => {
     const wrapper = shallowMount(ToolsView)
     expect(wrapper.find('.tools-page').exists()).toBe(true)
+  })
+
+  it('code tools offer no language choice and are saved as javascript', async () => {
+    mockToolsStore.saveTool = vi.fn().mockResolvedValue(undefined)
+    mockToolsStore.tools = [{ id: 'legacy', name: 'Legacy', description: 'd', type: 'code', language: 'python', code: 'return 1' }]
+    const wrapper = mount(ToolsView, { attachTo: document.body })
+    wrapper.find('.tools-card').element.click()
+    await nextTick()
+    expect(document.body.querySelector('option[value="python"]')).toBeNull()
+    const save = [...document.body.querySelectorAll('button')].find(b => b.textContent.includes('common.save'))
+    save.click()
+    await nextTick()
+    expect(mockToolsStore.saveTool).toHaveBeenCalledWith(expect.objectContaining({ type: 'code', language: 'javascript' }))
+    wrapper.unmount()
   })
 })
 

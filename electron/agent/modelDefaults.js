@@ -94,8 +94,9 @@ async function refreshFromRemote(dataDir) {
     JSON.parse(text)
     const cachedPath = path.join(dataDir, 'litellm-models.json')
     fs.writeFileSync(cachedPath, text, 'utf8')
-    // Invalidate in-memory cache so next lookup picks up new data
+    // Invalidate in-memory caches so next lookup picks up new data
     _cache = null
+    _catalog = null
   } catch (e) {
     logger.warn('[modelDefaults] remote refresh failed (will use local)', e.message)
   }
@@ -281,11 +282,40 @@ function _pickFromWhitelist(providerType, availableModelIds) {
   return null
 }
 
+// Parsed catalog plus lookup index, shared by every caller. The file is several
+// MB, so parsing it per model stalls the main process for seconds at startup.
+// Cleared by refreshFromRemote().
+let _catalog = null // { dataDir, raw, exact, bare }
+
+function _getCatalog(dataDir) {
+  if (_catalog && _catalog.dataDir === dataDir) return _catalog
+  const raw = _readRawCatalog(dataDir)
+  const exact = new Map() // lowercase key -> { meta, order }
+  const bare = new Map()  // lowercase key without provider prefix -> meta
+  let order = 0
+  for (const [key, meta] of Object.entries(raw)) {
+    if (key === 'sample_spec') continue
+    const lk = key.toLowerCase()
+    const short = lk.includes('/') ? lk.split('/').pop() : lk
+    // First entry in catalog order wins on duplicates.
+    if (!exact.has(lk)) exact.set(lk, { meta, order: order++ })
+    if (!bare.has(short)) bare.set(short, meta)
+  }
+  const catalog = { dataDir, raw, exact, bare }
+  // An empty result means nothing was readable; retry on the next call.
+  if (exact.size > 0) _catalog = catalog
+  return catalog
+}
+
 /**
  * Load full litellm catalog (not just max_output_tokens).
- * Returns raw { modelId: { ...fields } } object.
+ * Returns raw { modelId: { ...fields } } object. Callers must not mutate it.
  */
 function _loadRawCatalog(dataDir) {
+  return _getCatalog(dataDir).raw
+}
+
+function _readRawCatalog(dataDir) {
   if (dataDir) {
     const cachedPath = path.join(dataDir, 'litellm-models.json')
     try {
@@ -395,10 +425,10 @@ function lookupModelCatalog(modelId, providerType, dataDir) {
     cache_read_input_token_cost: null, cache_creation_input_token_cost: null,
   }
   if (!modelId) return empty
-  const catalog = _loadRawCatalog(dataDir)
-  if (!catalog || Object.keys(catalog).length === 0) return empty
+  const { exact, bare } = _getCatalog(dataDir)
+  if (exact.size === 0) return empty
 
-  const id = String(modelId).toLowerCase()
+  const id =String(modelId).toLowerCase()
   const litellmProvider = providerType ? PROVIDER_TO_LITELLM[providerType] : null
   const prefixed = litellmProvider ? `${litellmProvider}/${id}` : null
 
@@ -412,33 +442,18 @@ function lookupModelCatalog(modelId, providerType, dataDir) {
   })
 
   // 1. Exact match on either id or provider-prefixed id
-  for (const [key, meta] of Object.entries(catalog)) {
-    if (key === 'sample_spec') continue
-    const lk = key.toLowerCase()
-    if (lk === id || (prefixed && lk === prefixed)) return pick(meta)
-  }
+  const hits = [exact.get(id), prefixed && exact.get(prefixed)].filter(Boolean)
+  if (hits.length > 0) return pick(hits.sort((a, b) => a.order - b.order)[0].meta)
 
   // 2. Bare-id match (catalog keys like "deepseek/deepseek-chat" vs id "deepseek-chat")
-  for (const [key, meta] of Object.entries(catalog)) {
-    if (key === 'sample_spec') continue
-    const lk = key.toLowerCase()
-    const bare = lk.includes('/') ? lk.split('/').pop() : lk
-    if (bare === id) return pick(meta)
-  }
+  if (bare.has(id)) return pick(bare.get(id))
 
   // 3. Longest-prefix match against bare keys (e.g. "qwen-max-2025-01-25" matches "qwen-max")
-  let bestLen = 0
-  let bestMeta = null
-  for (const [key, meta] of Object.entries(catalog)) {
-    if (key === 'sample_spec') continue
-    const lk = key.toLowerCase()
-    const bare = lk.includes('/') ? lk.split('/').pop() : lk
-    if (id.startsWith(bare) && bare.length > bestLen) {
-      bestLen = bare.length
-      bestMeta = meta
-    }
+  for (let len = id.length - 1; len > 0; len--) {
+    const meta = bare.get(id.slice(0, len))
+    if (meta) return pick(meta)
   }
-  return bestMeta ? pick(bestMeta) : empty
+  return empty
 }
 
 /**

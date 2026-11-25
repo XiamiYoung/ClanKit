@@ -4,6 +4,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ── Platform ────────────────────────────────────────────────────────────────
   platform: process.platform,
   getLocale: () => ipcRenderer.invoke('app:get-locale'),
+  wikiWindow: {
+    open: () => ipcRenderer.invoke('wiki-window:open'),
+    onSource: callback => {
+      const listener = (_, filePath) => callback(filePath)
+      ipcRenderer.on('wiki-window:source', listener)
+      return () => ipcRenderer.removeListener('wiki-window:source', listener)
+    },
+  },
 
   // ── Storage ──────────────────────────────────────────────────────────────
   getChats: () => ipcRenderer.invoke('store:get-chats'),
@@ -192,6 +200,37 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   // ── Obsidian Vault ──────────────────────────────────────────────────────
+  aidoc: {
+    updateIndex: (options) => ipcRenderer.invoke('aidoc:index-update', options),
+    getGraph: (options) => ipcRenderer.invoke('aidoc:graph-data', options),
+    getSyncStatus: (options) => ipcRenderer.invoke('aidoc:sync-status', options),
+    resolveLink: (options) => ipcRenderer.invoke('aidoc:resolve-link', options),
+    getIngestPlan: (options) => ipcRenderer.invoke('aidoc:ingest-plan', options),
+    runIngest: (options) => ipcRenderer.invoke('aidoc:ingest-run', options),
+    stopIngest: (options) => ipcRenderer.invoke('aidoc:ingest-stop', options),
+    getIngestStatus: (options) => ipcRenderer.invoke('aidoc:ingest-status', options),
+    getSourceStates: (options) => ipcRenderer.invoke('aidoc:source-states', options),
+    getWikiPages: (options) => ipcRenderer.invoke('aidoc:wiki-pages', options),
+    categorizeWikiPages: (options) => ipcRenderer.invoke('aidoc:wiki-categorize', options),
+    stopWikiCategorize: (options) => ipcRenderer.invoke('aidoc:wiki-categorize-stop', options),
+    getWikiPage: (options) => ipcRenderer.invoke('aidoc:wiki-page', options),
+    onWikiCategorizeProgress: (cb) => {
+      const listener = (_, progress) => cb(progress)
+      ipcRenderer.on('aidoc:wiki-categorize-progress', listener)
+      return () => ipcRenderer.removeListener('aidoc:wiki-categorize-progress', listener)
+    },
+    onIngestProgress: (cb) => {
+      const listener = (_, progress) => cb(progress)
+      ipcRenderer.on('aidoc:ingest-progress', listener)
+      return () => ipcRenderer.removeListener('aidoc:ingest-progress', listener)
+    },
+    onIndexProgress: (cb) => {
+      const listener = (_, progress) => cb(progress)
+      ipcRenderer.on('aidoc:index-progress', listener)
+      return () => ipcRenderer.removeListener('aidoc:index-progress', listener)
+    },
+  },
+
   obsidian: {
     getConfig:    ()                   => ipcRenderer.invoke('obsidian:get-config'),
     saveConfig:   (config)             => ipcRenderer.invoke('obsidian:save-config', config),

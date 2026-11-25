@@ -7,6 +7,8 @@
 const fs   = require('fs')
 const path = require('path')
 const { logger } = require('../logger')
+const { AIDOC_FOLDERS, resolveAiDocRoot } = require('../lib/aidocLayout')
+const { buildWikiOverview } = require('../lib/aidocOverview')
 
 // ── Memory Helpers ───────────────────────────────────────────────────────────
 // Sections preserved when truncating large memory blobs. After the 2026-05-03
@@ -843,9 +845,20 @@ Loading a skill is cheap (returns a markdown guide); skipping it when relevant c
   const dataPath = config.dataPath || require('../lib/dataStore').paths().DATA_DIR
   // DoCPath = AI Doc folder (readable documents: md, docx, pdf, pptx, txt, etc.)
   // artifactPath = non-document output (exports, temp files, data, code snippets)
-  const aidocPath    = config.DoCPath || path.join(dataPath, 'clankit_doc')
+  // aiDocEnabled absent => on (IM bridge / scheduler / utility flows keep AI Doc guidance)
+  const aiDocOn      = config.aiDocEnabled !== false
+  const aidocPath    = resolveAiDocRoot({ ...config, dataPath })
+  let wikiOverview = ''
+  if (aiDocOn && _isProductivity) {
+    try {
+      const overview = buildWikiOverview({ dataDir: dataPath, root: aidocPath, language: config.language })
+      if (overview) wikiOverview = `\n${overview.text}\n\n`
+    } catch {
+      // Registry failures must not interrupt prompt construction.
+    }
+  }
   const artifactPath = config.artifactPath || path.join(dataPath, 'artifact')
-  const productivityWorkingPath = _isProductivity ? (config.chatWorkingPath || aidocPath) : null
+  const productivityWorkingPath = _isProductivity ? (config.chatWorkingPath || null) : null
   const skillsPath = config.skillsPath || path.join(dataPath, 'skills')
   // utilityModel fields were historically inlined into the DATA FILE ROUTING
   // prompt block. That block now lives in the clankit-config-admin built-in
@@ -859,8 +872,7 @@ This is the local data folder for the ClanKit desktop application. Visible struc
   ${dataPath}/
   ├── config.json          — App settings (API keys, models, providers, paths)
   ├── memory/              — Long-term memory store (SQLite + vector index)
-  ├── clankit_doc/         — AI Doc folder (readable documents)
-  └── artifact/            — AI-generated non-document output
+${aiDocOn ? '  ├── clankit_doc/         — AI Doc folder (general/, kb_source/, wiki/)\n' : ''}  └── artifact/            — AI-generated non-document output
 
 CLANKIT CONFIG MANAGEMENT — every config object (agents, tasks, plans, tools,
 MCP servers, knowledge bases, their categories) is managed via the
@@ -892,11 +904,15 @@ AGENT TERMINOLOGY (used by manage_agents tool):
     qualifier → it means 数字人 → use type="system".
   • type is immutable after creation; mistakes require delete + recreate.
 
-AI DOC PATH (primary directory for readable documents): ${aidocPath}
-This is where ALL readable documents live — Markdown (.md), Word (.docx), PDF (.pdf), PowerPoint (.pptx), plain text (.txt), Excel (.xlsx/.csv), HTML (.html), and similar human-readable formats. When the user asks you to create a document, report, note, summary, or any readable file, ALWAYS write it here (or a subfolder).
+${aiDocOn ? `AI DOC PATH (primary directory for readable documents): ${aidocPath}
+The AI Doc folder has three sub-folders:
+  - ${AIDOC_FOLDERS.GENERAL}/ — ordinary documents and documents generated in chats. This is where you write readable documents.
+  - ${AIDOC_FOLDERS.KB_SOURCE}/ — knowledge-base source files the user drops in. Read-only for agents: never write, edit, move, or delete anything here.
+  - ${AIDOC_FOLDERS.WIKI}/ — AI-maintained knowledge pages. Do NOT write here from normal chats.
+${wikiOverview}All readable documents live under ${aidocPath}/${AIDOC_FOLDERS.GENERAL} — Markdown (.md), Word (.docx), PDF (.pdf), PowerPoint (.pptx), plain text (.txt), Excel (.xlsx/.csv), HTML (.html), and similar human-readable formats. When the user asks you to create a document, report, note, summary, or any readable file, ALWAYS write it into ${aidocPath}/${AIDOC_FOLDERS.GENERAL} (or a subfolder of it).
 
-ARTIFACT PATH (for non-document output only): ${artifactPath}
-This is for generated files that are NOT readable documents: exports, temp files, raw data dumps, generated code snippets, binary output. Do NOT put .md, .docx, .pdf, .pptx, .txt, .html or other readable documents here. Create subdirectories as needed (e.g. ${artifactPath}/exports/). The directory is auto-created on first write.
+` : ''}ARTIFACT PATH (${aiDocOn ? 'for non-document output only' : 'for all generated files'}): ${artifactPath}
+${aiDocOn ? 'This is for generated files that are NOT readable documents: exports, temp files, raw data dumps, generated code snippets, binary output. Do NOT put .md, .docx, .pdf, .pptx, .txt, .html or other readable documents here.' : 'This is where ALL generated files go, documents included: reports, notes, summaries, exports, temp files, raw data dumps, generated code snippets, binary output.'} Create subdirectories as needed (e.g. ${artifactPath}/exports/). The directory is auto-created on first write.
 
 SKILLS PATH: ${skillsPath}
 This is the directory where installed skills live on disk. A skill is NOT a single markdown file — it is an ENTIRE FOLDER TREE with this shape:
@@ -913,15 +929,15 @@ SKILL INSTALLATION RULES:
   Then verify SKILL.md exists at the root. If the repo contains multiple skills in subfolders, clone to a temp dir and copy each skill subfolder into ${skillsPath}/ individually.
 - When the user asks you to install from a ZIP/tar.gz URL, download and extract the full archive into ${skillsPath}/<skill-name>, preserving all subdirectories.
 - When the user asks you to create a new skill from scratch, create the folder ${skillsPath}/<skill-name>/ and write SKILL.md (plus any supporting files) INSIDE it.
-- NEVER write SKILL.md or any skill files into the AI DOC PATH — skill definition files are NOT readable documents, they belong under SKILLS PATH. This is an explicit exception to the AI DOC PATH rule above.
-- After installing or creating a skill, tell the user to click Refresh on the Skills page to reload.`
+${aiDocOn ? `- NEVER write SKILL.md or any skill files into the AI DOC PATH — skill definition files are NOT readable documents, they belong under SKILLS PATH. This is an explicit exception to the AI DOC PATH rule above.
+` : ''}- After installing or creating a skill, tell the user to click Refresh on the Skills page to reload.`
 
   // ── Document Path subfolders (for file placement guidance) ──
-  // Priority: explicit obsidian vault override → aidocPath (already resolved above)
-  const effectiveDocPath = process.env.DOC_PATH || config.obsidianVaultPath || aidocPath
+  // Same root as the AI DOC PATH block so one prompt never names two general/ roots.
+  const effectiveDocPath = aidocPath
   let docSubfolders = []
   try {
-    const entries = fs.readdirSync(effectiveDocPath, { withFileTypes: true })
+    const entries = fs.readdirSync(path.join(effectiveDocPath, AIDOC_FOLDERS.GENERAL), { withFileTypes: true })
     docSubfolders = entries.filter(e => e.isDirectory()).map(e => e.name).sort()
   } catch (err) {
     // Directory may not exist yet — that's fine
@@ -931,21 +947,27 @@ SKILL INSTALLATION RULES:
     ? docSubfolders.map(f => `  - ${f}/`).join('\n')
     : '  (no subfolders yet — create as needed)'
 
-  system += `\n\nFILE PLACEMENT RULES — CRITICAL: route every file to the correct path:
-1. READABLE DOCUMENTS → AI Doc Path: ${effectiveDocPath}
+  const generalDocPath = path.join(effectiveDocPath, AIDOC_FOLDERS.GENERAL)
+  system += !aiDocOn
+    ? `\n\nFILE PLACEMENT RULES — CRITICAL:
+Every generated file — documents (.md, .docx, .pdf, .pptx, .txt, .xlsx, .csv, .html), scripts, intermediate files, exports, and binary output — goes to the Artifact Path: ${artifactPath}
+When running a script that produces a file, pass the output path as an absolute path inside the Artifact Path, not a relative path. Relative paths resolve to the shell working directory.`
+    : `\n\nFILE PLACEMENT RULES — CRITICAL: route every file to the correct path:
+1. READABLE DOCUMENTS → AI Doc general folder: ${generalDocPath}
    Includes: .md, .docx, .pdf, .pptx, .txt, .xlsx, .csv, .html and any human-readable report/note/summary.
    The FINAL output (the document the user asked for) goes here.
    Current subfolders:
 ${subfolderList}
    Choose an existing subfolder or create a new one as needed.
+   NEVER write into ${AIDOC_FOLDERS.KB_SOURCE}/ or ${AIDOC_FOLDERS.WIKI}/ — those folders are not for chat output.
 
 2. SCRIPTS & NON-DOCUMENT OUTPUT → Artifact Path: ${artifactPath}
    Includes ALL of the following, regardless of their purpose:
    - Helper/utility scripts (.py, .js, .ts, .sh, .ps1, .rb, etc.) — even if written solely to generate a document
    - Intermediate files, temp files, raw data dumps, exports, binary output
-   - Example: if you write verify_docx.py or convert.py to help produce a .docx, the .py goes here; the .docx goes to AI Doc Path above.
-   RULE: if the file is CODE (any script or program), it goes here — not in AI Doc Path.
-   IMPORTANT — when running a script that produces a document: hardcode or pass the output path as an absolute path pointing to AI Doc Path (${effectiveDocPath}), not a relative path. Relative paths resolve to the shell working directory, not the document folder.`
+   - Example: if you write verify_docx.py or convert.py to help produce a .docx, the .py goes here; the .docx goes to the AI Doc general folder above.
+   RULE: if the file is CODE (any script or program), it goes here — not in the AI Doc folder.
+   IMPORTANT — when running a script that produces a document: hardcode or pass the output path as an absolute path pointing to the AI Doc general folder (${generalDocPath}), not a relative path. Relative paths resolve to the shell working directory, not the document folder.`
 
   // Working folder context (productivity mode)
   if (_isProductivity && productivityWorkingPath) {
@@ -1040,7 +1062,7 @@ TODO LIST DISCIPLINE (non-negotiable, the user reads this panel as live status):
     }
 
     if (codeToolsList.length > 0) {
-      system += `\n\n**Code Tools** (reference implementations — use execute_shell to run):`
+      system += `\n\n**Code Tools** (executable JavaScript — call the tool to run it; no shell needed):`
       for (const t of codeToolsList) {
         system += `\n- \`code_${t.id}\` — ${t.name}${t.description ? `: ${t.description}` : ''}`
       }
