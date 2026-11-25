@@ -8,6 +8,7 @@ import { createPinia, setActivePinia } from 'pinia'
 const mockObsidianStore = {
   vaultPath: '',
   fileTree: [],
+  treeStatus: 'ready',
   activeFile: null,
   activeContent: '',
   probeCache: {},
@@ -18,6 +19,7 @@ const mockObsidianStore = {
   loadVault: vi.fn(),
   loadTree: vi.fn(),
   saveFile: vi.fn(),
+  renameItem: vi.fn(),
   readFile: vi.fn(),
   openFile: vi.fn(),
   restoreLastOpenedDoc: vi.fn(),
@@ -142,11 +144,14 @@ describe('DocsView', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     mockObsidianStore.vaultPath = ''
+    mockObsidianStore.configStatus = 'ready'
     mockObsidianStore.fileTree = []
+    mockObsidianStore.treeStatus = 'ready'
     mockObsidianStore.expandedFolders = {}
     mockObsidianStore.activeFile = null
     focusEnterWithSpy.mockClear()
     mockObsidianStore.openFile.mockClear()
+    mockObsidianStore.renameItem.mockReset().mockResolvedValue({ success: true })
     delete window.electronAPI.aidoc
   })
 
@@ -159,6 +164,14 @@ describe('DocsView', () => {
     const wrapper = shallowMount(DocsView)
     // Should show the vault description text
     expect(wrapper.text()).toContain('notes.vaultDesc')
+  })
+
+  it('shows a loading message while the workspace config is still pending', () => {
+    mockObsidianStore.configStatus = 'loading'
+    const wrapper = shallowMount(DocsView)
+    expect(wrapper.get('docs-loading-overlay-stub').attributes('label')).toBe('notes.loadingVault')
+    expect(wrapper.text()).not.toContain('notes.vaultDesc')
+    wrapper.unmount()
   })
 
   it('shows vault header when vault is loaded', () => {
@@ -174,6 +187,24 @@ describe('DocsView', () => {
     expect(wrapper.find('.doc-tree-panel').exists()).toBe(true)
   })
 
+  it.each([
+    ['loading', 'notes.loadingTree'],
+    ['error', 'notes.treeLoadFailed'],
+    ['ready', 'notes.noFilesFound'],
+  ])('shows the correct tree message when the tree status is %s', (status, message) => {
+    mockObsidianStore.vaultPath = '/some/vault'
+    mockObsidianStore.treeStatus = status
+    const wrapper = shallowMount(DocsView)
+    const panel = wrapper.get('.doc-tree-panel')
+    if (status === 'loading') {
+      expect(panel.get('[role="status"] docs-loading-overlay-stub').attributes('label')).toBe(message)
+    } else {
+      expect(panel.text()).toContain(message)
+    }
+    expect(panel.text().includes('notes.noFilesFound')).toBe(status === 'ready')
+    wrapper.unmount()
+  })
+
   it('shows source status on new and updated files in the tree and search results', async () => {
     const wrapper = mountSourceTree()
     await flushPromises()
@@ -184,6 +215,61 @@ describe('DocsView', () => {
     ])
     await wrapper.get('input.doc-filter-input').setValue('draft')
     expect(wrapper.get('.doc-search-item .aidoc-source-state').attributes('title')).toBe('aidoc.stateNew')
+    wrapper.unmount()
+  })
+
+  it('shows fixed sections and moves documents across the index boundary', async () => {
+    const wrapper = mountSourceTree()
+    await flushPromises()
+    const sidebar = wrapper.get('.doc-tree-panel')
+    expect(sidebar.findAll('.doc-section-heading').map(heading => heading.get('strong').text())).toEqual([
+      'aidoc.myFiles', 'aidoc.knowledgeSources', 'aidoc.knowledgePages',
+    ])
+    expect(sidebar.text()).not.toContain('kb_source')
+
+    const sourceSection = sidebar.get('[data-testid="doc-section-kb_source"]')
+    const transfer = {
+      types: ['application/x-node-type', 'text/plain'],
+      files: [],
+      getData: () => sourceTreeFiles[4].path,
+    }
+    await sourceSection.trigger('dragover', { dataTransfer: transfer })
+    expect(sourceSection.text()).toContain('aidoc.dropIntoScope')
+    await sourceSection.trigger('drop', { dataTransfer: transfer })
+    await flushPromises()
+    expect(mockObsidianStore.renameItem).toHaveBeenCalledWith(sourceTreeFiles[4].path, 'C:/Vault/kb_source/extra.md')
+    expect(sidebar.get('[role="status"]').text()).toBe('aidoc.movedIntoScope')
+
+    await sidebar.get('[data-testid="doc-section-general"]').trigger('drop', {
+      dataTransfer: { ...transfer, getData: () => sourceTreeFiles[0].path },
+    })
+    await flushPromises()
+    expect(mockObsidianStore.renameItem).toHaveBeenLastCalledWith(sourceTreeFiles[0].path, 'C:/Vault/general/draft.md')
+    expect(sidebar.get('[role="status"]').text()).toBe('aidoc.movedOutOfScope')
+    wrapper.unmount()
+  })
+
+  it('renders knowledge pages read-only and rejects drops into the knowledge pages section', async () => {
+    const root = '/some/vault'
+    const page = { path: root + '/wiki/Page.md', name: 'Page.md', type: 'file', content: '# Page' }
+    mockObsidianStore.vaultPath = root
+    mockObsidianStore.fileTree = [{ path: root + '/wiki', name: 'wiki', type: 'dir', children: [page] }]
+    mockObsidianStore.activeFile = page
+    const wrapper = shallowMount(DocsView, {
+      global: { stubs: { TreeNode: false, Teleport: true }, directives: { tooltip: {} } },
+    })
+    expect(wrapper.get('.prose-obsidian').attributes('contenteditable')).toBe('false')
+    expect(wrapper.find('.docs-mode-switch').exists()).toBe(false)
+    expect(wrapper.find('[class="doc-readonly-label"]').text()).toBe('aidoc.wikiReadonly')
+    const section = wrapper.get('[data-testid="doc-section-wiki"]')
+    const row = section.get('.cursor-pointer')
+    expect(row.attributes('draggable')).toBeUndefined()
+    await row.trigger('contextmenu')
+    expect(wrapper.get('.notes-ctx-menu').text()).toBe('notes.copyPath')
+    await section.trigger('drop', {
+      dataTransfer: { types: ['application/x-node-type'], files: [], getData: () => root + '/general/Note.md' },
+    })
+    expect(mockObsidianStore.renameItem).not.toHaveBeenCalled()
     wrapper.unmount()
   })
 
@@ -227,7 +313,23 @@ describe('DocsView', () => {
     wrapper.unmount()
   })
 
-  it('opens the wiki reader, opens a file from it and closes it; only one overlay at a time', async () => {
+  it('opens a native Wiki window without opening an embedded Wiki overlay', async () => {
+    mockObsidianStore.vaultPath = '/some/vault'
+    const open = vi.fn().mockResolvedValue(undefined)
+    window.electronAPI.wikiWindow = { open }
+    const wrapper = shallowMount(DocsView, { global: { stubs: { Teleport: true } } })
+    try {
+      wrapper.getComponent({ name: 'AiDocToolbar' }).vm.$emit('open-wiki')
+      await flushPromises()
+      expect(open).toHaveBeenCalledOnce()
+      expect(wrapper.findComponent({ name: 'AiDocWikiPanel' }).exists()).toBe(false)
+    } finally {
+      wrapper.unmount()
+      delete window.electronAPI.wikiWindow
+    }
+  })
+
+  it('opens and closes the embedded Wiki when desktop window APIs are unavailable', async () => {
     mockObsidianStore.vaultPath = '/some/vault'
     const wrapper = shallowMount(DocsView, { global: { stubs: { Teleport: true } } })
     const toolbar = () => wrapper.findComponent({ name: 'AiDocToolbar' })

@@ -114,6 +114,20 @@ describe('runIngest', () => {
     expect(Object.keys((await readRegistry(registryFile)).sources)).toEqual([])
   })
 
+  it('reports truncated output without marking partial pages or aborting other sources', async () => {
+    const files = ['a', 'b', 'c', 'd'].map(name => src(name + '.md'))
+    const agent = vi.fn(async ({ source, tool }) => {
+      await write(tool, path.basename(source.rel, '.md'), source.rel)
+      if (source !== files[3]) throw Object.assign(new Error('Output limit'), { code: 'output_truncated' })
+    })
+    const result = await run(files, agent)
+    expect(result.done).toEqual([files[3].rel])
+    expect(result.failed.map(item => item.reason)).toEqual(Array(3).fill('output_truncated'))
+    expect(result.aborted).toBeUndefined()
+    expect(Object.keys((await readRegistry(registryFile)).sources)).toEqual([files[3].rel])
+    expect(wikiRead('a.md')).toContain('Body of a.')
+  })
+
   it('does not abort when agent errors are not consecutive', async () => {
     const files = ['a', 'b', 'c', 'd', 'e'].map(n => src(n + '.md'))
     const failing = new Set([files[0].rel, files[1].rel, files[3].rel, files[4].rel])

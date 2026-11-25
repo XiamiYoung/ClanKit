@@ -2,10 +2,44 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  DIMMED_LABEL_FACTOR, LABEL_CAP, LABEL_MAX_CHARS, NODE_FALLBACK, NODE_PLACEHOLDER,
-  fitDistanceFor, initialCameraDistance, labelFade, labelPriority, labelText, nodeRadius,
-  resolveNodeColor, selectLabels, splitRgba,
+  createContainmentForce, hubIds, LABEL_MAX_CHARS, NODE_FALLBACK, NODE_PLACEHOLDER,
+  initialCameraDistance, labelText, nodeRadius, resolveNodeColor,
 } from '../graph3d'
+
+describe('graph3d hubs', () => {
+  const nodes = degrees => degrees.map((degree, index) => ({ id: 'n' + index, degree }))
+
+  it('marks only the best connected nodes as hubs', () => {
+    expect(hubIds(nodes([40, 30, ...Array(23).fill(6)]))).toEqual(new Set(['n0', 'n1']))
+    expect(hubIds(nodes([4, 3, 2, 1]))).toEqual(new Set())
+  })
+})
+
+describe('graph3d containment force', () => {
+  const at = (x, degree) => ({ x, y: 0, z: 0, vx: 5, vy: 0, vz: 0, degree })
+
+  it('pulls far-away nodes back to the edge of the connected cluster', () => {
+    const linked = [at(-100, 1), at(100, 1), at(0, 2)]
+    const orphan = at(2000, 0)
+    const near = at(40, 0)
+    const force = createContainmentForce()
+    force.initialize([...linked, orphan, near])
+    force(1)
+
+    expect(orphan.x).toBeCloseTo(100 * 1.15 + 15)
+    expect(orphan.vx).toBe(0)
+    expect(near).toMatchObject({ x: 40, vx: 5 })
+    expect(linked.map(node => node.x)).toEqual([-100, 100, 0])
+  })
+
+  it('leaves a graph without any links alone', () => {
+    const nodes = [at(-900, 0), at(900, 0)]
+    const force = createContainmentForce()
+    force.initialize(nodes)
+    force(1)
+    expect(nodes.map(node => node.x)).toEqual([-900, 900])
+  })
+})
 
 describe('graph3d helpers', () => {
   it('maps degree to a radius, with documents larger than placeholders and growth capped', () => {
@@ -34,62 +68,10 @@ describe('graph3d helpers', () => {
     expect(text.endsWith('…')).toBe(true)
   })
 
-  it('splits rgba strings into an opaque colour plus opacity', () => {
-    expect(splitRgba('rgba(91, 110, 136, 0.36)')).toEqual({ color: 'rgb(91, 110, 136)', opacity: 0.36 })
-    expect(splitRgba('#abcdef')).toEqual({ color: '#abcdef', opacity: 1 })
-  })
-
-  it('ranks hovered above matched above emphasized above dimmed', () => {
-    expect(labelPriority({ hovered: true, matched: true, emphasized: true })).toBe(3)
-    expect(labelPriority({ hovered: false, matched: true, emphasized: false })).toBe(2)
-    expect(labelPriority({ hovered: false, matched: false, emphasized: true })).toBe(1)
-    expect(labelPriority({ hovered: false, matched: false, emphasized: false })).toBe(0)
-  })
-
-  it('fades labels by distance and keeps high-degree nodes visible longer', () => {
-    expect(labelFade(40, 50, 100)).toBe(1)
-    expect(labelFade(75, 50, 100)).toBeCloseTo(0.5)
-    expect(labelFade(150, 50, 100)).toBe(0)
-    expect(labelFade(75, 50, 100, 16)).toBeGreaterThan(labelFade(75, 50, 100, 0))
-    expect(labelFade(60, 80, 80)).toBe(1)
-    expect(labelFade(90, 80, 80)).toBe(0)
-  })
-
-  it('selects labels with hovered and matched nodes first and respects the cap', () => {
-    const candidates = [
-      { id: 'far-hub', priority: 1, degree: 25, distance: 300 },
-      { id: 'near-a', priority: 1, degree: 1, distance: 20 },
-      { id: 'near-b', priority: 1, degree: 9, distance: 30 },
-      { id: 'dim', priority: 0, degree: 1, distance: 20 },
-      { id: 'match', priority: 2, degree: 0, distance: 900 },
-      { id: 'hover', priority: 3, degree: 0, distance: 900 },
-    ]
-    const shown = selectLabels(candidates, { cap: 3, near: 50, far: 100 })
-    expect([...shown.keys()]).toEqual(['hover', 'match', 'near-b'])
-    expect(shown.get('hover')).toBe(1)
-    expect(shown.get('match')).toBe(1)
-
-    const all = selectLabels(candidates, { cap: 10, near: 50, far: 100 })
-    expect(all.has('far-hub')).toBe(false)
-    expect(all.get('dim')).toBeCloseTo(DIMMED_LABEL_FACTOR)
-  })
-
-  it('never selects more labels than the default cap', () => {
-    const candidates = Array.from({ length: 500 }, (_, i) => ({ id: `n${i}`, priority: i < 100 ? 2 : 1, degree: i, distance: 10 }))
-    const shown = selectLabels(candidates, { near: 50, far: 100 })
-    expect(shown.size).toBe(LABEL_CAP)
-    expect([...shown.keys()].every(id => Number(id.slice(1)) < 100)).toBe(true)
-  })
-
   it('derives camera distances', () => {
     expect(initialCameraDistance(0)).toBeCloseTo(128)
     expect(initialCameraDistance(1000)).toBeCloseTo(470)
     expect(initialCameraDistance(1e9)).toBe(1200)
-    const bbox = { x: [-30, 30], y: [-40, 40], z: [0, 0] }
-    const radius = 0.5 * Math.hypot(60, 80, 0)
-    expect(fitDistanceFor(bbox, 60)).toBeCloseTo(radius / Math.sin(Math.PI / 6))
-    expect(fitDistanceFor(undefined)).toBeUndefined()
-    expect(fitDistanceFor({ x: [0, 0], y: [0, 0], z: [0, 0] })).toBeUndefined()
   })
 })
 

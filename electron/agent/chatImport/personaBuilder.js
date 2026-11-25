@@ -612,6 +612,9 @@ function _parseTokenError(err) {
   if (m3) return { outputCap: +m3[1] }
   const m4 = msg.match(/max_tokens.*?>\s*(\d+)/i)
   if (m4) return { outputCap: +m4[1] }
+  // DashScope format: "Range of max_tokens should be [1, 8192]"
+  const m5 = msg.match(/range of max_tokens should be \[\d+,\s*(\d+)\]/i)
+  if (m5) return { outputCap: +m5[1] }
   return null
 }
 
@@ -713,31 +716,31 @@ async function _callLLMOnce(prompt, config, maxTokens, options) {
 }
 
 /**
- * Make an LLM call with adaptive max_tokens retry. Returns the text response.
+ * Run an LLM request with adaptive max_tokens retry. `callOnce(maxTokens)` performs one request.
  *
  * Retry policy:
- *   - Server hard cap below request (tokenInfo.outputCap) → use server's cap, retry once.
+ *   - Server hard cap below request (tokenInfo.outputCap) → use server's cap, retry.
  *   - Silent output truncation (tokenInfo.outputTruncated) → double maxTokens, retry up to maxRetries.
  *   - Ceiling caps doubling at options.outputCeiling (default 32768) so we don't loop forever.
  *
- * Caller code stays unchanged: the retry is transparent. After ceiling is hit, the typed error
- * is rethrown so callers can surface "output too large for this model" in the UI.
+ * After the ceiling is hit, the error is rethrown so callers can surface "output too large for this model".
  */
-async function _callLLM(prompt, config, maxTokens = 8192, options = {}) {
+async function _retryWithAdaptiveMaxTokens(callOnce, maxTokens, options = {}) {
   const maxRetries = options.maxRetries ?? 2
   const ceiling = options.outputCeiling ?? 32768
+  const label = options.label ?? '_callLLM'
   let currentMax = maxTokens
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      return await _callLLMOnce(prompt, config, currentMax, options)
+      return await callOnce(currentMax)
     } catch (err) {
-      const ti = err.tokenInfo
+      const ti = err.tokenInfo || _parseTokenError(err)
       if (!ti) throw err
 
       // Server enforces a hard output cap below our request — adopt it and retry.
-      if (ti.outputCap && currentMax > ti.outputCap) {
-        logger.warn(`_callLLM: server caps output at ${ti.outputCap}, retrying`)
+      if (ti.outputCap && currentMax > ti.outputCap && attempt < maxRetries) {
+        logger.warn(`${label}: server caps output at ${ti.outputCap}, retrying`)
         currentMax = ti.outputCap
         continue
       }
@@ -745,8 +748,8 @@ async function _callLLM(prompt, config, maxTokens = 8192, options = {}) {
       // Silent truncation — double and retry, up to ceiling.
       if (ti.outputTruncated && attempt < maxRetries) {
         const newMax = Math.min(currentMax * 2, ceiling)
-        if (newMax === currentMax) throw err  // already at ceiling, can't grow
-        logger.warn(`_callLLM: output truncated at ${currentMax} tokens, retrying with ${newMax}`)
+        if (newMax <= currentMax) throw err  // already at ceiling, can't grow
+        logger.warn(`${label}: output truncated at ${currentMax} tokens, retrying with ${newMax}`)
         currentMax = newMax
         continue
       }
@@ -754,6 +757,11 @@ async function _callLLM(prompt, config, maxTokens = 8192, options = {}) {
       throw err
     }
   }
+}
+
+/** Single-prompt call on the utility model with the retry policy above. Returns the text response. */
+async function _callLLM(prompt, config, maxTokens = 8192, options = {}) {
+  return _retryWithAdaptiveMaxTokens(max => _callLLMOnce(prompt, config, max, options), maxTokens, options)
 }
 
 /**
@@ -1467,6 +1475,8 @@ module.exports = {
   getContextWindow,
   _splitMessageBlock,
   _callLLM,
+  _retryWithAdaptiveMaxTokens,
+  _makeTruncationError,
   // Exported for unit testing — pure post-process scrubber
   _scrubGeneratedPersona,
 }

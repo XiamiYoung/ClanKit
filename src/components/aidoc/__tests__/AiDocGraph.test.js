@@ -3,10 +3,10 @@
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { Group, Mesh, PerspectiveCamera } from 'three'
+import { BufferGeometry, Color, Group, Mesh, PerspectiveCamera } from 'three'
 import ForceGraph3D from '3d-force-graph'
 import AiDocGraph from '../AiDocGraph.vue'
-import { DIM_OPACITY, HOVER_SCALE, LABEL_CAP, nodeRadius } from '../../../utils/graph3d'
+import { DIM_OPACITY, DIMMED_LABEL_FACTOR, HOVER_SCALE, nodeRadius } from '../../../utils/graph3d'
 
 vi.mock('3d-force-graph', () => ({ default: vi.fn() }))
 vi.mock('three-spritetext', async () => {
@@ -25,13 +25,14 @@ vi.mock('../../../i18n/useI18n', () => ({ useI18n: () => ({ t: key => key }) }))
 
 const CHAINABLE = [
   'graphData', 'width', 'height', 'backgroundColor', 'showNavInfo', 'nodeLabel', 'nodeResolution',
-  'nodeThreeObject', 'linkWidth', 'linkMaterial', 'lights', 'warmupTicks', 'cooldownTicks',
+  'nodeThreeObject', 'linkWidth', 'linkMaterial', 'linkPositionUpdate', 'lights', 'warmupTicks', 'cooldownTicks',
   'onNodeHover', 'onNodeClick', 'onEngineTick', 'onEngineStop', 'zoomToFit', 'cameraPosition',
-  'pauseAnimation', 'resumeAnimation', '_destructor',
+  'pauseAnimation', 'resumeAnimation', '_destructor', 'd3Force',
 ]
 
 describe('AiDocGraph', () => {
   let instance
+  let forces
   let observer
   let onResize
   let camera
@@ -60,6 +61,8 @@ describe('AiDocGraph', () => {
     instance.renderer = vi.fn(() => renderer)
     instance.getGraphBbox = vi.fn(() => ({ x: [-50, 50], y: [-50, 50], z: [-50, 50] }))
     instance.lights = vi.fn(function (lights) { return lights ? instance : [{ position: { set: vi.fn() } }, { position: { set: vi.fn() } }] })
+    forces = { charge: { strength: vi.fn() }, link: { distance: vi.fn() } }
+    instance.d3Force = vi.fn((name, force) => force ? instance : forces[name])
     vi.mocked(ForceGraph3D).mockClear().mockImplementation(function () { return instance })
     observer = { observe: vi.fn(), disconnect: vi.fn() }
     vi.stubGlobal('ResizeObserver', class {
@@ -71,6 +74,31 @@ describe('AiDocGraph', () => {
   })
 
   afterEach(() => vi.unstubAllGlobals())
+
+  it('pads labels so tall glyphs and their outline are not clipped', () => {
+    const wrapper = mountGraph({ nodes: [doc('a'), doc('b')], links: [] })
+    const nodes = buildObjects()
+    expect(labelOf(nodes[0]).padding).toEqual([1.25, 1.25])
+    wrapper.unmount()
+  })
+
+  it('spreads nodes further apart than the library defaults', () => {
+    const wrapper = mountGraph({ nodes: [doc('a')], links: [] })
+    expect(forces.charge.strength.mock.lastCall[0]).toBeLessThan(-30)
+    expect(forces.link.distance.mock.lastCall[0]).toBeGreaterThan(30)
+    wrapper.unmount()
+  })
+
+  it('puts a glow behind hub nodes only, beneath the labels', () => {
+    const wrapper = mountGraph({ nodes: [doc('hub', { degree: 30 }), doc('leaf')], links: [] })
+    const [hub, leaf] = buildObjects()
+    const glowOf = node => node.__threeObj.children.find(child => child.name === 'glow')
+
+    expect(glowOf(leaf)).toBeUndefined()
+    expect(glowOf(hub).material.depthWrite).toBe(false)
+    expect(glowOf(hub).renderOrder).toBeLessThan(20)
+    wrapper.unmount()
+  })
 
   it('creates an orbit-controlled transparent 3D instance, supplies cloned graph data, emits selections and cleans up', async () => {
     const first = doc('a')
@@ -87,7 +115,6 @@ describe('AiDocGraph', () => {
     expect(instance.nodeLabel).toHaveBeenCalledWith('')
     expect(instance.cooldownTicks).toHaveBeenCalled()
     expect(instance.warmupTicks).toHaveBeenCalled()
-    expect(controls.addEventListener).toHaveBeenCalledWith('change', expect.any(Function))
     const data = instance.graphData.mock.lastCall[0]
     expect(data).toEqual(graph)
     expect(data.nodes[0]).not.toBe(first)
@@ -136,13 +163,20 @@ describe('AiDocGraph', () => {
     wrapper.unmount()
   })
 
-  it('shows hovered labels with a depth-test-free sprite that cannot be picked, and highlights the hovered node', () => {
+  it('labels every node without hovering, however many there are or however far they sit', () => {
+    const wrapper = mountGraph({ nodes: Array.from({ length: 150 }, (_, i) => doc(`n${i}`, { degree: 0 })), links: [] })
+    const objects = buildObjects()
+    for (const node of objects) Object.assign(node, { x: 0, y: 0, z: -5000 })
+
+    expect(objects.every(node => labelOf(node).visible && labelOf(node).material.opacity === 1)).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('draws labels as depth-test-free sprites that cannot be picked, and highlights the hovered node', () => {
     const wrapper = mountGraph({ nodes: [doc('a'), doc('b'), doc('c')], links: [{ source: 'a', target: 'b' }] })
     const [a, b, c] = buildObjects()
     const links = instance.graphData.mock.lastCall[0].links
     links.forEach(link => { link.source = a; link.target = b })
-    // Place nodes far from the camera so that only hovered / matched labels pass the distance fade.
-    for (const node of [a, b, c]) Object.assign(node, { x: 0, y: 0, z: -5000 })
     instance.onNodeHover.mock.lastCall[0](a)
 
     expect(labelOf(a).text).toBe('Title a')
@@ -151,7 +185,7 @@ describe('AiDocGraph', () => {
     expect(labelOf(a).material.depthTest).toBe(false)
     expect(labelOf(a).material.depthWrite).toBe(false)
     expect(labelOf(a).raycast()).toBeUndefined()
-    expect(labelOf(c)).toBeUndefined()
+    expect(labelOf(c).material.opacity).toBe(DIMMED_LABEL_FACTOR)
     expect(sphereOf(a).scale.x).toBe(HOVER_SCALE)
     expect(sphereOf(a).material.emissiveIntensity).toBeGreaterThan(0)
     expect(sphereOf(b).material.opacity).toBe(1)
@@ -161,7 +195,7 @@ describe('AiDocGraph', () => {
     instance.onNodeHover.mock.lastCall[0](null)
     expect(sphereOf(a).scale.x).toBe(1)
     expect(sphereOf(c).material.opacity).toBe(1)
-    expect(labelOf(a).visible).toBe(false)
+    expect(labelOf(c).material.opacity).toBe(1)
     wrapper.unmount()
   })
 
@@ -174,61 +208,52 @@ describe('AiDocGraph', () => {
     const linkMaterial = instance.linkMaterial.mock.lastCall[0]
     expect(instance.linkWidth).toHaveBeenCalledWith(0)
     const normal = linkMaterial(links[0])
-    expect(normal.opacity).toBeCloseTo(0.36)
+    expect(normal.opacity).toBeCloseTo(0.4)
+    expect(normal.vertexColors).toBe(true)
     expect(normal.transparent).toBe(true)
 
     instance.onNodeHover.mock.lastCall[0](a)
-    expect(lineObjects[0].material.opacity).toBeCloseTo(0.75)
-    expect(lineObjects[1].material.opacity).toBeCloseTo(0.1)
+    expect(lineObjects[0].material.opacity).toBeCloseTo(0.85)
+    expect(lineObjects[1].material.opacity).toBeCloseTo(0.08)
     instance.onNodeHover.mock.lastCall[0](null)
     expect(lineObjects[1].material).toBe(normal)
     wrapper.unmount()
   })
 
-  it('highlights search matches without updating the simulation data and labels them first', async () => {
+  it('blends each link from the colour of one end to the other and repaints when colours change', async () => {
+    const nodes = [doc('a', { group: 'one' }), doc('b', { group: 'two' })]
+    const wrapper = mountGraph({ nodes, links: [{ source: 'a', target: 'b' }] }, { colors: { one: '#ff0000', two: '#0000ff' } })
+    const [link] = instance.graphData.mock.lastCall[0].links
+    link.__lineObj = { geometry: new BufferGeometry() }
+    const colorsOf = () => [...link.__lineObj.geometry.getAttribute('color').array].map(value => Number(value.toFixed(4)))
+    const expected = (...hexes) => hexes.flatMap(hex => new Color(hex).toArray()).map(value => Number(value.toFixed(4)))
+
+    // Returning false lets the library keep positioning the line.
+    expect(instance.linkPositionUpdate.mock.lastCall[0](link.__lineObj, {}, link)).toBe(false)
+    expect(colorsOf()).toEqual(expected('#ff0000', '#0000ff'))
+
+    await wrapper.setProps({ colors: { one: '#00ff00', two: '#0000ff' } })
+    expect(colorsOf()).toEqual(expected('#00ff00', '#0000ff'))
+    wrapper.unmount()
+  })
+
+  it('highlights search matches without updating the simulation data and fades the other labels', async () => {
     const node = doc('a', { degree: 0 })
     const other = doc('b', { degree: 0 })
     const wrapper = mountGraph({ nodes: [node, other], links: [] })
     const [a, b] = buildObjects()
-    for (const n of [a, b]) Object.assign(n, { x: 0, y: 0, z: -5000 })
     await wrapper.setProps({ graph: { nodes: [{ ...node, matched: true }, other], links: [] }, highlightQuery: true })
 
     expect(instance.graphData).toHaveBeenCalledOnce()
     expect(sphereOf(a).material.opacity).toBe(1)
     expect(sphereOf(a).material.emissiveIntensity).toBeGreaterThan(0)
     expect(sphereOf(b).material.opacity).toBe(DIM_OPACITY)
-    expect(labelOf(a).visible).toBe(true)
-    expect(labelOf(b)).toBeUndefined()
+    expect(labelOf(a).material.opacity).toBe(1)
+    expect(labelOf(b).material.opacity).toBe(DIMMED_LABEL_FACTOR)
 
     await wrapper.setProps({ highlightQuery: false })
     expect(sphereOf(b).material.opacity).toBe(1)
-    expect(labelOf(a).visible).toBe(false)
-    wrapper.unmount()
-  })
-
-  it('never shows more than the label cap, matched nodes first', async () => {
-    const nodes = Array.from({ length: LABEL_CAP + 40 }, (_, i) => doc(`n${i}`, { degree: i }))
-    const wrapper = mountGraph({ nodes, links: [] })
-    const objects = buildObjects()
-    objects.forEach(node => Object.assign(node, { x: 0, y: 0, z: 0 }))
-    camera.position.set(0, 0, 1)
-    const matchedIds = new Set(['n0', 'n1'])
-    await wrapper.setProps({
-      graph: { nodes: nodes.map(node => ({ ...node, matched: matchedIds.has(node.id) })), links: [] },
-      highlightQuery: true,
-    })
-    const matched = objects.filter(node => matchedIds.has(node.id))
-    expect(matched.map(node => labelOf(node)?.material.opacity)).toEqual([1, 1])
-    const faint = objects.filter(node => !matchedIds.has(node.id) && labelOf(node)?.visible)
-    expect(faint.length).toBeLessThanOrEqual(LABEL_CAP - 2)
-    expect(faint.every(node => labelOf(node).material.opacity < 0.3)).toBe(true)
-
-    await wrapper.setProps({ highlightQuery: false })
-    const shown = objects.filter(node => labelOf(node)?.visible)
-    expect(shown.length).toBeGreaterThan(0)
-    expect(shown.length).toBeLessThanOrEqual(LABEL_CAP)
-    // High-degree nodes win the slots.
-    expect(shown.every(node => Number(node.id.slice(1)) >= 40)).toBe(true)
+    expect(labelOf(b).material.opacity).toBe(1)
     wrapper.unmount()
   })
 

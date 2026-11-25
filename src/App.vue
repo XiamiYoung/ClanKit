@@ -121,6 +121,15 @@ const chatsStore    = useChatsStore()
 const skillsStore   = useSkillsStore()
 const configStore   = useConfigStore()
 const obsidianStore = useObsidianStore()
+const offWikiSource = window.electronAPI?.wikiWindow?.onSource(async filePath => {
+  if (/\.pdf$/i.test(filePath)) {
+    await window.electronAPI.openFile(filePath)
+    return
+  }
+  await router.push('/notes')
+  await obsidianStore.openFile(filePath, filePath.split(/[/\\]/).at(-1))
+})
+onUnmounted(() => offWikiSource?.())
 const agentsStore = useAgentsStore()
 const mcpStore      = useMcpStore()
 const modelsStore   = useModelsStore()
@@ -286,7 +295,7 @@ onMounted(async () => {
   }
 
   // Load cached model lists from disk (instant, no API calls)
-  modelsStore.loadFromDisk()
+  void modelsStore.loadFromDisk()
 
   // Fire all store loads concurrently — none blocks the UI
   await Promise.all([
@@ -300,10 +309,9 @@ onMounted(async () => {
     skillsStore.loadSkills(configStore.config.skillsPath).then(() =>
       skillsStore.loadSkillPrompts(configStore.config.skillsPath)
     ),
-    obsidianStore.loadConfig(),
+    obsidianStore.loadConfig({ loadFiles: false }),
     knowledgeStore.loadConfig()
   ])
-
 })
 </script>
 

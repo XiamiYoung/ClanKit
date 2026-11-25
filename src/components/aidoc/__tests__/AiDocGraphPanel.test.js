@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { nextTick, reactive } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import AiDocGraphPanel from '../AiDocGraphPanel.vue'
@@ -12,6 +12,9 @@ vi.mock('../../../i18n/useI18n', () => ({
 }))
 vi.mock('../AiDocGraph.vue', () => ({
   default: { name: 'AiDocGraph', props: ['graph'], template: '<div />' },
+}))
+vi.mock('../AiDocGraph2D.vue', () => ({
+  default: { name: 'AiDocGraph2D', props: ['graph'], template: '<div />' },
 }))
 
 describe('AiDocGraphPanel', () => {
@@ -30,6 +33,31 @@ describe('AiDocGraphPanel', () => {
     useAiDocStore.mockReturnValue(store)
   })
 
+  it('switches between 3D and 2D left of the type filter and starts in 3D every time', async () => {
+    const wrapper = mount(AiDocGraphPanel)
+    await flushPromises()
+    const button = value => wrapper.get(`.graph-view > [role="group"] [data-testid="aidoc-graph-${value}d"]`)
+    const shows = (target, name) => target.findComponent({ name }).exists()
+    expect(shows(wrapper, 'AiDocGraph')).toBe(true)
+    expect(wrapper.text()).not.toContain('aidoc.graphShapeSource')
+    expect(button(3).attributes('aria-pressed')).toBe('true')
+    expect(wrapper.get('.graph-view').element.firstElementChild.className).toBe('graph-dimensions')
+
+    await button(2).trigger('click')
+    await flushPromises()
+    expect(shows(wrapper, 'AiDocGraph2D')).toBe(true)
+    expect(shows(wrapper, 'AiDocGraph')).toBe(false)
+    expect(wrapper.text()).toContain('aidoc.graphShapeSource')
+    expect(button(2).attributes('aria-pressed')).toBe('true')
+    wrapper.unmount()
+
+    const reopened = mount(AiDocGraphPanel)
+    await flushPromises()
+    expect(shows(reopened, 'AiDocGraph')).toBe(true)
+    expect(shows(reopened, 'AiDocGraph2D')).toBe(false)
+    reopened.unmount()
+  })
+
   it('loads data and displays the unindexed empty state', () => {
     store.graph.hasIndex = false
     const wrapper = mount(AiDocGraphPanel)
@@ -41,12 +69,12 @@ describe('AiDocGraphPanel', () => {
     wrapper.unmount()
   })
 
-  it('reports stale status and uses an icon-only close button', async () => {
+  it('reports stale status and closes from an icon-only button', async () => {
     const wrapper = mount(AiDocGraphPanel)
     expect(wrapper.text()).toContain('aidoc.syncStale 3')
-    expect(wrapper.text()).not.toContain('aidoc.syncPending')
+    expect(wrapper.text()).toContain('aidoc.syncPending 1')
     store.status.ingestAvailable = true
-    await nextTick()
+    await flushPromises()
     expect(wrapper.text()).toContain('aidoc.syncPending 4')
     const graph = wrapper.getComponent({ name: 'AiDocGraph' })
     graph.vm.$emit('select', unresolved)
@@ -54,7 +82,6 @@ describe('AiDocGraphPanel', () => {
     graph.vm.$emit('select', doc)
     expect(wrapper.emitted('open-file')).toEqual([[{ path: doc.path, name: doc.name }]])
     const close = wrapper.get('[data-testid="aidoc-graph-close"]')
-    expect(close.classes()).toContain('app-btn--icon')
     expect(close.attributes('aria-label')).toBe('aidoc.closeGraph')
     expect(close.text()).toBe('')
     await close.trigger('click')
@@ -98,8 +125,65 @@ describe('AiDocGraphPanel', () => {
     }
   })
 
+  it('keeps search in the title bar and maximizes to the whole viewport and back', async () => {
+    const wrapper = mount(AiDocGraphPanel, { attachTo: document.body })
+    try {
+      await nextTick()
+      expect(wrapper.find('.graph-titlebar input[type="search"]').exists()).toBe(true)
+      const { style } = wrapper.element
+      const frame = () => [style.left, style.top, style.width, style.height]
+      const initial = frame()
+      const maximize = () => wrapper.get('[data-testid="aidoc-graph-maximize"]')
+      expect(maximize().attributes('aria-label')).toBe('titlebar.maximize')
+
+      await maximize().trigger('click')
+      expect(frame()).toEqual(['0px', '0px', '100%', '100%'])
+      expect(maximize().attributes('aria-label')).toBe('titlebar.restore')
+      expect(wrapper.find('.graph-resize-button').exists()).toBe(false)
+      await wrapper.get('.graph-drag-handle').trigger('keydown', { key: 'ArrowRight' })
+      expect(frame()).toEqual(['0px', '0px', '100%', '100%'])
+
+      await maximize().trigger('click')
+      expect(frame()).toEqual(initial)
+      await wrapper.get('.graph-titlebar').trigger('dblclick')
+      expect(style.width).toBe('100%')
+      await wrapper.get('.graph-drag-handle').trigger('dblclick')
+      expect(frame()).toEqual(initial)
+      await wrapper.get('.graph-search input').trigger('dblclick')
+      expect(frame()).toEqual(initial)
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
+  it('sits inside its container when embedded, without window chrome', async () => {
+    const wrapper = mount(AiDocGraphPanel, { props: { embedded: true }, attachTo: document.body })
+    await flushPromises()
+    expect(wrapper.classes()).toContain('is-embedded')
+    expect(wrapper.attributes('style')).toBeUndefined()
+    for (const selector of ['.graph-drag-handle', '.graph-window-controls', '.graph-resize-button']) {
+      expect(wrapper.find(selector).exists()).toBe(false)
+    }
+    await wrapper.get('.graph-titlebar').trigger('dblclick')
+    expect(wrapper.attributes('style')).toBeUndefined()
+
+    // Escape clears a search first, so it does not reach the surrounding window.
+    const outer = vi.fn()
+    document.body.addEventListener('keydown', outer)
+    const search = wrapper.get('.graph-search input')
+    await search.setValue('a')
+    await search.trigger('keydown', { key: 'Escape' })
+    expect(search.element.value).toBe('')
+    expect(outer).not.toHaveBeenCalled()
+    await search.trigger('keydown', { key: 'Escape' })
+    expect(outer).toHaveBeenCalledOnce()
+    document.body.removeEventListener('keydown', outer)
+    wrapper.unmount()
+  })
+
   it('filters orphan nodes and document types', async () => {
     const wrapper = mount(AiDocGraphPanel)
+    await flushPromises()
     const graph = wrapper.getComponent({ name: 'AiDocGraph' })
     await wrapper.get('[data-testid="aidoc-hide-orphans"]').setValue(true)
     expect(graph.props('graph').nodes).toEqual([doc, unresolved])

@@ -3,7 +3,25 @@
 const fs = require('fs')
 const path = require('path')
 const { extractWikiLinks } = require('./aidocLinkParser')
-const { wikiLanguageRoot } = require('./aidocLanguages')
+const { AIDOC_FOLDERS } = require('./aidocLayout')
+const { wikiLanguageOf, wikiLanguageRoot } = require('./aidocLanguages')
+
+// Files the app creates in every wiki root. They describe or catalogue the wiki and are not knowledge pages.
+const WIKI_SCAFFOLD_FILES = Object.freeze({ schema: 'SCHEMA.md', index: 'index.md', log: 'log.md' })
+
+// Wiki root of a page: wiki/<lang> for a language wiki, plain wiki for legacy flat pages.
+function wikiRootOf(rel) {
+  const lang = wikiLanguageOf(rel)
+  return lang ? `${AIDOC_FOLDERS.WIKI}/${lang}` : AIDOC_FOLDERS.WIKI
+}
+
+// True when rel is one of the given scaffold files (all of them by default) directly under a wiki root.
+function isWikiScaffoldFile(rel, kinds = Object.keys(WIKI_SCAFFOLD_FILES)) {
+  const slash = rel.lastIndexOf('/')
+  const name = rel.slice(slash + 1).toLowerCase()
+  return rel.slice(0, slash).toLowerCase() === wikiRootOf(rel).toLowerCase() &&
+    kinds.some(kind => WIKI_SCAFFOLD_FILES[kind].toLowerCase() === name)
+}
 
 // {WIKI} is replaced with the language root (for example wiki/en) when the scaffold is written.
 const SCHEMA_TEMPLATE_EN = `# Wiki Schema
@@ -113,9 +131,9 @@ function ensureWikiScaffold(root, lang) {
   const created = []
   const template = _scaffoldFor(lang)
   const files = [
-    ['SCHEMA.md', defaultSchema(lang)],
-    ['index.md', template.index],
-    ['log.md', template.log],
+    [WIKI_SCAFFOLD_FILES.schema, defaultSchema(lang)],
+    [WIKI_SCAFFOLD_FILES.index, template.index],
+    [WIKI_SCAFFOLD_FILES.log, template.log],
   ]
   for (const [name, content] of files) {
     try {
@@ -139,7 +157,7 @@ function _singleLine(text) {
 
 async function appendLog(root, lang, { date, sourceRel, pages }) {
   ensureWikiScaffold(root, lang)
-  const logPath = path.join(_wikiDir(root, lang), 'log.md')
+  const logPath = path.join(_wikiDir(root, lang), WIKI_SCAFFOLD_FILES.log)
   const existing = await fs.promises.readFile(logPath, 'utf8')
   const lead = existing && !existing.endsWith('\n') ? '\n' : ''
   const lines = (pages || []).map(p => `- [[${_safeName(p)}]]\n`).join('')
@@ -155,7 +173,7 @@ function _baseName(rel) {
 
 async function ensureIndexCoverage(root, lang, pages) {
   ensureWikiScaffold(root, lang)
-  const indexPath = path.join(_wikiDir(root, lang), 'index.md')
+  const indexPath = path.join(_wikiDir(root, lang), WIKI_SCAFFOLD_FILES.index)
   const uncategorized = _scaffoldFor(lang).uncategorized
   const content = await fs.promises.readFile(indexPath, 'utf8')
   const linked = new Set(extractWikiLinks(content).map(l => l.toLowerCase()))
@@ -192,4 +210,4 @@ async function ensureIndexCoverage(root, lang, pages) {
   return { added }
 }
 
-module.exports = { defaultSchema, ensureWikiScaffold, appendLog, ensureIndexCoverage }
+module.exports = { WIKI_SCAFFOLD_FILES, isWikiScaffoldFile, defaultSchema, ensureWikiScaffold, appendLog, ensureIndexCoverage }

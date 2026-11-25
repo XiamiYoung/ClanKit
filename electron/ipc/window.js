@@ -81,6 +81,7 @@ function _attachMinibarMovedGuard(win) {
 }
 
 function register() {
+  require('./wikiWindow').registerWikiWindow()
   // -- File Reveal / Open -----------------------------------------------------
 
   ipcMain.handle('shell:open-file', async (_, filePath) => {

@@ -324,6 +324,7 @@ function createWindow() {
     }
   })
 
+
   // Publish to shared windowRef so extracted IPC modules can access it
   require('./lib/windowRef').set(mainWindow)
 
@@ -630,6 +631,7 @@ app.whenReady().then(async () => {
     logger.error('[Startup] ensureBuiltinSkills failed:', err.message)
   }
 
+
   // ── AI Doc layout: make sure general/kb_source/wiki exist under the AI Doc root ──
   try {
     const { resolveAiDocRoot, ensureAiDocLayout } = require('./lib/aidocLayout')
@@ -638,6 +640,7 @@ app.whenReady().then(async () => {
   } catch (err) {
     logger.error('[Startup] ensureAiDocLayout failed:', err.message)
   }
+
 
   // Refresh LiteLLM model catalog in background (best-effort)
   require('./agent/modelDefaults').refreshFromRemote(p().DATA_DIR).catch(() => {})
@@ -661,6 +664,7 @@ app.whenReady().then(async () => {
   } catch (err) {
     logger.warn('Failed to clean up stale run entries:', err.message)
   }
+
 
   // ── Sweep stale agent references against live resource sets ───────────────
   // Self-healing: cleans dead IDs (skill/tool/mcp/knowledge) that may have
@@ -716,6 +720,7 @@ app.whenReady().then(async () => {
   } catch (err) {
     logger.warn('[main] pruneAllStale sweep failed:', err.message)
   }
+
 
   // ── Task Scheduler ──────────────────────────────────────────────────────────
   const taskScheduler = require('./task-scheduler')

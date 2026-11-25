@@ -53,6 +53,18 @@ describe('AI Doc store', () => {
     expect(unsubscribe).toHaveBeenCalledOnce()
   })
 
+  it('loads Wiki pages without classifying them until the user asks', async () => {
+    const page = { rel: 'wiki/en/notes.md', size: 5, mtimeMs: 2, topics: [], topicsChecked: false }
+    api.getWikiPages.mockResolvedValue({ success: true, pages: [page] })
+    api.categorizeWikiPages = vi.fn()
+    const store = useAiDocStore()
+    store.setRoot('/a')
+    await store.loadWikiPages()
+    expect(store.wikiPages).toEqual([page])
+    expect(store.wikiTopicsLoading).toBe(false)
+    expect(api.categorizeWikiPages).not.toHaveBeenCalled()
+  })
+
   it('records failed update responses and clears the updating flag', async () => {
     const store = useAiDocStore()
     store.setRoot('/a')
@@ -111,6 +123,21 @@ describe('AI Doc store', () => {
     expect(api.getIngestPlan).toHaveBeenCalledWith({ root: '/a', rels: undefined, force: false })
     expect(store.ingestPlan).toBeNull()
     expect(store.ingestNothing).toBe(true)
+  })
+
+  it('opens and confirms removal-only sync without a configured model', async () => {
+    const store = useAiDocStore()
+    store.setRoot('/a')
+    const removed = ['kb_source/deleted.md']
+    api.updateIndex.mockResolvedValue({ success: true })
+    api.getIngestPlan.mockResolvedValue({ success: true, sources: [], removed, providerReady: false })
+    api.runIngest.mockResolvedValue({ success: true, done: [], failed: [], removed, deletedPages: ['wiki/en/deleted.md'] })
+    await store.runSync()
+    expect(store.ingestDialogVisible).toBe(true)
+    expect(store.ingestNothing).toBe(false)
+    await store.confirmIngest()
+    expect(api.runIngest).toHaveBeenCalledWith({ root: '/a', requestId: expect.any(String), force: false, rels: [], batchSize: 5, reconcileRemoved: true })
+    expect(store.ingestResult).toMatchObject({ removed, deletedPages: ['wiki/en/deleted.md'], remaining: 0 })
   })
 
   it('confirms only the selected source, tracks progress, stops and refreshes stores', async () => {
@@ -319,13 +346,14 @@ describe('AI Doc store', () => {
       expect(store.ingestResult).toBeNull()
     })
 
-    it('does not open the result view while a run is active', async () => {
+    it('opens the progress view before the first event arrives', async () => {
       const store = useAiDocStore()
       await planned(store)
       api.runIngest.mockImplementation(never)
       void store.confirmIngest()
       store.openIngestResult()
-      expect(store.ingestDialogVisible).toBe(false)
+      expect(store.ingestDialogVisible).toBe(true)
+      expect(store.ingestProgress).toBeNull()
     })
 
     it('brings the dialog back when starting fails with a real error', async () => {
@@ -496,6 +524,32 @@ describe('AI Doc store', () => {
       expect(store.syncPercent).toBe(20)
     })
 
+    it('reopens the run with each active unit and preserves progress when dismissed', async () => {
+      const store = useAiDocStore()
+      const { send, finish, run } = await startIngest(store, 10)
+      const first = { index: 0, rel: 'a', lang: 'en' }
+      const second = { index: 5, rel: 'f', lang: 'zh', action: 'read_wiki' }
+      send({ ...first, status: 'start', completed: 0, active: [first] })
+      send({ ...second, status: 'start', type: 'action', completed: 0, active: [first, second] })
+
+      store.openIngestResult()
+      expect(store.ingestDialogVisible).toBe(true)
+      expect(store.ingestProgress).toMatchObject({ total: 10, completed: 0, active: [first, second] })
+      store.cancelIngestPlan()
+      expect(store.ingestDialogVisible).toBe(false)
+      expect(store.ingesting).toBe(true)
+
+      send({ ...first, status: 'done', completed: 1, active: [second] })
+      store.openIngestResult()
+      expect(store.ingestProgress).toMatchObject({ completed: 1, active: [second] })
+      send({ type: 'indexing', phase: 'indexing', completed: 1, active: [] })
+      expect(store.ingestProgress).toMatchObject({ completed: 1, active: [], phase: 'indexing' })
+      finish({ success: true, done: ['a'], failed: [], stopped: true, overflow: 0 })
+      await run
+      expect(store.ingestDialogVisible).toBe(true)
+      expect(store.ingestResult.stopped).toBe(true)
+    })
+
     it('keeps the last percent for stopped, aborted or partial runs and shows 100 for complete ones', async () => {
       const store = useAiDocStore()
       const { send, finish, run } = await startIngest(store, 3)
@@ -611,11 +665,17 @@ describe('AI Doc store', () => {
       expect(store.ingestPlanLoading).toBe(false)
     })
 
-    it('opens the dialog for an empty plan only when another language still has work', async () => {
+    it('keeps the sync dialog available for reclassification with an empty plan', async () => {
       const store = useAiDocStore()
       await openPlan(store, planOf([], ['en'], { languages: { available: ['en', 'zh'], selected: ['en'], otherWork: false } }))
-      expect(store.ingestDialogVisible).toBe(false)
+      expect(store.ingestDialogVisible).toBe(true)
       expect(store.ingestNothing).toBe(true)
+      api.categorizeWikiPages = vi.fn().mockResolvedValue({ success: true, pages: [
+        { rel: 'wiki/en/topic.md', topics: ['New topic'], topicsChecked: true },
+      ] })
+      await store.reclassifyWikiPages(true)
+      expect(api.categorizeWikiPages).toHaveBeenCalledWith({ root: expect.any(String), force: true, requestId: expect.any(String) })
+      expect(store.wikiReclassification).toEqual({ total: 1, count: 1, failed: 0, stopped: false })
       store.setRoot('/b')
       await openPlan(store, planOf([], ['en'], { languages: { available: ['en', 'zh'], selected: ['en'], otherWork: true } }))
       expect(store.ingestDialogVisible).toBe(true)
@@ -700,6 +760,101 @@ describe('AI Doc store', () => {
       expect(store.ingestProgress).toMatchObject({ index: 1, total: 4, lang: 'zh' })
       expect(store.syncPercent).toBe(25)
     })
+
+    it('restores active actions and stop state from the main process', async () => {
+      const store = useAiDocStore()
+      const active = [{ index: 2, rel: 'a', lang: 'zh', action: 'edit_wiki' }, { index: 5, rel: 'f', lang: 'en' }]
+      api.getIngestStatus.mockResolvedValue({
+        success: true, running: true, requestId: 'bg', total: 8, completed: 2, active, stopping: true,
+      })
+      store.setRoot('/a')
+      await vi.waitFor(() => expect(store.ingesting).toBe(true))
+      store.openIngestResult()
+      expect(store.ingestDialogVisible).toBe(true)
+      expect(store.ingestProgress).toMatchObject({ completed: 2, active })
+      expect(store.ingestStopping).toBe(true)
+      expect(store.syncPercent).toBe(25)
+    })
   })
 
+})
+
+describe('aidoc store reclassification progress', () => {
+  let emit
+  let finish
+  let api
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    api = {
+      onWikiCategorizeProgress: vi.fn(callback => { emit = callback; return vi.fn() }),
+      categorizeWikiPages: vi.fn(() => new Promise(resolve => { finish = resolve })),
+    }
+    window.electronAPI = { aidoc: api }
+  })
+
+  it('runs in the background and tracks the percent of its own request', async () => {
+    const store = useAiDocStore()
+    store.setRoot('/a')
+    store.ingestDialogVisible = true
+    const run = store.reclassifyWikiPages(true)
+    const { requestId } = api.categorizeWikiPages.mock.calls[0][0]
+
+    expect(store.reclassifying).toBe(true)
+    expect(store.ingestDialogVisible).toBe(false)
+    expect(store.syncPercent).toBe(0)
+    emit({ requestId: 'other', done: 9, total: 10 })
+    expect(store.syncPercent).toBe(0)
+    emit({ requestId, done: 12, total: 24 })
+    expect(store.syncPercent).toBe(50)
+    emit({ requestId, done: 24, total: 24 })
+    expect(store.syncPercent).toBe(99)
+
+    finish({ success: true, pages: [{ rel: 'wiki/en/a.md', topics: ['T'], topicsChecked: true }] })
+    await run
+    expect(store.reclassifying).toBe(false)
+    expect(store.wikiReclassification).toEqual({ total: 1, count: 1, failed: 0, stopped: false })
+    expect(store.ingestDialogVisible).toBe(false)
+    store.openIngestResult()
+    expect(store.ingestDialogVisible).toBe(true)
+    store.cancelIngestPlan()
+    expect(store.wikiReclassification).toBeNull()
+  })
+
+  it('brings the dialog back when reclassification fails', async () => {
+    const store = useAiDocStore()
+    store.setRoot('/a')
+    const run = store.reclassifyWikiPages(true)
+    finish({ success: false, code: 'providerMissing' })
+    await run
+
+    expect(store.wikiReclassification).toEqual({ error: 'providerMissing' })
+    expect(store.ingestDialogVisible).toBe(true)
+  })
+})
+
+describe('aidoc store wiki classification controls', () => {
+  it('classifies only new articles by default and can stop the run', async () => {
+    setActivePinia(createPinia())
+    let finish
+    const api = {
+      categorizeWikiPages: vi.fn(() => new Promise(resolve => { finish = resolve })),
+      stopWikiCategorize: vi.fn().mockResolvedValue({ success: true }),
+    }
+    window.electronAPI = { aidoc: api }
+    const store = useAiDocStore()
+    store.setRoot('/a')
+
+    const run = store.reclassifyWikiPages()
+    expect(api.categorizeWikiPages).toHaveBeenCalledWith({ root: '/a', force: false, requestId: expect.any(String) })
+    await store.stopWikiClassification()
+    expect(api.stopWikiCategorize).toHaveBeenCalledWith({ root: '/a' })
+    expect(store.reclassifyStopping).toBe(true)
+
+    finish({ success: true, stopped: true, failed: 0, pages: [{ rel: 'wiki/en/a.md', topics: ['T'], topicsChecked: true }] })
+    await run
+    expect(store.wikiReclassification).toEqual({ total: 1, count: 1, failed: 0, stopped: true })
+    expect(store.reclassifying).toBe(false)
+    expect(store.reclassifyStopping).toBe(false)
+  })
 })

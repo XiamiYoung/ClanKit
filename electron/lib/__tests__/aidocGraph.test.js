@@ -5,7 +5,7 @@ import os from 'os'
 import path from 'path'
 
 const require = createRequire(import.meta.url)
-const { assignGroupColors, buildGraph, readIngestedSources } = require('../aidocGraph')
+const { applyCategories, assignGroupColors, buildGraph, readIngestedSources } = require('../aidocGraph')
 const { rootHash } = require('../aidocIndex')
 
 const dirs = []
@@ -19,6 +19,63 @@ function file(rel, links = []) {
 }
 
 describe('AI Doc graph', () => {
+  it('links a source to the pages generated from it even without a wikilink', () => {
+    const { links, nodes } = buildGraph({
+      files: [file('wiki/zh/summary.md', ['kb_source/doc.md']), file('wiki/zh/topic.md'), file('wiki/en/other.md'), file('kb_source/doc.md')],
+      ingested: { 'kb_source/doc.md': {
+        pages: ['wiki/zh/topic.md'],
+        langs: { zh: { pages: ['wiki/zh/summary.md', 'wiki/zh/topic.md', 'wiki/zh/deleted.md'] }, en: { pages: ['wiki/en/other.md'] } },
+      } },
+      lang: 'zh',
+    })
+    expect(links).toEqual([
+      { source: 'wiki/zh/summary.md', target: 'kb_source/doc.md' },
+      { source: 'wiki/zh/topic.md', target: 'kb_source/doc.md' },
+    ])
+    expect(nodes.find(node => node.id === 'kb_source/doc.md').degree).toBe(2)
+  })
+
+  it('groups nodes by top-level topic and lets sources follow their pages', () => {
+    const graph = buildGraph({
+      files: [
+        file('wiki/a.md', ['kb_source/s.md']), file('wiki/b.md', ['kb_source/s.md']), file('wiki/c.md', ['kb_source/s.md', 'missing']),
+        file('wiki/d.md'), file('kb_source/s.md'),
+      ],
+      ingested: { 'kb_source/s.md': {} },
+    })
+    const result = applyCategories(graph, new Map([
+      ['wiki/a.md', 'Cloud › Storage'], ['wiki/b.md', 'cloud'], ['wiki/c.md', 'AI › Agents'],
+    ]))
+
+    const groupOf = id => result.nodes.find(node => node.id === id).group
+    expect(['wiki/a.md', 'wiki/b.md', 'wiki/c.md', 'kb_source/s.md', 'wiki/d.md'].map(groupOf))
+      .toEqual(['Cloud', 'Cloud', 'AI', 'Cloud', ''])
+    expect(result.groups).toEqual(['Cloud', 'AI', ''])
+    expect(new Set(result.groups.map(group => result.colors[group])).size).toBe(3)
+    expect(result.nodes.find(node => node.id === '?missing').group).toBeUndefined()
+  })
+
+  it('keeps folder groups while nothing has been classified', () => {
+    const graph = buildGraph({ files: [file('wiki/a.md')], ingested: {} })
+    expect(applyCategories(graph, new Map())).toBeNull()
+  })
+
+  it('leaves out the wiki system files and every link to or from them', () => {
+    const { WIKI_SCAFFOLD_FILES } = require('../aidocWiki')
+    const system = Object.values(WIKI_SCAFFOLD_FILES).flatMap(name => [`wiki/${name}`, `wiki/en/${name}`])
+    const { nodes, links } = buildGraph({
+      files: [
+        ...system.map(rel => file(rel, ['Topic'])),
+        file('wiki/en/Topic.md', ['index', 'log', 'SCHEMA']),
+        file('wiki/en/notes/index.md', ['Topic']),
+      ],
+      ingested: {},
+    })
+
+    expect(nodes.map(node => node.id)).toEqual(['wiki/en/Topic.md', 'wiki/en/notes/index.md'])
+    expect(links).toEqual([{ source: 'wiki/en/notes/index.md', target: 'wiki/en/Topic.md' }])
+  })
+
   it('returns an empty graph for an empty index', () => {
     expect(buildGraph({ files: [], ingested: {} })).toEqual({ nodes: [], links: [], groups: [] })
   })
@@ -61,7 +118,7 @@ describe('AI Doc graph', () => {
 
   it('connects the source to an ambiguous placeholder and the placeholder to each visible candidate', () => {
     const files = [
-      file('wiki/index.md', ['a']),
+      file('wiki/Home.md', ['a']),
       file('wiki/first/a.md'),
       file('wiki/second/a.md'),
     ]
@@ -70,18 +127,18 @@ describe('AI Doc graph', () => {
     expect(ambiguous.degree).toBe(3)
     expect(ambiguous).not.toHaveProperty('path')
     expect(links).toEqual([
-      { source: 'wiki/index.md', target: ambiguous.id },
+      { source: 'wiki/Home.md', target: ambiguous.id },
       { source: ambiguous.id, target: 'wiki/first/a.md' },
       { source: ambiguous.id, target: 'wiki/second/a.md' },
     ])
   })
 
   it('retains the ambiguity when only one candidate is visible', () => {
-    const files = [file('wiki/index.md', ['a']), file('kb_source/first/a.md'), file('kb_source/second/a.md')]
+    const files = [file('wiki/Home.md', ['a']), file('kb_source/first/a.md'), file('kb_source/second/a.md')]
     const { nodes, links } = buildGraph({ files, ingested: { 'kb_source/second/a.md': {} } })
     const ambiguous = nodes.find(node => node.kind === 'ambiguous')
     expect(links).toEqual([
-      { source: 'wiki/index.md', target: ambiguous.id },
+      { source: 'wiki/Home.md', target: ambiguous.id },
       { source: ambiguous.id, target: 'kb_source/second/a.md' },
     ])
   })
@@ -129,10 +186,10 @@ describe('AI Doc graph', () => {
 
   describe('language wikis', () => {
     const files = () => [
-      file('wiki/en/index.md', ['Topic']),
+      file('wiki/en/Home.md', ['Topic']),
       file('wiki/en/Topic.md', ['Topic zh', 'Missing']),
       file('wiki/en/notes/Deep.md', ['Topic']),
-      file('wiki/zh/index.md', ['Topic']),
+      file('wiki/zh/Home.md', ['Topic']),
       file('wiki/zh/Topic.md', ['Topic']),
       file('wiki/Legacy.md', ['Topic']),
       file('kb_source/source.md'),
@@ -141,18 +198,18 @@ describe('AI Doc graph', () => {
 
     it('shows only the pages of the preferred language when its folder exists', () => {
       const en = buildGraph({ files: files(), ingested: { 'kb_source/source.md': {} }, lang: 'en' })
-      expect(ids(en)).toEqual(['wiki/en/index.md', 'wiki/en/Topic.md', 'wiki/en/notes/Deep.md', 'kb_source/source.md'])
+      expect(ids(en)).toEqual(['wiki/en/Home.md', 'wiki/en/Topic.md', 'wiki/en/notes/Deep.md', 'kb_source/source.md'])
       const zh = buildGraph({ files: files(), ingested: {}, lang: 'zh' })
-      expect(ids(zh)).toEqual(['wiki/zh/index.md', 'wiki/zh/Topic.md'])
+      expect(ids(zh)).toEqual(['wiki/zh/Home.md', 'wiki/zh/Topic.md'])
     })
 
     it('resolves a link to the page in its own language even when both languages have that name', () => {
       const en = buildGraph({ files: files(), ingested: {}, lang: 'en' })
-      expect(en.links).toContainEqual({ source: 'wiki/en/index.md', target: 'wiki/en/Topic.md' })
+      expect(en.links).toContainEqual({ source: 'wiki/en/Home.md', target: 'wiki/en/Topic.md' })
       expect(en.links.some(link => link.target === 'wiki/zh/Topic.md')).toBe(false)
       expect(en.nodes.some(node => node.kind === 'ambiguous')).toBe(false)
       const zh = buildGraph({ files: files(), ingested: {}, lang: 'zh' })
-      expect(zh.links).toContainEqual({ source: 'wiki/zh/index.md', target: 'wiki/zh/Topic.md' })
+      expect(zh.links).toContainEqual({ source: 'wiki/zh/Home.md', target: 'wiki/zh/Topic.md' })
     })
 
     it('groups language pages by the first folder below the language root', () => {
@@ -164,8 +221,8 @@ describe('AI Doc graph', () => {
 
     it('shows every wiki page when the preferred language folder does not exist', () => {
       const onlyZh = files().filter(item => !item.rel.startsWith('wiki/en/'))
-      expect(ids(buildGraph({ files: onlyZh, ingested: {}, lang: 'en' }))).toEqual(['wiki/zh/index.md', 'wiki/zh/Topic.md', 'wiki/Legacy.md'])
-      expect(ids(buildGraph({ files: onlyZh, ingested: {} }))).toEqual(['wiki/zh/index.md', 'wiki/zh/Topic.md', 'wiki/Legacy.md'])
+      expect(ids(buildGraph({ files: onlyZh, ingested: {}, lang: 'en' }))).toEqual(['wiki/zh/Home.md', 'wiki/zh/Topic.md', 'wiki/Legacy.md'])
+      expect(ids(buildGraph({ files: onlyZh, ingested: {} }))).toEqual(['wiki/zh/Home.md', 'wiki/zh/Topic.md', 'wiki/Legacy.md'])
     })
   })
 })

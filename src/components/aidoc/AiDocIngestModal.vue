@@ -17,7 +17,7 @@
           <label class="ingest-field">
             <span class="ingest-detail">{{ t('aidoc.ingestProviderLabel') }}</span>
             <select class="ingest-input" data-testid="aidoc-ingest-provider" :value="store.ingestModel.providerId"
-              :disabled="store.ingesting" @change="changeProvider($event.target.value)">
+              @change="changeProvider($event.target.value)">
               <option v-for="provider in store.ingestPlan.providers" :key="provider.id" :value="provider.id">{{ provider.name }}</option>
             </select>
           </label>
@@ -25,7 +25,7 @@
             <span class="ingest-detail">{{ t('aidoc.ingestModelLabel') }}</span>
             <input class="ingest-input" data-testid="aidoc-ingest-model" type="text" list="aidoc-ingest-models"
               maxlength="200" autocomplete="off" spellcheck="false" :value="store.ingestModel.model"
-              :disabled="store.ingesting" @input="store.ingestModel.model = $event.target.value">
+              @input="store.ingestModel.model = $event.target.value">
             <datalist id="aidoc-ingest-models">
               <option v-for="model in providerModels" :key="model" :value="model" />
             </datalist>
@@ -34,7 +34,7 @@
           <p class="ingest-detail ingest-model-hint">{{ t('aidoc.ingestModelHint') }}</p>
         </div>
 
-        <fieldset v-if="showLanguageControls" class="ingest-languages" data-testid="aidoc-ingest-languages" :disabled="store.ingesting">
+        <fieldset v-if="showLanguageControls" class="ingest-languages" data-testid="aidoc-ingest-languages">
           <legend class="ingest-detail">{{ t('aidoc.ingestLanguagesLabel') }}</legend>
           <div class="ingest-language-options">
             <label v-for="lang in languageChoices" :key="lang" class="ingest-language">
@@ -49,8 +49,7 @@
 
         <label v-if="confirming && store.ingestPlan.sources.length" class="ingest-field w-fit">
           <span class="ingest-detail">{{ t('aidoc.ingestBatchSizeLabel') }}</span>
-          <select v-model="batchSize" class="ingest-input" data-testid="aidoc-ingest-batch-size"
-            :disabled="store.ingesting">
+          <select v-model="batchSize" class="ingest-input" data-testid="aidoc-ingest-batch-size">
             <option :value="5">5</option>
             <option :value="10">10</option>
           </select>
@@ -59,7 +58,24 @@
           </span>
         </label>
 
-        <template v-if="store.ingestResult">
+        <template v-if="store.ingesting">
+          <div class="ingest-summary" role="status">
+            <div class="ingest-bar" role="progressbar" :aria-label="t('aidoc.ingestProgressLabel')" aria-valuemin="0" aria-valuemax="100"
+              :aria-valuenow="percent" data-testid="aidoc-ingest-progress">
+              <div class="ingest-bar-fill" :style="{ width: percent + '%' }"></div>
+            </div>
+            <p>{{ runningSummary }}</p>
+          </div>
+          <ul v-if="activeSteps.length" class="ingest-list" data-testid="aidoc-ingest-active">
+            <li v-for="step in activeSteps" :key="step.index" class="ingest-failure">
+              <span class="ingest-path">{{ step.rel }}</span>
+              <span v-if="step.lang" class="ingest-detail">{{ t(languageLabelKey(step.lang)) }}</span>
+              <span v-if="step.action" class="ingest-detail">{{ actionLabels[step.action] ? t(actionLabels[step.action]) : step.action }}</span>
+            </li>
+          </ul>
+        </template>
+
+        <template v-else-if="store.ingestResult">
           <div class="ingest-summary" role="status">
             <div class="ingest-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100"
               :aria-valuenow="percent" data-testid="aidoc-ingest-progress">
@@ -67,6 +83,8 @@
             </div>
             <p>{{ t('aidoc.ingestDone', { n: store.ingestResult.done.length }) }}</p>
             <p>{{ t('aidoc.ingestFailed', { n: store.ingestResult.failed.length }) }}</p>
+            <p v-if="store.ingestResult.deletedPages?.length">{{ t('aidoc.ingestDeletedPages', { n: store.ingestResult.deletedPages.length }) }}</p>
+            <p v-if="store.ingestResult.updatedPages?.length">{{ t('aidoc.ingestUpdatedPages', { n: store.ingestResult.updatedPages.length }) }}</p>
             <p v-if="store.ingestResult.stopped">{{ t('aidoc.ingestStopped') }}</p>
             <p v-if="store.ingestResult.aborted === 'consecutive_agent_errors'" class="ingest-alert" role="alert">{{ t('aidoc.ingestAbortedAgentErrors') }}</p>
             <p v-if="(store.ingestResult.remaining ?? store.ingestResult.overflow) > 0">{{ t('aidoc.ingestRemaining', { n: store.ingestResult.remaining ?? store.ingestResult.overflow }) }}</p>
@@ -95,14 +113,43 @@
         </template>
 
         <template v-else-if="store.ingestPlan">
-          <p>{{ t('aidoc.ingestFiles', { n: store.ingestPlan.sources.length }) }}</p>
-          <AiDocIngestTree :sources="store.ingestPlan.sources" :format-size="formatSize" />
+          <template v-if="!removalOnly">
+            <p>{{ t('aidoc.ingestFiles', { n: store.ingestPlan.sources.length }) }}</p>
+            <AiDocIngestTree :sources="store.ingestPlan.sources" :format-size="formatSize" />
+          </template>
           <p v-if="store.ingestPlan.overflow" class="ingest-detail">
             {{ t('aidoc.ingestOverflow', { n: store.ingestPlan.overflow }) }}
           </p>
-          <p v-if="!store.ingestPlan.providerReady && !hasModelChoice" class="ingest-alert" role="alert">{{ providerMessage }}</p>
+          <p v-if="!removalOnly && !store.ingestPlan.providerReady && !hasModelChoice" class="ingest-alert" role="alert">{{ providerMessage }}</p>
         </template>
 
+        <template v-if="!store.ingesting && removedSources.length">
+          <p>{{ t(store.ingestResult ? 'aidoc.ingestRemovedSources' : 'aidoc.ingestMissingSources', { n: removedSources.length }) }}</p>
+          <ul class="ingest-list" data-testid="aidoc-ingest-removed-sources">
+            <li v-for="rel in removedSources" :key="rel" class="ingest-failure ingest-path">{{ rel }}</li>
+          </ul>
+          <p v-if="confirming" class="ingest-detail">{{ t('aidoc.ingestRemoveHint') }}</p>
+        </template>
+
+        <p v-if="store.ingestNothing && !store.ingestResult" class="ingest-detail">{{ t('aidoc.ingestNothing') }}</p>
+        <div v-if="store.reclassifying" class="ingest-summary" role="status">
+          <div class="ingest-bar" role="progressbar" :aria-label="t('aidoc.wikiClassifyingTopics')" aria-valuemin="0" aria-valuemax="100"
+            :aria-valuenow="percent" data-testid="aidoc-reclassify-progress">
+            <div class="ingest-bar-fill" :style="{ width: percent + '%' }"></div>
+          </div>
+          <p>{{ t('aidoc.wikiClassifyingTopics') }} {{ percent }}%</p>
+        </div>
+        <p v-else-if="store.wikiTopicsLoading" class="ingest-detail" role="status">{{ t('aidoc.wikiClassifyingTopics') }}</p>
+        <p v-else-if="store.wikiReclassification?.error" class="ingest-alert" role="alert">
+          {{ t(store.wikiReclassification.error === 'providerMissing' ? 'aidoc.providerMissing' : 'aidoc.wikiReclassifyFailed') }}
+        </p>
+        <div v-else-if="store.wikiReclassification" role="status">
+          <p class="ingest-detail">{{ t('aidoc.wikiTopicCoverage', store.wikiReclassification) }}</p>
+          <p v-if="store.wikiReclassification.stopped" class="ingest-detail">{{ t('aidoc.wikiClassifyStopped') }}</p>
+          <p v-if="store.wikiReclassification.failed" class="ingest-alert" data-testid="aidoc-reclassify-failed">
+            {{ t('aidoc.wikiTopicFailed', store.wikiReclassification) }}
+          </p>
+        </div>
         <p v-if="store.ingestErrorKey || store.ingestError" class="ingest-alert" role="alert">
           {{ store.ingestErrorKey && t(store.ingestErrorKey) }} {{ store.ingestError }}
         </p>
@@ -113,13 +160,37 @@
           data-testid="aidoc-ingest-dismiss" @click="dismiss">
           {{ t(confirming ? 'common.cancel' : 'common.close') }}
         </AppButton>
-        <AppButton v-if="confirming" size="modal" type="button" data-testid="aidoc-ingest-start"
-          :disabled="!canStart || store.ingesting" @click="store.confirmIngest(batchSize)">
-          {{ t('aidoc.ingestStart') }}
+        <AppTooltip v-if="store.ingesting && !indexing" :text="stopLabel">
+          <AppButton size="icon" variant="danger" type="button" data-testid="aidoc-ingest-stop"
+            :aria-label="stopLabel" :loading="store.ingestStopping" @click="store.stopIngest()">
+            <svg v-if="!store.ingestStopping" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <rect x="6" y="6" width="12" height="12" rx="1.5" />
+            </svg>
+          </AppButton>
+        </AppTooltip>
+        <AppButton v-else-if="confirming" size="modal" type="button" data-testid="aidoc-ingest-start"
+          :disabled="!canStart || store.updating || store.wikiTopicsLoading" @click="store.confirmIngest(batchSize)">
+          {{ t(removedSources.length ? 'aidoc.ingestSyncChanges' : 'aidoc.ingestStart') }}
         </AppButton>
-        <AppButton v-else-if="modelErrorHint && hasModelChoice" size="modal" type="button" data-testid="aidoc-ingest-retry"
+        <AppButton v-else-if="!store.ingesting && modelErrorHint && hasModelChoice" size="modal" type="button" data-testid="aidoc-ingest-retry"
           :disabled="!selectionComplete || store.syncPreparing" @click="retry">
           {{ t('aidoc.ingestRetry') }}
+        </AppButton>
+        <AppTooltip v-if="store.reclassifying" :text="t('aidoc.wikiClassifyStop')">
+          <AppButton size="icon" variant="danger" type="button" data-testid="aidoc-wiki-classify-stop"
+            :aria-label="t('aidoc.wikiClassifyStop')" :loading="store.reclassifyStopping" @click="store.stopWikiClassification()">
+            <svg v-if="!store.reclassifyStopping" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <rect x="6" y="6" width="12" height="12" rx="1.5" />
+            </svg>
+          </AppButton>
+        </AppTooltip>
+        <AppButton size="modal" variant="ghost" type="button" data-testid="aidoc-wiki-reclassify"
+          :disabled="classifyDisabled" @click="store.reclassifyWikiPages(true)">
+          {{ t('aidoc.wikiReclassifyAll') }}
+        </AppButton>
+        <AppButton size="modal" variant="ghost" type="button" data-testid="aidoc-wiki-classify"
+          :disabled="classifyDisabled" :loading="store.wikiTopicsLoading" @click="store.reclassifyWikiPages()">
+          {{ t('aidoc.wikiClassifyNew') }}
         </AppButton>
       </footer>
     </dialog>
@@ -139,14 +210,16 @@ const { t, locale } = useI18n()
 const store = useAiDocStore()
 const dialog = ref(null)
 const batchSize = ref(5)
-const confirming = computed(() => !!store.ingestPlan && !store.ingestResult)
+const confirming = computed(() => !store.ingesting && !!store.ingestPlan && !store.ingestResult)
+const removedSources = computed(() => (store.ingestResult ? store.ingestResult.removed : store.ingestPlan?.removed) || [])
+const removalOnly = computed(() => confirming.value && removedSources.value.length > 0 && !store.ingestPlan.sources.length)
 const providerMessage = computed(() => {
   const error = store.ingestPlan?.providerError
   return error && error !== 'providerMissing' ? error : t('aidoc.providerMissing')
 })
 
 const hasModelChoice = computed(() => Boolean(store.ingestPlan?.providers?.length && store.ingestModel))
-const showModelControls = computed(() => hasModelChoice.value && (confirming.value || modelErrorHint.value))
+const showModelControls = computed(() => !store.ingesting && !removalOnly.value && hasModelChoice.value && (confirming.value || modelErrorHint.value))
 const providerModels = computed(() => store.ingestPlan?.providers?.find(provider => provider.id === store.ingestModel?.providerId)?.models || [])
 const modelSourceKeys = {
   remembered: 'aidoc.ingestModelSourceRemembered',
@@ -162,10 +235,12 @@ const modelSourceKey = computed(() => {
 const selectionComplete = computed(() => Boolean(store.ingestModel?.providerId && store.ingestModel.model?.trim()))
 const languageChoices = computed(() => store.ingestPlan?.languages?.available || [])
 const selectedLanguages = computed(() => store.ingestLanguages || [])
-const showLanguageControls = computed(() => confirming.value && languageChoices.value.length > 0)
+const showLanguageControls = computed(() => confirming.value && languageChoices.value.length > 0
+  && (!removalOnly.value || store.ingestPlan.languages.otherWork))
 // Without a language, or while the plan is recomputed for a changed selection, there is nothing valid to start.
-const languagesReady = computed(() => selectedLanguages.value.length > 0 && !store.ingestPlanLoading && store.ingestPlan?.sources.length > 0)
-const canStart = computed(() => Boolean((hasModelChoice.value ? selectionComplete.value : store.ingestPlan?.providerReady) && languagesReady.value))
+const languagesReady = computed(() => selectedLanguages.value.length > 0 && store.ingestPlan?.sources.length > 0)
+const canStart = computed(() => !store.ingestPlanLoading && (removalOnly.value
+  || Boolean((hasModelChoice.value ? selectionComplete.value : store.ingestPlan?.providerReady) && languagesReady.value)))
 // A model that the provider rejects fails every source the same way, so point the user at the picker.
 const modelErrorHint = computed(() => {
   const result = store.ingestResult
@@ -210,10 +285,29 @@ const reasonKeys = {
   no_pages: 'aidoc.reasonNoPages',
   read_failed: 'aidoc.reasonReadFailed',
   agent_error: 'aidoc.reasonAgentError',
+  output_truncated: 'aidoc.reasonOutputTruncated',
   record_failed: 'aidoc.reasonRecordFailed',
   registry_unreadable: 'aidoc.reasonRegistryUnreadable'
 }
 const percent = computed(() => store.syncPercent ?? 0)
+const classifyDisabled = computed(() => store.ingesting || store.updating || store.syncPreparing || store.wikiTopicsLoading)
+const indexing = computed(() => store.ingestProgress?.phase === 'indexing')
+const stopLabel = computed(() => t(store.ingestStopping ? 'aidoc.syncStopping' : 'aidoc.ingestStop'))
+const activeSteps = computed(() => indexing.value ? [] : store.ingestProgress?.active ?? [])
+const runningSummary = computed(() => {
+  const progress = store.ingestProgress
+  if (indexing.value) return t('aidoc.ingestIndexing')
+  if (progress?.phase === 'reconciling') return t('aidoc.ingestReconciling')
+  if (!progress?.total) return t('aidoc.ingestPreparing')
+  return t('aidoc.ingestBatchProgress', { done: progress.completed ?? 0, total: progress.total, percent: percent.value })
+})
+const actionLabels = {
+  list: 'aidoc.actionList',
+  read_source: 'aidoc.actionReadSource',
+  read_wiki: 'aidoc.actionReadWiki',
+  write_wiki: 'aidoc.actionWriteWiki',
+  edit_wiki: 'aidoc.actionEditWiki',
+}
 
 const numberFormat = computed(() => new Intl.NumberFormat(locale?.value, { maximumFractionDigits: 1 }))
 function formatSize(bytes) {
@@ -223,7 +317,7 @@ function formatSize(bytes) {
 }
 
 function dismiss() {
-  if (!store.ingesting) store.cancelIngestPlan()
+  store.cancelIngestPlan()
 }
 
 onMounted(() => dialog.value.showModal())
@@ -380,6 +474,7 @@ onUnmounted(() => dialog.value?.close())
   transition: width 0.3s ease-out;
 }
 .ingest-footer {
+  flex-wrap: wrap;
   justify-content: flex-end;
   background: var(--ingest-footer);
 }

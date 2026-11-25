@@ -29,8 +29,6 @@
         data-testid="aidoc-sync"
         :aria-label="syncLabel"
         :loading="syncBusy"
-        :disabled="store.ingesting"
-        :aria-disabled="store.ingesting ? 'true' : undefined"
         aria-haspopup="dialog"
         :aria-expanded="Boolean(showRebuild || showIngest)"
         @click="onSyncClick"
@@ -39,10 +37,9 @@
         @keydown.context-menu.prevent="openRebuild"
       >
         <svg v-if="!syncBusy" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path d="M20 7v5h-5M4 17v-5h5" />
-          <path d="M6 7a7 7 0 0 1 11.6-1L20 12M4 12l2.4 6A7 7 0 0 0 18 17" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 5h6l2 2h8v12H4zM12 16v-6m-3 3 3-3 3 3" />
         </svg>
-        <span v-if="store.ingesting" class="sync-bar" aria-hidden="true" data-testid="aidoc-sync-bar">
+        <span v-if="running" class="sync-bar" aria-hidden="true" data-testid="aidoc-sync-bar">
           <span class="sync-bar-fill" :style="{ width: percent + '%' }"></span>
         </span>
         <span v-if="resultBadge" class="sync-result" :class="'sync-result--' + resultBadge.variant" aria-hidden="true" data-testid="aidoc-sync-result">{{ resultBadge.text }}</span>
@@ -51,21 +48,7 @@
       </AppButton>
     </AppTooltip>
     <span v-if="showPercent" class="sync-percent" data-testid="aidoc-sync-percent" aria-hidden="true">{{ percent }}%</span>
-    <AppTooltip v-if="store.ingesting" :text="stopLabel">
-      <AppButton
-        size="icon"
-        variant="danger"
-        data-testid="aidoc-sync-stop"
-        :aria-label="stopLabel"
-        :loading="store.ingestStopping"
-        @click="store.stopIngest()"
-      >
-        <svg v-if="!store.ingestStopping" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true">
-          <rect x="6" y="6" width="12" height="12" rx="1.5" />
-        </svg>
-      </AppButton>
-    </AppTooltip>
-    <AppTooltip :text="t('aidoc.fullRebuild')">
+    <AppTooltip :text="t(store.ingesting ? 'aidoc.ingestAutoRebuild' : 'aidoc.fullRebuild')">
       <AppButton
         size="icon"
         data-testid="aidoc-rebuild"
@@ -75,8 +58,7 @@
         @click="openRebuild"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <ellipse cx="12" cy="5" rx="8" ry="3" />
-          <path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M20 11a8 8 0 0 0-14.3-4.9L4 8m0-5v5h5M4 13a8 8 0 0 0 14.3 4.9L20 16m0 5v-5h-5" />
         </svg>
       </AppButton>
     </AppTooltip>
@@ -84,7 +66,7 @@
 
     <AiDocIngestModal v-if="showIngest" />
     <ConfirmModal
-      v-if="showRebuild"
+      v-if="showRebuild && !store.ingesting"
       :visible="true"
       :title="t('aidoc.fullRebuild')"
       :message="t('aidoc.fullRebuildHint')"
@@ -97,7 +79,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from '../../i18n/useI18n'
 import { useAiDocStore } from '../../stores/aidoc'
 import AppButton from '../common/AppButton.vue'
@@ -111,9 +93,12 @@ const store = useAiDocStore()
 const showRebuild = ref(false)
 const showIngest = computed(() => store.ingestDialogVisible)
 const syncBusy = computed(() => store.updating || store.syncPreparing)
+watch(() => store.ingesting, running => {
+  if (running) showRebuild.value = false
+})
 const pendingCount = computed(() => {
   const { ingestAvailable, pending } = store.status || {}
-  return ingestAvailable && pending ? pending.new + pending.updated : 0
+  return (ingestAvailable && pending ? pending.new + pending.updated : 0) + (pending?.removed ?? 0)
 })
 const syncText = computed(() => {
   const status = store.status
@@ -134,25 +119,38 @@ const feedback = computed(() => {
 })
 
 const percent = computed(() => store.syncPercent ?? 0)
-const showPercent = computed(() => syncBusy.value || store.ingesting)
+// Organizing and reclassifying both run in the background behind the Sync button.
+const running = computed(() => store.ingesting || store.reclassifying)
+const showPercent = computed(() => syncBusy.value || running.value)
 
 const fileName = rel => String(rel || '').split('/').pop()
-const stopLabel = computed(() => t(store.ingestStopping ? 'aidoc.syncStopping' : 'aidoc.syncStop'))
 // The latest finished run, shown as a badge until the user opens and dismisses it.
 const resultBadge = computed(() => {
+  if (running.value || store.ingestDialogVisible) return null
   const result = store.ingestResult
-  if (!result || store.ingesting || store.ingestDialogVisible) return null
+  const topics = store.wikiReclassification
+  if (!result && topics && !topics.error) {
+    return { variant: 'ok', text: '✓' + topics.count, tip: t('aidoc.wikiTopicCoverage', topics) }
+  }
+  if (!result) return null
   const done = result.done?.length || 0
   const failed = result.failed?.length || 0
+  const removed = result.removed?.length || 0
   const params = { done, failed }
   if (result.aborted) return { variant: 'warn', text: '!', tip: t('aidoc.syncResultAborted', params) }
   if (result.stopped) return { variant: 'warn', text: '!', tip: t('aidoc.syncResultStopped', params) }
-  return { variant: failed || result.indexError ? 'warn' : 'ok', text: failed || result.indexError ? '!' : '✓' + done, tip: t('aidoc.syncResult', params) }
+  const issue = failed || result.indexError || result.warnings?.length || result.remaining
+  const tip = removed ? t('aidoc.syncResultWithRemovals', { ...params, removed }) : t('aidoc.syncResult', params)
+  return { variant: issue ? 'warn' : 'ok', text: issue ? '!' : '✓' + (done + removed), tip }
 })
 
-const syncLabel = computed(() => t(store.ingesting ? 'aidoc.syncInProgress' : (syncBusy.value ? 'aidoc.updating' : 'aidoc.sync')))
+const syncLabel = computed(() => {
+  if (store.reclassifying) return t('aidoc.wikiClassifyingTopics')
+  return t(store.ingesting ? 'aidoc.syncInProgress' : (syncBusy.value ? 'aidoc.updating' : 'aidoc.sync'))
+})
 const ingestDetail = computed(() => {
   const info = store.ingestProgress
+  if (info?.phase === 'reconciling') return t('aidoc.ingestReconciling')
   if (!info?.total) return `${percent.value}%`
   if (Number.isInteger(info.completed)) {
     return t('aidoc.ingestBatchProgress', { done: info.completed, total: info.total, percent: percent.value })
@@ -160,7 +158,10 @@ const ingestDetail = computed(() => {
   return t('aidoc.syncRunning', { i: info.index + 1, n: info.total, name: fileName(info.rel), percent: percent.value })
 })
 const syncTooltip = computed(() => {
-  if (store.ingesting) return [syncLabel.value, ingestDetail.value].join(' · ')
+  if (running.value) {
+    const detail = store.reclassifying ? `${percent.value}%` : ingestDetail.value
+    return [syncLabel.value, detail, t('aidoc.ingestOpenProgress')].join(' · ')
+  }
   const detail = store.updating
     ? (store.progress && t('aidoc.indexProgress', store.progress))
     : syncText.value
@@ -171,17 +172,17 @@ const syncTooltip = computed(() => {
 })
 
 function onSyncClick() {
-  if (resultBadge.value) store.openIngestResult()
+  if (running.value || resultBadge.value) store.openIngestResult()
   else store.runSync()
 }
 
 function openRebuild() {
-  if (!syncBusy.value && !showIngest.value) showRebuild.value = true
+  if (!syncBusy.value && !store.ingesting && !showIngest.value) showRebuild.value = true
 }
 
 function rebuildIndex() {
   showRebuild.value = false
-  store.updateIndex({ full: true })
+  if (!store.ingesting && !syncBusy.value) store.updateIndex({ full: true })
 }
 
 onMounted(() => {

@@ -34,7 +34,7 @@
     </div>
 
     <!-- Replace row -->
-    <div class="srb-row">
+    <div v-if="!readonly" class="srb-row">
       <div class="srb-input-wrap" style="flex:1;">
         <input
           v-model="replaceQuery"
@@ -56,6 +56,7 @@
 import { ref, computed, watch, nextTick } from 'vue'
 
 const props = defineProps({
+  readonly: Boolean,
   textContent: { type: String, default: null },   // raw string for text/md/code files
   textareaEl:  { type: Object, default: null },   // <textarea> DOM element for navigation
   fileType:    { type: String, default: 'text' }, // 'text' | 'pptx' | 'xlsx' | 'docx'

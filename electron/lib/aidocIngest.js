@@ -280,6 +280,11 @@ async function ingestSequentially({ root, registryFile, sources, languages, runA
           })
         } catch (error) {
           if (error?.name === 'AbortError' || stopRequested()) { result.stopped = true; halt(i); break sourceLoop }
+          if (error?.code === 'output_truncated') {
+            failUnit(i, 'output_truncated', errorMessage(error))
+            sourceDone = false
+            continue
+          }
           failUnit(i, 'agent_error', errorMessage(error))
           sourceDone = false
           const streak = parallel ? ++parallel.agentErrorStreak : ++agentErrorStreak

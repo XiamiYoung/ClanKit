@@ -33,8 +33,8 @@ renderer.heading = function (text, level) {
 }
 // Code renderer: intercept ```mermaid``` blocks; otherwise delegate to highlight.js when language is known.
 renderer.code = function (code, infostring) {
-  const lang = (infostring || '').trim().split(/\s+/)[0]
-  if (lang === 'mermaid') {
+  const lang = (infostring || '').trim().split(/\s+/)[0].toLowerCase()
+  if (lang === 'mermaid' || (['flow', 'flowchart', 'diagram'].includes(lang) && /^\s*(?:flowchart|graph)\s/.test(code))) {
     return `<pre class="mermaid">${escapeHtml(code)}</pre>`
   }
   if (lang && hljs.getLanguage(lang)) {

@@ -23,6 +23,12 @@ export const useAiDocStore = defineStore('aidoc', () => {
   const wikiPages = shallowRef(null)
   const currentWikiPage = shallowRef(null)
   const wikiLoading = ref(false)
+  const wikiTopicsLoading = ref(false)
+  const wikiReclassification = ref(null)
+  // True only while a user-requested full reclassification runs.
+  const reclassifying = ref(false)
+  const reclassifyPercent = ref(0)
+  const reclassifyStopping = ref(false)
 
   const progress = ref(null)
   const error = ref('')
@@ -41,7 +47,7 @@ export const useAiDocStore = defineStore('aidoc', () => {
   const ingestStopping = ref(false)
   const syncPreparing = ref(false)
   const ingestNothing = ref(false)
-  // The confirmation or result dialog. The run itself never needs a dialog.
+  // The confirmation, progress, or result dialog.
   const ingestDialogVisible = ref(false)
   // Provider and model chosen for organizing. Global, so setRoot does not reset it.
   const ingestModel = ref({ providerId: '', model: '' })
@@ -52,16 +58,15 @@ export const useAiDocStore = defineStore('aidoc', () => {
   // Approximate percent bookkeeping; each value only moves forward within a run.
   const indexPercent = ref(0)
   const ingestPercent = ref(0)
-  let ingestCompleted = 0
-  let ingestActions = 0
+  const ingestActions = new Map()
   // Id of the run whose result arrives through this renderer's own invoke promise.
   let localIngestId = null
   let finishingIngestId = null
   let planRequest = 0
 
-  // Phase 1 shows index progress; phase 2 estimates progress from finished sources plus a
-  // smoothed fraction of the in-flight one. 100 is only shown once the run result exists.
+  // Phase 1 shows index progress. Phase 2 estimates progress from completed and in-flight units.
   const syncPercent = computed(() => {
+    if (reclassifying.value) return reclassifyPercent.value
     const result = ingestResult.value
     // A stopped, aborted or partially processed run never reports a full bar.
     if (result && !result.stopped && !result.aborted && !result.remaining) return 100
@@ -70,29 +75,30 @@ export const useAiDocStore = defineStore('aidoc', () => {
     return 0
   })
 
-  function bumpIngestPercent(total) {
-    if (!total) return
-    const fraction = Math.min(ingestActions / (ingestActions + 4), 0.9)
-    const raw = Math.floor(((ingestCompleted + fraction) / total) * 100)
-    ingestPercent.value = Math.max(ingestPercent.value, Math.min(raw, 99))
-  }
-
   function trackIngestEvent(event) {
-    if (Number.isInteger(event.completed)) {
-      ingestCompleted = Math.max(ingestCompleted, event.completed)
-      ingestActions = 0
-      bumpIngestPercent(event.total)
-      return
+    const previous = ingestProgress.value
+    const { index, rel, lang, action, status } = event
+    const total = event.total ?? previous?.total
+    const phase = event.phase ?? 'organizing'
+    const finished = status === 'done' || status === 'failed'
+    const completed = Math.max(previous?.completed ?? 0, event.completed ?? (Number.isInteger(index) ? index + Number(finished) : 0))
+    const active = event.active ?? (previous?.active ?? []).filter(unit => unit.index !== index)
+    if (!event.active && status === 'start') active.push({ index, rel, lang, action })
+    if (event.type === 'action') ingestActions.set(index, (ingestActions.get(index) ?? 0) + 1)
+    for (const activeIndex of ingestActions.keys()) {
+      if (!active.some(unit => unit.index === activeIndex)) ingestActions.delete(activeIndex)
     }
-    if (event.type === 'action') ingestActions++
-    else if (event.status === 'start') { ingestCompleted = event.index; ingestActions = 0 }
-    else if (event.status === 'done' || event.status === 'failed') { ingestCompleted = event.index + 1; ingestActions = 0 }
-    bumpIngestPercent(event.total)
+    ingestProgress.value = { ...event, total, phase, completed, active }
+    if (!total) return
+    let fraction = 0
+    for (const count of ingestActions.values()) fraction += Math.min(count / (count + 4), 0.9)
+    const raw = Math.floor(((completed + fraction) / total) * 100)
+    ingestPercent.value = Math.max(ingestPercent.value, Math.min(raw, 99))
   }
 
   function resetPercent() {
     indexPercent.value = ingestPercent.value = 0
-    ingestCompleted = ingestActions = 0
+    ingestActions.clear()
   }
 
   let root = ''
@@ -111,6 +117,9 @@ export const useAiDocStore = defineStore('aidoc', () => {
     status.value = graph.value = progress.value = stats.value = null
     wikiPages.value = currentWikiPage.value = null
     wikiLoading.value = false
+    wikiTopicsLoading.value = false
+    wikiReclassification.value = null
+    reclassifying.value = reclassifyStopping.value = false
     sourceStates.value = {}
     requestId.value = ingestRequestId.value = null
     error.value = errorKey.value = ''
@@ -162,11 +171,64 @@ export const useAiDocStore = defineStore('aidoc', () => {
   const refreshStatus = async () => {
     await read('getSyncStatus', status)
     const { ingestAvailable, pending } = status.value || {}
-    if (ingestAvailable && pending && pending.new + pending.updated > 0) ingestNothing.value = false
+    if (ingestAvailable && pending && pending.new + pending.updated + (pending.removed || 0) > 0) ingestNothing.value = false
   }
   const loadGraph = () => read('getGraph', graph)
   const refreshSourceStates = () => read('getSourceStates', sourceStates, { field: 'states', silent: true })
-  const loadWikiPages = () => read('getWikiPages', wikiPages, { field: 'pages' })
+  async function loadWikiPages() {
+    await read('getWikiPages', wikiPages, { field: 'pages' })
+  }
+
+  // Classification only runs when the user asks for it. Without `force` only new, changed or
+  // unfinished articles are classified.
+  async function reclassifyWikiPages(force = false) {
+    const api = window.electronAPI?.aidoc
+    if (!api?.categorizeWikiPages || wikiTopicsLoading.value || ingesting.value || updating.value) return
+    const current = generation
+    const requestId = globalThis.crypto.randomUUID()
+    // Like organizing, the run continues in the background and the toolbar shows its percent.
+    wikiTopicsLoading.value = reclassifying.value = true
+    reclassifyPercent.value = 0
+    ingestDialogVisible.value = false
+    ingestPlan.value = ingestResult.value = wikiReclassification.value = null
+    let unsubscribeProgress
+    try {
+      unsubscribeProgress = api.onWikiCategorizeProgress?.(event => {
+        if (current !== generation || event.requestId !== requestId || !event.total) return
+        reclassifyPercent.value = Math.min(Math.floor((event.done / event.total) * 100), 99)
+      })
+      const result = await api.categorizeWikiPages({ root, force: force === true, requestId })
+      if (current !== generation) return
+      if (!result.success) {
+        wikiReclassification.value = { error: result.code || 'topicClassificationFailed' }
+        return
+      }
+      wikiPages.value = result.pages
+      const articles = result.pages.filter(page => !page.isIndex)
+      const count = articles.filter(page => page.topics?.length).length
+      wikiReclassification.value = { total: articles.length, count, failed: result.failed || 0, stopped: result.stopped === true }
+    } catch {
+      if (current === generation) wikiReclassification.value = { error: 'topicClassificationFailed' }
+    } finally {
+      unsubscribeProgress?.()
+      if (current === generation) {
+        wikiTopicsLoading.value = reclassifying.value = reclassifyStopping.value = false
+        if (wikiReclassification.value?.error) ingestDialogVisible.value = true
+      }
+    }
+  }
+
+  async function stopWikiClassification() {
+    const api = window.electronAPI?.aidoc
+    if (!api?.stopWikiCategorize || !reclassifying.value || reclassifyStopping.value) return
+    reclassifyStopping.value = true
+    try {
+      const result = await api.stopWikiCategorize({ root })
+      if (!result.success) reclassifyStopping.value = false
+    } catch {
+      reclassifyStopping.value = false
+    }
+  }
   const openWikiPage = rel => read('getWikiPage', currentWikiPage, {
     field: 'page', options: { rel }, loading: wikiLoading,
   })
@@ -216,6 +278,7 @@ export const useAiDocStore = defineStore('aidoc', () => {
     ingestNothing.value = false
     ingestError.value = ingestErrorKey.value = ''
     ingestPlan.value = ingestResult.value = null
+    if (!reclassifying.value) wikiReclassification.value = null
     ingestDialogVisible.value = false
     try {
       if (!(await updateIndex()) || current !== generation) return
@@ -226,14 +289,17 @@ export const useAiDocStore = defineStore('aidoc', () => {
         return
       }
       // With nothing pending for the selection the dialog still opens when another language has work to add.
-      if (result.sources.length || result.languages?.otherWork) {
+      if (result.sources.length || result.removed?.length || result.languages?.otherWork) {
         ingestPlan.value = { ...result, force, rels }
         ingestLanguages.value = [...(result.languages?.selected || [])]
         ingestDialogVisible.value = true
         // Keep an in-session choice while its provider is still offered; otherwise use the remembered one.
         const kept = result.providers?.some(provider => provider.id === ingestModel.value.providerId)
         if (!kept && result.selected) ingestModel.value = { ...result.selected }
-      } else ingestNothing.value = true
+      } else {
+        ingestNothing.value = true
+        if (rels === undefined && !force) ingestDialogVisible.value = true
+      }
       await Promise.all([refreshStatus(), refreshSourceStates()])
     } catch (err) {
       if (current === generation) describeError({ error: err.message }, ingestError, ingestErrorKey)
@@ -286,7 +352,6 @@ export const useAiDocStore = defineStore('aidoc', () => {
         if (localIngestId !== event.requestId) void finishRestoredIngest(event)
         return
       }
-      ingestProgress.value = event
       trackIngestEvent(event)
     })
   }
@@ -340,15 +405,12 @@ export const useAiDocStore = defineStore('aidoc', () => {
       ingestRequestId.value = snapshot.requestId
       localIngestId = null
       ingestDialogVisible.value = false
+      ingestStopping.value = Boolean(snapshot.stopping)
       ingestPlan.value = ingestResult.value = null
+      ingestProgress.value = null
       ingestError.value = ingestErrorKey.value = ''
       resetPercent()
-      if (snapshot.total) {
-        ingestProgress.value = {
-          requestId: snapshot.requestId, status: snapshot.status, index: snapshot.index, total: snapshot.total, rel: snapshot.rel, lang: snapshot.lang, completed: snapshot.completed,
-        }
-        trackIngestEvent(ingestProgress.value)
-      }
+      if (snapshot.total || snapshot.phase) trackIngestEvent(snapshot)
       ensureIngestListener()
     } catch { /* Without a snapshot the button simply stays idle. */ }
   }
@@ -356,14 +418,17 @@ export const useAiDocStore = defineStore('aidoc', () => {
   async function confirmIngest(batchSize = 5) {
     const api = window.electronAPI?.aidoc
     const plan = ingestPlan.value
-    if (!api?.runIngest || ingesting.value || ingestPlanLoading.value || !plan?.providerReady || !plan.sources.length) return
-    if (plan.languages && !ingestLanguages.value.length) return
+    if (!api?.runIngest || ingesting.value || updating.value || wikiTopicsLoading.value || ingestPlanLoading.value || !plan) return
+    const hasSources = plan.sources.length > 0
+    const reconcileRemoved = plan.rels === undefined && !plan.force && Boolean(plan.removed?.length)
+    if (!hasSources && !reconcileRemoved) return
+    if (hasSources && (!plan.providerReady || plan.languages && !ingestLanguages.value.length)) return
     const id = globalThis.crypto.randomUUID()
     ingestRequestId.value = id
     localIngestId = id
     // The run continues in the background; only a failure brings the dialog back.
     ingestDialogVisible.value = false
-    ingestProgress.value = ingestResult.value = null
+    ingestProgress.value = ingestResult.value = wikiReclassification.value = null
     resetPercent()
     ingestError.value = ingestErrorKey.value = ''
     let busy = false
@@ -371,8 +436,9 @@ export const useAiDocStore = defineStore('aidoc', () => {
       ensureIngestListener()
       const result = await api.runIngest({
         root, requestId: id, force: plan.force, rels: plan.sources.map(source => source.rel), batchSize,
+        ...(reconcileRemoved ? { reconcileRemoved: true } : {}),
         ...(plan.languages ? { languages: [...ingestLanguages.value] } : {}),
-        ...(plan.providers?.length ? { providerId: ingestModel.value.providerId, model: ingestModel.value.model } : {}),
+        ...(hasSources && plan.providers?.length ? { providerId: ingestModel.value.providerId, model: ingestModel.value.model } : {}),
       })
       if (id !== ingestRequestId.value) return
       if (!result.success) {
@@ -387,7 +453,7 @@ export const useAiDocStore = defineStore('aidoc', () => {
       const overflow = Math.max(result.overflow || 0, plan.overflow || 0)
       // A source can fail in several languages, so failures are counted per source.
       const failedSources = new Set(result.failed.map(failure => failure.rel)).size
-      const remaining = Math.max(0, plan.sources.length - result.done.length - failedSources) + overflow
+      const remaining = Math.max(0, plan.sources.length - result.done.length - failedSources) + overflow + (result.remainingRemoved || 0)
       ingestResult.value = { ...result, overflow, remaining }
       await refreshAfterIngest()
     } catch (err) {
@@ -404,13 +470,13 @@ export const useAiDocStore = defineStore('aidoc', () => {
   }
 
   function openIngestResult() {
-    if (ingestResult.value && !ingesting.value) ingestDialogVisible.value = true
+    if (ingesting.value || ingestResult.value || reclassifying.value || wikiReclassification.value) ingestDialogVisible.value = true
   }
 
   function cancelIngestPlan() {
-    if (ingesting.value) return
     ingestDialogVisible.value = false
-    ingestPlan.value = ingestProgress.value = ingestResult.value = null
+    if (ingesting.value) return
+    ingestPlan.value = ingestProgress.value = ingestResult.value = wikiReclassification.value = null
     ingestError.value = ingestErrorKey.value = ''
     resetPercent()
   }
@@ -439,7 +505,8 @@ export const useAiDocStore = defineStore('aidoc', () => {
 
   return {
     status, graph, progress, updating, error, errorKey, stats,
-    sourceStates, wikiPages, currentWikiPage, wikiLoading,
+    sourceStates, wikiPages, currentWikiPage, wikiLoading, wikiTopicsLoading,
+    wikiReclassification, reclassifying, reclassifyWikiPages, reclassifyStopping, stopWikiClassification,
     ingestPlan, ingesting, ingestProgress, ingestResult, ingestError, ingestErrorKey,
     ingestStopping, syncPreparing, ingestNothing, syncPercent, ingestModel, ingestDialogVisible, ingestLanguages, ingestPlanLoading,
     setRoot, setIngestLanguages, refreshStatus, loadGraph, refreshSourceStates, loadWikiPages, openWikiPage,

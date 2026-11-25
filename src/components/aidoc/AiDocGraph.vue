@@ -12,15 +12,14 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import ForceGraph3D from '3d-force-graph'
 import SpriteText from 'three-spritetext'
 import {
-  AmbientLight, DirectionalLight, Group, LineBasicMaterial, Mesh, MeshLambertMaterial,
-  OctahedronGeometry, SphereGeometry,
+  AmbientLight, BufferAttribute, Color, DataTexture, DirectionalLight, Group, LinearFilter, LineBasicMaterial, Mesh, MeshLambertMaterial,
+  OctahedronGeometry, SphereGeometry, Sprite, SpriteMaterial,
 } from 'three'
 import { useI18n } from '../../i18n/useI18n'
 import {
-  DIM_OPACITY, EMISSIVE_ACTIVE, HOVER_SCALE, LABEL_CAP, LABEL_FAR_RATIO, LABEL_HEIGHT, LABEL_NEAR_RATIO,
-  LABEL_STROKE, LINK_ACTIVE, LINK_DIM, LINK_NORMAL, MATCH_SCALE, NODE_LABEL,
-  fitDistanceFor, initialCameraDistance, labelPriority, labelText, nodeRadius, resolveNodeColor,
-  selectLabels, splitRgba,
+  DIM_OPACITY, DIMMED_LABEL_FACTOR, EMISSIVE_ACTIVE, HOVER_SCALE, LABEL_HEIGHT, LABEL_STROKE, LINK_OPACITY,
+  MATCH_SCALE, NODE_FALLBACK, NODE_LABEL, GLOW_OPACITY, GLOW_SCALE, createContainmentForce, glowPixels,
+  hubIds, CHARGE_STRENGTH, LINK_DISTANCE, initialCameraDistance, labelText, nodeRadius, resolveNodeColor,
 } from '../../utils/graph3d'
 
 const NODE_SEGMENTS = 20
@@ -28,7 +27,6 @@ const WARMUP_TICKS = 20
 const COOLDOWN_TICKS = 220
 const FIT_DURATION_MS = 450
 const FIT_PADDING = 44
-const MAX_IDLE_LABELS = LABEL_CAP * 3
 
 const props = defineProps({
   graph: { type: Object, required: true },
@@ -46,8 +44,6 @@ let hoveredId
 let fitOnStop = false
 let reducedMotion = false
 let paused = false
-let fitDistance = 0
-let labelFrame = 0
 let nodesById = new Map()
 let layoutNodes = new Map()
 let layoutLinks = []
@@ -55,6 +51,8 @@ let neighbors = new Map()
 let matchedIds = new Set()
 let records = new Map()
 let geometries = new Map()
+let hubs = new Set()
+let glowTexture
 const linkMaterials = {}
 
 function syncGraph() {
@@ -69,6 +67,7 @@ function syncGraph() {
   }
 
   dataSignature = signature
+  hubs = hubIds(nodes)
   if (!nodesById.has(hoveredId)) hoveredId = undefined
   neighbors = new Map(nodes.map(node => [node.id, new Set()]))
   for (const { source, target } of links) {
@@ -89,7 +88,6 @@ function syncGraph() {
   layoutNodes = new Map(nextNodes.map(node => [node.id, node]))
   layoutLinks = links.map(link => ({ ...link }))
   instance.graphData({ nodes: nextNodes, links: layoutLinks })
-  fitDistance = fitDistance || initialCameraDistance(nodes.length)
   applyStyles()
 }
 
@@ -124,23 +122,36 @@ function buildNodeObject(node) {
   const mesh = new Mesh(geometryFor(node, size), material)
   const group = new Group()
   group.add(mesh)
-  const record = { node, size, group, mesh, material, label: null }
+  const record = { node, size, group, mesh, material, label: null, glow: null }
+  if (hubs.has(node.id)) {
+    record.glow = buildGlow(color, size)
+    group.add(record.glow)
+  }
   records.set(node.id, record)
   styleRecord(record)
   return group
 }
 
-function disposeLabel(record) {
-  const { label } = record
-  if (!label) return
-  label.removeFromParent()
-  label.material.map?.dispose()
-  label.material.dispose()
-  record.label = null
+// A soft halo behind hub nodes. It never writes depth and draws before the labels, which stay on top.
+function buildGlow(color, size) {
+  if (!glowTexture) {
+    const { data, size: side } = glowPixels()
+    glowTexture = new DataTexture(data, side, side)
+    glowTexture.magFilter = glowTexture.minFilter = LinearFilter
+    glowTexture.needsUpdate = true
+  }
+  const glow = new Sprite(new SpriteMaterial({ map: glowTexture, color, transparent: true, depthWrite: false }))
+  glow.name = 'glow'
+  glow.scale.setScalar(size * GLOW_SCALE)
+  glow.renderOrder = 1
+  glow.raycast = () => {}
+  return glow
 }
 
 function disposeRecord(record) {
-  disposeLabel(record)
+  record.label?.material.map?.dispose()
+  record.label?.material.dispose()
+  record.glow?.material.dispose()
   record.material.dispose()
 }
 
@@ -154,7 +165,9 @@ function styleRecord(record) {
   material.depthWrite = emphasized
   material.emissiveIntensity = hovered || match ? EMISSIVE_ACTIVE : 0
   mesh.scale.setScalar(hovered ? HOVER_SCALE : match ? MATCH_SCALE : 1)
-  if (record.label) placeLabel(record)
+  if (record.glow) record.glow.material.opacity = GLOW_OPACITY * (emphasized ? 1 : DIM_OPACITY)
+  ensureLabel(record).material.opacity = emphasized ? 1 : DIMMED_LABEL_FACTOR
+  placeLabel(record)
 }
 
 function placeLabel(record) {
@@ -167,6 +180,8 @@ function ensureLabel(record) {
   label.fontWeight = '500'
   label.strokeWidth = 2
   label.strokeColor = LABEL_STROKE
+  // The sprite canvas is exactly one font size tall, which clips CJK glyphs, descenders and the outline.
+  label.padding = [LABEL_HEIGHT * 0.25, LABEL_HEIGHT * 0.25]
   // Labels must stay legible on top of spheres and must never intercept pointer events.
   label.material.depthTest = false
   label.material.depthWrite = false
@@ -174,7 +189,6 @@ function ensureLabel(record) {
   label.raycast = () => {}
   record.label = label
   record.group.add(label)
-  placeLabel(record)
   return label
 }
 
@@ -194,10 +208,20 @@ function linkIsDim(link) {
 function linkMaterialFor(link) {
   const state = linkIsDim(link) ? 'dim' : hoveredId === undefined ? 'normal' : 'active'
   if (!linkMaterials[state]) {
-    const { color, opacity } = splitRgba({ dim: LINK_DIM, normal: LINK_NORMAL, active: LINK_ACTIVE }[state])
-    linkMaterials[state] = new LineBasicMaterial({ color, opacity, transparent: true, depthWrite: false })
+    linkMaterials[state] = new LineBasicMaterial({
+      vertexColors: true, opacity: LINK_OPACITY[state], transparent: true, depthWrite: false,
+    })
   }
   return linkMaterials[state]
+}
+
+// A straight line has two vertices, so one colour per end gives a gradient between the two nodes.
+function paintLink(line, link) {
+  const ends = [link.source, link.target].map(end => {
+    const node = nodesById.get(linkEndId(end))
+    return new Color(node ? resolveNodeColor(node, props.colors) : NODE_FALLBACK)
+  })
+  line.geometry.setAttribute('color', new BufferAttribute(new Float32Array(ends.flatMap(color => color.toArray())), 3))
 }
 
 function applyStyles() {
@@ -205,54 +229,6 @@ function applyStyles() {
   for (const link of layoutLinks) {
     if (link.__lineObj) link.__lineObj.material = linkMaterialFor(link)
   }
-  updateLabels()
-}
-
-function updateLabels() {
-  if (!instance) return
-  const camera = instance.camera()
-  const near = fitDistance * LABEL_NEAR_RATIO
-  const far = fitDistance * LABEL_FAR_RATIO
-  const candidates = []
-  for (const { node } of records.values()) {
-    const layout = layoutNodes.get(node.id)
-    if (!layout || !Number.isFinite(layout.x)) continue
-    const { x, y, z = 0 } = layout
-    candidates.push({
-      id: node.id,
-      degree: node.degree || 0,
-      distance: Math.hypot(x - camera.position.x, y - camera.position.y, z - camera.position.z),
-      priority: labelPriority({
-        hovered: hoveredId === node.id,
-        matched: isMatch(node.id),
-        emphasized: isEmphasized(node.id),
-      }),
-    })
-  }
-  const shown = selectLabels(candidates, { cap: LABEL_CAP, near, far })
-  let idle = 0
-  for (const record of records.values()) {
-    const opacity = shown.get(record.node.id)
-    if (opacity) {
-      const label = ensureLabel(record)
-      label.visible = true
-      label.material.opacity = opacity
-    } else if (record.label) {
-      record.label.visible = false
-      idle++
-    }
-  }
-  if (idle > MAX_IDLE_LABELS) {
-    for (const record of records.values()) if (record.label && !record.label.visible) disposeLabel(record)
-  }
-}
-
-function scheduleLabelUpdate() {
-  if (labelFrame) return
-  labelFrame = requestAnimationFrame(() => {
-    labelFrame = 0
-    updateLabels()
-  })
 }
 
 function setPaused(next) {
@@ -279,7 +255,6 @@ function onVisibilityChange() {
 
 function fitCamera() {
   instance.zoomToFit(reducedMotion ? 0 : FIT_DURATION_MS, FIT_PADDING)
-  fitDistance = fitDistanceFor(instance.getGraphBbox?.(), instance.camera().fov) || fitDistance
 }
 
 function createInstance() {
@@ -308,6 +283,10 @@ onMounted(() => {
     .nodeThreeObject(buildNodeObject)
     .linkWidth(0)
     .linkMaterial(linkMaterialFor)
+    .linkPositionUpdate((line, _, link) => {
+      if (!line.geometry.getAttribute('color')) paintLink(line, link)
+      return false
+    })
     .lights([new AmbientLight(0xffffff, Math.PI * 0.85), new DirectionalLight(0xffffff, Math.PI * 0.75)])
     .warmupTicks(WARMUP_TICKS)
     .cooldownTicks(COOLDOWN_TICKS)
@@ -316,17 +295,17 @@ onMounted(() => {
       applyStyles()
     })
     .onNodeClick(node => emit('select', nodesById.get(node.id)))
-    .onEngineTick(scheduleLabelUpdate)
     .onEngineStop(() => {
       if (!fitOnStop) return
       fitOnStop = false
       fitCamera()
     })
+  instance.d3Force('charge')?.strength(CHARGE_STRENGTH)
+  instance.d3Force('link')?.distance(LINK_DISTANCE)
+  instance.d3Force('contain', createContainmentForce())
   instance.lights()[1]?.position?.set(1, 1.4, 1.2)
-  instance.controls?.()?.addEventListener?.('change', scheduleLabelUpdate)
 
-  fitDistance = initialCameraDistance(props.graph.nodes.length)
-  instance.cameraPosition({ x: 0, y: 0, z: fitDistance }, { x: 0, y: 0, z: 0 }, 0)
+  instance.cameraPosition({ x: 0, y: 0, z: initialCameraDistance(props.graph.nodes.length) }, { x: 0, y: 0, z: 0 }, 0)
   resize()
   fitOnStop = props.graph.nodes.length > 1
   syncGraph()
@@ -344,6 +323,10 @@ watch(() => props.colors, () => {
     const color = resolveNodeColor(record.node, props.colors)
     record.material.color.set(color)
     record.material.emissive.set(color)
+    record.glow?.material.color.set(color)
+  }
+  for (const link of layoutLinks) {
+    if (link.__lineObj) paintLink(link.__lineObj, link)
   }
 })
 
@@ -354,8 +337,6 @@ watch(() => props.highlightQuery, () => {
 onBeforeUnmount(() => {
   resizeObserver?.disconnect()
   document.removeEventListener('visibilitychange', onVisibilityChange)
-  if (labelFrame) cancelAnimationFrame(labelFrame)
-  labelFrame = 0
   if (!instance) return
   const renderer = instance.renderer?.()
   instance.pauseAnimation()
@@ -366,6 +347,8 @@ onBeforeUnmount(() => {
   for (const geometry of geometries.values()) geometry.dispose()
   geometries.clear()
   for (const material of Object.values(linkMaterials)) material.dispose()
+  glowTexture?.dispose()
+  glowTexture = undefined
   instance = undefined
 })
 </script>

@@ -8,31 +8,21 @@ const { scanKnowledgeFiles } = require('./aidocIndex')
 const { extractWikiLinks } = require('./aidocLinkParser')
 const { createLinkResolver } = require('./aidocLinkResolver')
 const { wikiLanguageOf } = require('./aidocLanguages')
+const { MAX_WIKI_TOPIC_EXCERPT } = require('./aidocWikiTopics')
+const { isWikiScaffoldFile } = require('./aidocWiki')
 const { resolveWikiToolPath } = require('../agent/tools/AiDocWikiTool')
 
 const { WIKI, KB_SOURCE } = AIDOC_FOLDERS
 const HEADER_BYTES = 4096
-const MAX_PAGES = 1000
 const MAX_PAGE_BYTES = 2 * 1024 * 1024
-
-// Wiki root of a page: wiki/<lang> for a language wiki, plain wiki for legacy flat pages.
-function wikiRootOf(rel) {
-  const lang = wikiLanguageOf(rel)
-  return lang ? `${WIKI}/${lang}` : WIKI
-}
-
-// index.md, log.md and SCHEMA.md directly under a wiki root are scaffolding, not reader pages.
-function isScaffoldFile(rel, names) {
-  const lower = rel.toLowerCase()
-  return names.includes(path.posix.basename(lower)) && path.posix.dirname(lower) === wikiRootOf(rel)
-}
+const TOPIC_READ_BYTES = 16 * 1024
 
 function isWikiPage(rel) {
   return typeof rel === 'string' && rel.startsWith(`${WIKI}/`) &&
-    path.posix.extname(rel).toLowerCase() === '.md' && !isScaffoldFile(rel, ['schema.md', 'log.md'])
+    path.posix.extname(rel).toLowerCase() === '.md' && !isWikiScaffoldFile(rel, ['schema', 'log'])
 }
 
-const isHome = rel => isScaffoldFile(rel, ['index.md'])
+const isHome = rel => isWikiScaffoldFile(rel, ['index'])
 
 // Pages that belong to different trees (language folders, legacy flat pages) never link to each other.
 const sameTree = (a, b) => wikiLanguageOf(a) === wikiLanguageOf(b)
@@ -86,12 +76,11 @@ async function listWikiPages(root) {
 
   const pages = []
   for (const { rel, size, mtimeMs } of files) {
-    if (pages.length === MAX_PAGES) break
     const target = await findAreaFile(root, WIKI, rel)
     if (!target || !isWikiPage(target.rel)) continue
     try {
       const header = await readHeader(target.abs, size)
-      const page = { rel, path: target.abs, lang: wikiLanguageOf(rel), ...metadata(rel, parseFrontmatter(header).data), mtimeMs }
+      const page = { rel, path: target.abs, lang: wikiLanguageOf(rel), ...metadata(rel, parseFrontmatter(header).data), size, mtimeMs }
       if (isHome(rel)) page.isIndex = true
       pages.push(page)
     } catch (error) {
@@ -99,6 +88,23 @@ async function listWikiPages(root) {
     }
   }
   return pages
+}
+
+async function readWikiTopicExcerpt({ root, rel }) {
+  const target = isWikiPage(rel) && !isHome(rel) && await findAreaFile(root, WIKI, rel)
+  if (!target || !isWikiPage(target.rel) || isHome(target.rel)) return ''
+
+  const handle = await fs.open(target.abs, 'r')
+  try {
+    const buffer = Buffer.alloc(TOPIC_READ_BYTES)
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0)
+    const text = buffer.toString('utf8', 0, bytesRead)
+    const { body, hasFrontmatter } = parseFrontmatter(text)
+    if (bytesRead === buffer.length && !hasFrontmatter && /^\uFEFF?---[^\S\r\n]*\r?\n/u.test(text)) return ''
+    return body.trim().slice(0, MAX_WIKI_TOPIC_EXCERPT)
+  } finally {
+    await handle.close()
+  }
 }
 
 function buildBacklinks(cache, rel) {
@@ -143,4 +149,4 @@ async function readWikiPage({ root, cache, rel }) {
   }
 }
 
-module.exports = { listWikiPages, buildBacklinks, readWikiPage }
+module.exports = { listWikiPages, buildBacklinks, readWikiPage, readWikiTopicExcerpt }

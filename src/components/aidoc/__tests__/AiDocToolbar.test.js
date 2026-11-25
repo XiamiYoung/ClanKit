@@ -95,6 +95,13 @@ describe('AiDocToolbar', () => {
     wrapper.unmount()
   })
 
+  it('badges a removed source even when an organizing provider is unavailable', () => {
+    store.status = { ingestAvailable: false, pending: { new: 2, updated: 1, removed: 1 } }
+    const wrapper = mount(AiDocToolbar, { global: { stubs: { Teleport: true } } })
+    expect(wrapper.get('[data-testid="aidoc-sync-pending"]').text()).toBe('1')
+    wrapper.unmount()
+  })
+
   it('shows the percent next to Sync only while busy', async () => {
     const wrapper = mount(AiDocToolbar, { global: { stubs: { Teleport: true } } })
     expect(wrapper.find('[data-testid="aidoc-sync-percent"]').exists()).toBe(false)
@@ -108,6 +115,26 @@ describe('AiDocToolbar', () => {
     store.syncPercent = 80
     await nextTick()
     expect(wrapper.get('[data-testid="aidoc-sync-percent"]').text()).toBe('80%')
+    wrapper.unmount()
+  })
+
+  it('shows reclassification progress in the same place as organizing', async () => {
+    const wrapper = mount(AiDocToolbar, { global: { stubs: { Teleport: true } } })
+    store.reclassifying = true
+    store.syncPercent = 42
+    await nextTick()
+    const sync = wrapper.get('[data-testid="aidoc-sync"]')
+    expect(wrapper.get('[data-testid="aidoc-sync-percent"]').text()).toBe('42%')
+    expect(sync.get('[data-testid="aidoc-sync-bar"] .sync-bar-fill').attributes('style')).toContain('width: 42%')
+    await sync.trigger('click')
+    expect(store.openIngestResult).toHaveBeenCalledOnce()
+    expect(store.runSync).not.toHaveBeenCalled()
+
+    store.reclassifying = false
+    store.wikiReclassification = { total: 5, count: 4 }
+    await nextTick()
+    expect(wrapper.find('[data-testid="aidoc-sync-percent"]').exists()).toBe(false)
+    expect(sync.get('[data-testid="aidoc-sync-result"]').text()).toBe('✓4')
     wrapper.unmount()
   })
 
@@ -135,29 +162,33 @@ describe('AiDocToolbar', () => {
   describe('background run', () => {
     const mountToolbar = () => mount(AiDocToolbar, { global: { stubs: { Teleport: true } } })
 
-    it('shows progress, blocks starting again and offers an accessible Stop while running', async () => {
+    it('opens progress from Sync and blocks rebuild buttons and shortcuts while running', async () => {
       store.ingesting = true
       store.syncPercent = 37
       store.ingestProgress = { index: 2, total: 12, rel: 'kb_source/a.md' }
+      store.openIngestResult.mockImplementation(() => { store.ingestDialogVisible = true })
+      store.cancelIngestPlan = vi.fn(() => { store.ingestDialogVisible = false })
       const wrapper = mountToolbar()
       const sync = wrapper.get('[data-testid="aidoc-sync"]')
-      expect(sync.attributes()).toHaveProperty('disabled')
-      expect(sync.attributes('aria-disabled')).toBe('true')
+      expect(sync.element.disabled).toBe(false)
       expect(sync.attributes('aria-label')).toBe('aidoc.syncInProgress')
       expect(sync.get('[data-testid="aidoc-sync-bar"] .sync-bar-fill').attributes('style')).toContain('width: 37%')
       expect(wrapper.get('[data-testid="aidoc-sync-percent"]').text()).toBe('37%')
       await sync.trigger('click')
       expect(store.runSync).not.toHaveBeenCalled()
-      const stop = wrapper.get('[data-testid="aidoc-sync-stop"]')
-      expect(stop.classes()).toContain('app-btn--icon')
-      expect(stop.attributes('aria-label')).toBe('aidoc.syncStop')
-      expect(stop.text()).toBe('')
-      await stop.trigger('click')
-      expect(store.stopIngest).toHaveBeenCalledOnce()
-      store.ingestStopping = true
-      await nextTick()
-      expect(stop.attributes()).toHaveProperty('disabled')
-      expect(stop.attributes('aria-label')).toBe('aidoc.syncStopping')
+      expect(store.openIngestResult).toHaveBeenCalledOnce()
+      expect(wrapper.find('[data-testid="aidoc-sync-stop"]').exists()).toBe(false)
+      expect(wrapper.find('[data-testid="aidoc-ingest-stop"]').exists()).toBe(true)
+      await wrapper.get('[data-testid="aidoc-ingest-dismiss"]').trigger('click')
+      expect(wrapper.find('.ingest-dialog').exists()).toBe(false)
+      expect(store.ingesting).toBe(true)
+      const rebuild = wrapper.get('[data-testid="aidoc-rebuild"]')
+      expect(rebuild.element.disabled).toBe(true)
+      await rebuild.trigger('click')
+      await sync.trigger('contextmenu')
+      await sync.trigger('keydown', { key: 'F10', shiftKey: true })
+      expect(wrapper.find('.confirm-action-btn').exists()).toBe(false)
+      expect(store.updateIndex).not.toHaveBeenCalled()
       wrapper.unmount()
     })
 
@@ -172,7 +203,9 @@ describe('AiDocToolbar', () => {
 
     it.each([
       ['success', { done: [{}, {}], failed: [], remaining: 0 }, 'ok', '✓2', 'aidoc.syncResult'],
+      ['removal-only', { done: [], failed: [], removed: ['kb_source/deleted.md'] }, 'ok', '✓1', 'aidoc.syncResultWithRemovals'],
       ['failures', { done: [{}], failed: [{}], remaining: 0 }, 'warn', '!', 'aidoc.syncResult'],
+      ['cleanup warnings', { done: [], failed: [], remaining: 1, warnings: [{}] }, 'warn', '!', 'aidoc.syncResult'],
       ['stopped', { done: [{}], failed: [], stopped: true, remaining: 1 }, 'warn', '!', 'aidoc.syncResultStopped'],
     ])('shows a %s result badge, opens the result on click and clears after dismissal', async (_name, result, variant, text, tip) => {
       store.ingestResult = result

@@ -126,12 +126,11 @@ describe('AI Doc Wiki reader', () => {
     expect(await listWikiPages(root)).toEqual([])
   })
 
-  it('lists at most 1000 pages and keeps the home entry', async () => {
-    await fs.mkdir(path.join(root, 'wiki'))
+  it('lists every page beyond one thousand and keeps the home entry first', async () => {
     await Promise.all(Array.from({ length: 1000 }, (_, index) => write(`wiki/${index}.md`, 'page')))
     await write('wiki/index.md', 'home')
     const pages = await listWikiPages(root)
-    expect(pages).toHaveLength(1000)
+    expect(pages).toHaveLength(1001)
     expect(pages.find(page => page.isIndex)?.rel).toBe('wiki/index.md')
   }, 30000)
 

@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, reactive } from 'vue'
+import { useConfigStore } from './config'
 
 function normalizePath(p) {
   return p || ''
@@ -7,7 +8,10 @@ function normalizePath(p) {
 
 export const useObsidianStore = defineStore('obsidian', () => {
   const vaultPath = ref('')
+  const configStatus = ref('idle')
   const fileTree = ref([])
+  const treeStatus = ref('idle')
+  let treeRequest = null
   const activeFile = ref(null)     // { path, name, content, dirty } or { path, name, base64, binary: true, dirty }
   const expandedFolders = ref({})  // { [path]: true }
   const fileLoading = ref(false)
@@ -29,15 +33,22 @@ export const useObsidianStore = defineStore('obsidian', () => {
   const failedPaths = reactive({})
   const _inflightProbes = new Map() // path → Promise, de-dup concurrent probes
 
-  async function loadConfig() {
-    const config = await window.electronAPI.obsidian.getConfig()
+  async function loadConfig({ loadFiles = true } = {}) {
+    configStatus.value = 'loading'
+    let config
+    try {
+      config = await window.electronAPI.obsidian.getConfig()
+      configStatus.value = 'ready'
+    } catch (error) {
+      configStatus.value = 'error'
+      throw error
+    }
     if (config.vaultPath) {
       vaultPath.value = normalizePath(config.vaultPath)
       // Sync DoCPath to configStore so MessageRenderer can detect aidoc files
-      const { useConfigStore } = await import('./config')
       const configStore = useConfigStore()
       configStore.config.DoCPath = vaultPath.value
-      await loadTree()
+      if (loadFiles) await loadTree()
       // NOTE: We intentionally do NOT auto-openFile the last opened doc here.
       // Auto-reading on app launch is how a single broken/huge file could
       // freeze the app on every start. DocsView.onMounted handles restoration
@@ -93,26 +104,43 @@ export const useObsidianStore = defineStore('obsidian', () => {
   }
 
   async function setVault(folder) {
-    vaultPath.value = folder
     await window.electronAPI.obsidian.saveConfig({ vaultPath: folder, lastOpenedDoc: null })
     // Sync DoCPath to configStore so ConfigView picks it up
-    const { useConfigStore } = await import('./config')
     const configStore = useConfigStore()
     configStore.config.DoCPath = folder
+    if (vaultPath.value !== folder) fileTree.value = []
+    vaultPath.value = folder
     activeFile.value = null
     expandedFolders.value = {}
     resetFailureCache()
-    await loadTree()
+    await loadTree({ fresh: true })
   }
 
-  async function loadTree() {
-    if (!vaultPath.value) { fileTree.value = []; return }
-    const tree = await window.electronAPI.obsidian.readTree(vaultPath.value)
-    fileTree.value = tree
-    // Kick off a background batch probe so the tree can filter itself as
-    // results come in. We don't await — the UI shows all files initially and
-    // the filter tightens as the probe completes.
-    _batchProbeTree(tree)
+  async function loadTree({ fresh = false } = {}) {
+    const root = vaultPath.value
+    if (!root) return
+    if (!fresh && treeRequest?.root === root) return treeRequest.promise
+
+    treeStatus.value = 'loading'
+    const request = { root }
+    treeRequest = request
+    request.promise = (async () => {
+      try {
+        const tree = await window.electronAPI.obsidian.readTree(root)
+        if (treeRequest !== request || vaultPath.value !== root) return
+        fileTree.value = tree
+        treeStatus.value = 'ready'
+        // File probing may finish after the directory tree is displayed.
+        void _batchProbeTree(tree)
+      } catch (error) {
+        if (treeRequest !== request || vaultPath.value !== root) return
+        treeStatus.value = 'error'
+        console.error('Failed to load AI Doc tree:', error)
+      } finally {
+        if (treeRequest === request) treeRequest = null
+      }
+    })()
+    return request.promise
   }
 
   // Walk the tree collecting file paths, then fire one batch probe IPC.
@@ -318,35 +346,35 @@ export const useObsidianStore = defineStore('obsidian', () => {
   async function createFile(dir, name) {
     const result = await window.electronAPI.obsidian.createFile(dir, name)
     if (result.error) { console.error('Failed to create file:', result.error); return result }
-    await loadTree()
+    await loadTree({ fresh: true })
     return result
   }
 
   async function createDrawio(dir, name) {
     const result = await window.electronAPI.obsidian.createDrawio(dir, name)
     if (result.error) { console.error('Failed to create drawio:', result.error); return result }
-    await loadTree()
+    await loadTree({ fresh: true })
     return result
   }
 
   async function createDocx(dir, name) {
     const result = await window.electronAPI.obsidian.createDocx(dir, name)
     if (result.error) { console.error('Failed to create docx:', result.error); return result }
-    await loadTree()
+    await loadTree({ fresh: true })
     return result
   }
 
   async function createXlsx(dir, name) {
     const result = await window.electronAPI.obsidian.createXlsx(dir, name)
     if (result.error) { console.error('Failed to create xlsx:', result.error); return result }
-    await loadTree()
+    await loadTree({ fresh: true })
     return result
   }
 
   async function createFolder(dir, name) {
     const result = await window.electronAPI.obsidian.createFolder(dir, name)
     if (result.error) { console.error('Failed to create folder:', result.error); return result }
-    await loadTree()
+    await loadTree({ fresh: true })
     return result
   }
 
@@ -361,23 +389,29 @@ export const useObsidianStore = defineStore('obsidian', () => {
     delete probeCache[targetPath]
     delete probeReasons[targetPath]
     delete failedPaths[targetPath]
-    await loadTree()
+    await loadTree({ fresh: true })
     return result
   }
 
   async function renameItem(oldPath, newPath) {
     const result = await window.electronAPI.obsidian.rename(oldPath, newPath)
     if (result.error) { console.error('Failed to rename:', result.error); return result }
-    // Update active file path if it was renamed
-    if (activeFile.value && activeFile.value.path === oldPath) {
-      activeFile.value.path = newPath
-      const parts = newPath.split(/[/\\]/)
-      activeFile.value.name = parts[parts.length - 1]
+    // Keep the open document pointing at its new location when a parent moves.
+    const active = activeFile.value
+    if (active) {
+      const current = active.path.replace(/\\/g, '/')
+      const previous = oldPath.replace(/\\/g, '/')
+      if (current === previous || current.startsWith(previous + '/')) {
+        const nextPath = newPath + current.slice(previous.length)
+        const name = nextPath.split(/[/\\]/).pop()
+        activeFile.value = { ...active, path: nextPath, name }
+        void window.electronAPI.obsidian.saveConfig({ lastOpenedDoc: { path: nextPath, name } })
+      }
     }
     delete probeCache[oldPath]
     delete probeReasons[oldPath]
     delete failedPaths[oldPath]
-    await loadTree()
+    await loadTree({ fresh: true })
     return result
   }
 
@@ -390,7 +424,7 @@ export const useObsidianStore = defineStore('obsidian', () => {
   }
 
   return {
-    vaultPath, fileTree, activeFile, expandedFolders, fileLoading, fileError, highlightNav,
+    vaultPath, configStatus, fileTree, treeStatus, activeFile, expandedFolders, fileLoading, fileError, highlightNav,
     probeCache, probeReasons, failedPaths,
     loadConfig, restoreLastOpenedDoc, pickVault, setVaultManually, loadTree, openFile, openBinaryFile,
     probeFile, resetFailureCache,

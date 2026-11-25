@@ -20,7 +20,7 @@ describe('AI Doc IPC', () => {
     dirs.push(dataDir)
     const root = path.join(dataDir, 'vault')
     const configFile = path.join(dataDir, 'config.json')
-    const fromPath = path.join(root, 'wiki', 'index.md')
+    const fromPath = path.join(root, 'wiki', 'Home.md')
     await fs.mkdir(path.dirname(fromPath), { recursive: true })
     await fs.writeFile(fromPath, '# Index\n\n[[Page]]\n')
     const pagePath = path.join(root, 'wiki', 'Page.md')
@@ -45,10 +45,10 @@ describe('AI Doc IPC', () => {
       root, requestId: 'test-update', done: 2, total: 2,
     })
     const cache = JSON.parse(await fs.readFile(cachePathFor(dataDir, root), 'utf8'))
-    expect(cache.files['wiki/index.md'].links).toEqual(['Page'])
+    expect(cache.files['wiki/Home.md'].links).toEqual(['Page'])
     await expect(invoke('graph-data')).resolves.toMatchObject({
       success: true, hasIndex: true,
-      links: [{ source: 'wiki/index.md', target: 'wiki/Page.md' }],
+      links: [{ source: 'wiki/Home.md', target: 'wiki/Page.md' }],
       nodes: expect.arrayContaining([expect.objectContaining({ id: 'wiki/Page.md', path: pagePath })]),
     })
     await expect(invoke('sync-status')).resolves.toMatchObject({ indexStale: false, staleCount: 0 })
@@ -160,6 +160,7 @@ it('allows only one run and a stop from the original renderer and root', async (
   const work = invoke('ingest-run')
   await entered
   await expect(invoke('ingest-run')).resolves.toMatchObject({ success: false, code: 'busy' })
+  await expect(invoke('index-update', { full: true })).resolves.toMatchObject({ success: false, code: 'busy' })
   await expect(invoke('ingest-stop', {}, { send: vi.fn() })).resolves.toMatchObject({ success: true })
   expect(stop).not.toHaveBeenCalled()
   await expect(invoke('ingest-stop')).resolves.toMatchObject({ success: true })
@@ -171,8 +172,9 @@ it('reports the active run through ingest-status and pushes a final complete eve
   let release
   let taskEntered
   const entered = new Promise(resolve => { taskEntered = resolve })
-  const runAgent = vi.fn(({ active }) => {
+  const runAgent = vi.fn(({ active, onAction }) => {
     active.loops.add({ stop: () => release() })
+    onAction('read_source')
     taskEntered()
     return new Promise(resolve => { release = resolve })
   })
@@ -182,6 +184,7 @@ it('reports the active run through ingest-status and pushes a final complete eve
   await entered
   await expect(invoke('ingest-status')).resolves.toMatchObject({
     success: true, running: true, requestId: 'bg', index: 0, total: 1, rel: 'kb_source/note.md',
+    phase: 'organizing', completed: 0, active: [{ index: 0, rel: 'kb_source/note.md', action: 'read_source' }],
   })
   await expect(invoke('ingest-status', { root: path.join(os.tmpdir(), 'another-root') })).resolves.toMatchObject({ success: false, code: 'rootChanged' })
   await expect(invoke('ingest-status', {}, { send: vi.fn() })).resolves.toMatchObject({ running: false })
@@ -202,6 +205,41 @@ const noteContent = ['---', 'type: summary', 'title: note', 'sources:', '  - kb_
 const writeNote = async ({ tool }) => {
   await tool.execute('write', { operation: 'write_wiki', path: 'wiki/en/note.md', content: noteContent })
 }
+
+it('updates a changed source and only removes its generated wiki page through whole-vault sync', async () => {
+  const config = configuredProvider()
+  const runAgent = vi.fn(async ({ tool }) => {
+    const source = await tool.execute('read', { operation: 'read_source', path: 'kb_source/note.md' })
+    const content = noteContent.replace('A wiki note.', source.content[0].text)
+    const result = await tool.execute('write', { operation: 'write_wiki', path: 'wiki/en/note.md', content })
+    expect(result.isError).not.toBe(true)
+  })
+  const { root, source, sender, invoke } = await ingestFixture(runAgent, config)
+  const page = path.join(root, 'wiki', 'en', 'note.md')
+  await expect(invoke('ingest-run')).resolves.toMatchObject({ success: true, done: ['kb_source/note.md'] })
+  await fs.writeFile(source, 'Replacement content from the updated source file.')
+  await expect(invoke('ingest-plan')).resolves.toMatchObject({ sources: [{ rel: 'kb_source/note.md', state: 'updated' }] })
+  await expect(invoke('ingest-run')).resolves.toMatchObject({ success: true, done: ['kb_source/note.md'] })
+  await expect(fs.readFile(page, 'utf8')).resolves.toContain('Replacement content')
+  await expect(fs.readFile(page, 'utf8')).resolves.not.toContain('A source for the wiki.')
+
+  await fs.unlink(source)
+  config.providers = []
+  await expect(invoke('index-update', { full: true })).resolves.toMatchObject({ success: true })
+  await expect(fs.access(page)).resolves.toBeUndefined()
+  await expect(invoke('ingest-plan')).resolves.toMatchObject({ sources: [], removed: ['kb_source/note.md'], providerReady: false })
+  await expect(invoke('ingest-run', { rels: ['kb_source/note.md'], force: true })).resolves.toMatchObject({ success: true, done: [] })
+  await expect(fs.access(page)).resolves.toBeUndefined()
+  await expect(invoke('ingest-run', { rels: [], reconcileRemoved: true, requestId: 'cleanup' })).resolves.toMatchObject({
+    success: true, done: [], failed: [], removed: ['kb_source/note.md'], deletedPages: ['wiki/en/note.md'], remainingRemoved: 0,
+  })
+  expect(sender.send).toHaveBeenCalledWith('aidoc:ingest-progress', expect.objectContaining({ requestId: 'cleanup', phase: 'reconciling' }))
+  expect(sender.send).toHaveBeenCalledWith('aidoc:ingest-progress', expect.objectContaining({ requestId: 'cleanup', phase: 'indexing' }))
+  await expect(fs.access(page)).rejects.toMatchObject({ code: 'ENOENT' })
+  await expect(invoke('ingest-plan')).resolves.toMatchObject({ sources: [], removed: [] })
+  expect((await invoke('graph-data')).nodes).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: 'wiki/en/note.md' })]))
+  expect(runAgent).toHaveBeenCalledTimes(2)
+})
 
 it('returns registry_unreadable without running the agent when the registry is corrupt', async () => {
   const runAgent = vi.fn()
@@ -275,6 +313,20 @@ it('injects cached model max output tokens into the ingest loop config', async (
   })
   await invoke('ingest-run')
   expect(seen._cachedModelMaxOutputTokens).toEqual({ 'main-model': 4321 })
+})
+
+it.each([undefined, '64000'])('resolves the selected provider context window with override %s', async override => {
+  const config = configuredProvider()
+  if (override) config.providers[1].modelSettings = { 'main-model': { contextWindow: override } }
+  const runAgent = vi.fn(writeNote)
+  const { invoke } = await ingestFixture(runAgent, config, {
+    readJSON: () => ({
+      other: { models: [{ id: 'main-model', context_length: 4096 }] },
+      'my-provider': { models: [{ id: 'main-model', context_length: 128000, max_output_tokens: 16000 }] },
+    }),
+  })
+  await expect(invoke('ingest-run')).resolves.toMatchObject({ success: true, done: ['kb_source/note.md'] })
+  expect(runAgent.mock.calls[0][0].loopConfig.modelContextWindow).toBe(override ? 64000 : 128000)
 })
 
 it('stops a running ingest and frees the busy flag when the owning window is destroyed', async () => {
@@ -606,18 +658,25 @@ it('stops every active batch and validates batch size', async () => {
   let notifyStarted
   const started = new Promise(resolve => { notifyStarted = resolve })
   const stops = []
-  const runAgent = vi.fn(({ active }) => new Promise(resolve => {
+  const runAgent = vi.fn(({ active, progress, onAction }) => new Promise(resolve => {
     const stop = vi.fn(resolve)
     const loop = { stop }
     active.loops.add(loop)
+    onAction(progress.index === 0 ? 'read_source' : 'read_wiki')
     stops.push(stop)
     if (stops.length === 2) notifyStarted()
   }))
   const { root, invoke } = await ingestFixture(runAgent)
   for (let i = 0; i < 5; i++) await fs.writeFile(path.join(root, 'kb_source', 'batch-' + i + '.md'), '# Source')
   await expect(invoke('ingest-run', { batchSize: 6 })).resolves.toMatchObject({ success: false, code: 'invalid_batch_size' })
-  const run = invoke('ingest-run', { batchSize: 5 })
+  const run = invoke('ingest-run', { batchSize: 5, requestId: 'batches' })
   await started
+  await expect(invoke('ingest-status')).resolves.toMatchObject({
+    running: true, completed: 0, total: 6, active: expect.arrayContaining([
+      expect.objectContaining({ index: 0, action: 'read_source' }),
+      expect.objectContaining({ index: 5, action: 'read_wiki' }),
+    ]),
+  })
   await expect(invoke('ingest-stop')).resolves.toMatchObject({ success: true })
   await expect(run).resolves.toMatchObject({ stopped: true, done: [] })
   expect(runAgent).toHaveBeenCalledTimes(2)

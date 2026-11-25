@@ -84,18 +84,87 @@ describe('AiDocIngestModal', () => {
     expect(dialog.querySelector('[role="alert"]').textContent).toContain('Connection missing')
   })
 
-  it('has no running view: Start is disabled once a run is active and no stop control is rendered', async () => {
+  it('lists deleted sources and permits a removal-only sync without a provider', () => {
+    store.ingestPlan = { sources: [], removed: ['kb_source/deleted.md'], providerReady: false }
+    store.ingestLanguages = []
+    const dialog = open()
+    expect(dialog.textContent).toContain('aidoc.ingestMissingSources 1')
+    expect(dialog.querySelector('[data-testid="aidoc-ingest-removed-sources"]').textContent).toBe('kb_source/deleted.md')
+    expect(dialog.textContent).toContain('aidoc.ingestRemoveHint')
+    expect(dialog.querySelector('[role="alert"]')).toBeNull()
+    const start = dialog.querySelector('[data-testid="aidoc-ingest-start"]')
+    expect(start.textContent).toBe('aidoc.ingestSyncChanges')
+    expect(start.disabled).toBe(false)
+    start.click()
+    expect(store.confirmIngest).toHaveBeenCalledExactlyOnceWith(5)
+  })
+
+  it('requires a provider when deleted and new sources are in the same plan', () => {
+    store.ingestPlan.removed = ['kb_source/deleted.md']
+    store.ingestPlan.providerReady = false
+    const dialog = open()
+    expect(dialog.textContent).toContain('aidoc.ingestMissingSources 1')
+    expect(dialog.querySelector('[role="alert"]').textContent).toBe('aidoc.providerMissing')
+    expect(dialog.querySelector('[data-testid="aidoc-ingest-start"]').disabled).toBe(true)
+  })
+
+  it('reports deleted sources and the affected wiki pages in the result', () => {
+    store.ingestPlan = null
+    store.ingestResult = {
+      done: [], failed: [], removed: ['kb_source/deleted.md'], deletedPages: ['wiki/old.md'], updatedPages: ['wiki/shared.md'],
+    }
+    const dialog = open()
+    expect(dialog.textContent).toContain('aidoc.ingestRemovedSources 1')
+    expect(dialog.textContent).toContain('aidoc.ingestDeletedPages 1')
+    expect(dialog.textContent).toContain('aidoc.ingestUpdatedPages 1')
+    expect(dialog.querySelector('[data-testid="aidoc-ingest-removed-sources"]').textContent).toBe('kb_source/deleted.md')
+  })
+
+  it('shows progress and active source details with Stop while organizing', async () => {
     const dialog = open()
     const start = dialog.querySelector('[data-testid="aidoc-ingest-start"]')
     expect(start.disabled).toBe(false)
     start.click()
     expect(store.confirmIngest).toHaveBeenCalledOnce()
     store.ingesting = true
-    store.ingestProgress = { index: 1, total: 3, rel: 'kb_source/report.md', action: 'read_source' }
+    store.syncPercent = 33
+    store.ingestProgress = {
+      total: 3,
+      completed: 1,
+      active: [
+        { index: 1, rel: 'kb_source/report.md', lang: 'en', action: 'read_source' },
+        { index: 2, rel: 'kb_source/notes.md', lang: 'zh', action: 'write_wiki' },
+      ],
+    }
     await nextTick()
-    expect(start.disabled).toBe(true)
+    expect(dialog.querySelector('[data-testid="aidoc-ingest-start"]')).toBeNull()
+    expect(dialog.querySelector('[role="progressbar"]').getAttribute('aria-valuenow')).toBe('33')
+    expect(dialog.textContent).toContain('aidoc.ingestBatchProgress 1 3 33')
+    const active = [...dialog.querySelectorAll('[data-testid="aidoc-ingest-active"] li')]
+    expect(active[0].textContent).toBe('kb_source/report.mdaidoc.langEnaidoc.actionReadSource')
+    expect(active[1].textContent).toBe('kb_source/notes.mdaidoc.langZhaidoc.actionWriteWiki')
+    const stop = dialog.querySelector('[data-testid="aidoc-ingest-stop"]')
+    expect(stop.getAttribute('aria-label')).toBe('aidoc.ingestStop')
+    dialog.querySelector('[data-testid="aidoc-ingest-dismiss"]').click()
+    expect(store.cancelIngestPlan).toHaveBeenCalledOnce()
+    expect(store.stopIngest).not.toHaveBeenCalled()
+    stop.click()
+    expect(store.stopIngest).toHaveBeenCalledOnce()
+    store.ingestStopping = true
+    await nextTick()
+    expect(stop.disabled).toBe(true)
+    expect(stop.getAttribute('aria-label')).toBe('aidoc.syncStopping')
+    store.ingestProgress.phase = 'indexing'
+    await nextTick()
+    expect(dialog.textContent).toContain('aidoc.ingestIndexing')
+    expect(dialog.querySelector('[data-testid="aidoc-ingest-active"]')).toBeNull()
     expect(dialog.querySelector('[data-testid="aidoc-ingest-stop"]')).toBeNull()
-    expect(dialog.querySelector('[data-testid="aidoc-ingest-percent"]')).toBeNull()
+  })
+
+  it('disables starting while an index update is active', () => {
+    store.updating = true
+    const dialog = open()
+    expect(dialog.querySelector('[data-testid="aidoc-ingest-start"]').disabled).toBe(true)
   })
 
   it('renders the result view with a progressbar at the store percent', () => {
@@ -251,11 +320,11 @@ describe('AiDocIngestModal', () => {
       expect(dialog.textContent).toContain('aidoc.ingestFiles 0')
     })
 
-    it('locks the checkboxes while ingesting', async () => {
+    it('hides the language selection while ingesting', async () => {
       const dialog = open()
       store.ingesting = true
       await nextTick()
-      expect(dialog.querySelector('[data-testid="aidoc-ingest-languages"]').disabled).toBe(true)
+      expect(dialog.querySelector('[data-testid="aidoc-ingest-languages"]')).toBeNull()
     })
 
     it('is hidden in the result view and names the language of each failure', () => {
@@ -310,7 +379,7 @@ describe('AiDocIngestModal', () => {
       expect(store.ingestModel).toEqual({ providerId: 'p1', model: 'm2' })
     })
 
-    it('accepts a typed model and disables the controls while ingesting', async () => {
+    it('accepts a typed model and hides the controls while ingesting', async () => {
       const dialog = open()
       const input = dialog.querySelector('[data-testid="aidoc-ingest-model"]')
       input.value = 'brand-new'
@@ -318,8 +387,8 @@ describe('AiDocIngestModal', () => {
       expect(store.ingestModel.model).toBe('brand-new')
       store.ingesting = true
       await nextTick()
-      expect(input.disabled).toBe(true)
-      expect(dialog.querySelector('[data-testid="aidoc-ingest-provider"]').disabled).toBe(true)
+      expect(dialog.querySelector('[data-testid="aidoc-ingest-model"]')).toBeNull()
+      expect(dialog.querySelector('[data-testid="aidoc-ingest-provider"]')).toBeNull()
     })
 
     it('disables start when the model is empty', async () => {
@@ -447,13 +516,15 @@ describe('AiDocIngestModal', () => {
     })
   })
 
-  it('does not dismiss on a backdrop click or Escape while ingesting', () => {
+  it('ignores a backdrop click and dismisses on Escape without stopping', () => {
     store.ingesting = true
     const dialog = open()
     dialog.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    expect(store.cancelIngestPlan).not.toHaveBeenCalled()
     const cancel = new Event('cancel', { cancelable: true })
     dialog.dispatchEvent(cancel)
     expect(cancel.defaultPrevented).toBe(true)
-    expect(store.cancelIngestPlan).not.toHaveBeenCalled()
+    expect(store.cancelIngestPlan).toHaveBeenCalledOnce()
+    expect(store.stopIngest).not.toHaveBeenCalled()
   })
 })

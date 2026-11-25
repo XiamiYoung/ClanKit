@@ -5,6 +5,7 @@ const { readRegistry, registryPathFor } = require('./aidocRegistry')
 const { createLinkResolver } = require('./aidocLinkResolver')
 const { isImageWikiTarget } = require('./aidocLinkParser')
 const { wikiLanguageOf } = require('./aidocLanguages')
+const { isWikiScaffoldFile } = require('./aidocWiki')
 
 async function readIngestedSources(dataDir, root) {
   return (await readRegistry(registryPathFor(dataDir, root))).sources
@@ -22,7 +23,7 @@ function buildGraph({ files, ingested, lang }) {
   const resolve = createLinkResolver(files.map(file => file.rel).filter(inScope))
 
   for (const { rel, abs, ext, title } of files) {
-    if (!inScope(rel)) continue
+    if (!inScope(rel) || isWikiScaffoldFile(rel)) continue
     const segments = rel.split('/')
     const [area] = segments
     if (area !== AIDOC_FOLDERS.WIKI &&
@@ -51,6 +52,7 @@ function buildGraph({ files, ingested, lang }) {
     for (const target of targets) {
       if (isImageWikiTarget(target)) continue
       const match = resolve(rel, target)
+      if (match.kind === 'resolved' && isWikiScaffoldFile(match.rel)) continue
       if (match.kind === 'resolved' && nodes.has(match.rel)) {
         addLink(rel, match.rel)
         continue
@@ -66,6 +68,15 @@ function buildGraph({ files, ingested, lang }) {
           if (nodes.has(candidate)) addLink(id, candidate)
         }
       }
+    }
+  }
+
+  // A generated page may mention its source only in frontmatter, so the registry also links them.
+  for (const [rel, record] of Object.entries(ingested)) {
+    if (!nodes.has(rel)) continue
+    const pages = [record.pages, ...Object.values(record.langs || {}).map(entry => entry?.pages)]
+    for (const page of pages.flatMap(list => list || [])) {
+      if (nodes.has(page) && !targetsBySource.get(rel)?.has(page)) addLink(page, rel)
     }
   }
 
@@ -99,4 +110,51 @@ function assignGroupColors(groups) {
   ])
 }
 
-module.exports = { assignGroupColors, buildGraph, readIngestedSources }
+// Well separated hues, assigned from the largest category down.
+const CATEGORY_COLORS = [
+  '#4c7ef3', '#f0803c', '#2fb67c', '#a463f2', '#e5484d', '#12a5b8', '#d6a100', '#e45cb0',
+  '#6b8e23', '#8d6e63', '#5c6bc0', '#00897b', '#c2185b', '#7cb342', '#ef6c00', '#3949ab',
+]
+const UNCATEGORIZED_COLOR = '#9aa5b1'
+
+// Regroups document nodes by their top-level topic. Sources have no topic of their own and take the
+// most common one among linked pages. Returns null while nothing has been classified.
+function applyCategories(graph, topics) {
+  const names = new Map()
+  const categories = new Map()
+  for (const node of graph.nodes) {
+    const root = topics.get(node.id)?.split(' › ')[0]
+    if (!root) continue
+    const key = root.toLowerCase()
+    if (!names.has(key)) names.set(key, root)
+    categories.set(node.id, names.get(key))
+  }
+  if (!categories.size) return null
+
+  const votes = new Map()
+  for (const { source, target } of graph.links) {
+    for (const [from, to] of [[source, target], [target, source]]) {
+      if (!from.startsWith(AIDOC_FOLDERS.KB_SOURCE + '/') || !categories.has(to)) continue
+      if (!votes.has(from)) votes.set(from, new Map())
+      const counts = votes.get(from)
+      counts.set(categories.get(to), (counts.get(categories.get(to)) || 0) + 1)
+    }
+  }
+  for (const [id, counts] of votes) categories.set(id, [...counts].sort((a, b) => b[1] - a[1])[0][0])
+
+  const sizes = new Map()
+  const nodes = graph.nodes.map(node => {
+    if (node.kind !== 'doc') return node
+    const group = categories.get(node.id) || ''
+    sizes.set(group, (sizes.get(group) || 0) + 1)
+    return { ...node, group }
+  })
+  // Largest first; the uncategorized group is always last.
+  const groups = [...sizes.keys()].sort((a, b) => Number(!a) - Number(!b) || sizes.get(b) - sizes.get(a) || a.localeCompare(b))
+  const colors = Object.fromEntries(groups.map((group, index) =>
+    [group, group ? CATEGORY_COLORS[index % CATEGORY_COLORS.length] : UNCATEGORIZED_COLOR]))
+  return { ...graph, nodes, groups, colors }
+}
+
+module.exports = {
+  applyCategories, assignGroupColors, buildGraph, readIngestedSources }
