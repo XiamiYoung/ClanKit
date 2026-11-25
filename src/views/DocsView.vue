@@ -956,6 +956,7 @@
 </template>
 
 <script setup>
+import '../utils/proseObsidian.css'
 defineOptions({ inheritAttrs: false })
 import { ref, reactive, computed, watch, nextTick, onMounted, onBeforeUnmount, defineComponent, h } from 'vue'
 import ConfirmModal from '../components/common/ConfirmModal.vue'
@@ -3767,19 +3768,6 @@ defineExpose({ docTreeCollapsed })
 </script>
 
 <style>
-.prose-obsidian {
-  font-family: 'Inter', sans-serif;
-  font-size: var(--fs-body);
-  line-height: 1.75;
-  color: #1A1A1A;
-  width: 95%;
-  max-width: 95%;
-  outline: none;
-  cursor: text;
-}
-.prose-obsidian:focus {
-  outline: none;
-}
 .html-wv-toolbar {
   display: flex;
   align-items: center;
@@ -3877,187 +3865,6 @@ defineExpose({ docTreeCollapsed })
   word-wrap: break-word;
   overflow-wrap: break-word;
 }
-.prose-obsidian h1 { font-family: 'Inter', serif; font-size: var(--fs-page-title); font-weight: 700; margin: 0 0 16px; color: #1A1A1A; border-bottom: 1px solid #E5E5EA; padding-bottom: 8px; }
-.prose-obsidian h2 { font-family: 'Inter', serif; font-size: var(--fs-section); font-weight: 600; margin: 28px 0 12px; color: #1A1A1A; }
-.prose-obsidian h3 { font-family: 'Inter', serif; font-size: var(--fs-subtitle); font-weight: 600; margin: 24px 0 8px; color: #1A1A1A; }
-.prose-obsidian p { margin: 0 0 12px; }
-.prose-obsidian ul, .prose-obsidian ol { margin: 0 0 12px; padding-left: 24px; }
-.prose-obsidian li { margin: 4px 0; }
-.prose-obsidian code {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
-  font-size: 0.875em;
-  background: #F5F5F5;
-  padding: 2px 6px;
-  border-radius: 4px;
-  color: #5856D6;
-}
-.prose-obsidian pre {
-  background: #1C1C1E;
-  color: #E5E5EA;
-  padding: 16px;
-  border-radius: 12px;
-  overflow-x: auto;
-  margin: 0 0 16px;
-  font-size: var(--fs-secondary);
-  line-height: 1.5;
-}
-.prose-obsidian pre code {
-  background: none;
-  padding: 0;
-  color: inherit;
-  font-size: inherit;
-}
-.prose-obsidian blockquote {
-  border-left: 3px solid #007AFF;
-  margin: 0 0 12px;
-  padding: 8px 16px;
-  color: #6B7280;
-  background: #F2F2F7;
-  border-radius: 0 8px 8px 0;
-}
-.prose-obsidian a { color: #007AFF; text-decoration: none; }
-.prose-obsidian a:hover { text-decoration: underline; }
-.prose-obsidian hr { border: none; border-top: 1px solid #E5E5EA; margin: 24px 0; }
-.prose-obsidian table { border-collapse: collapse; margin: 0 0 16px; width: 100%; font-size: var(--fs-body); }
-.prose-obsidian th, .prose-obsidian td { border: 1px solid #E5E5EA; padding: 8px 12px; text-align: left; vertical-align: top; }
-.prose-obsidian th { background: #F9F9F9; font-weight: 600; }
-.prose-obsidian tbody tr:nth-child(even) td { background: #FAFAFA; }
-.prose-obsidian img { max-width: 100%; border-radius: 8px; }
-
-/* ── Properties (YAML frontmatter) ── */
-.prose-obsidian .doc-properties {
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  gap: 4px 16px;
-  padding: 12px 16px;
-  margin: 0 0 24px;
-  border: 1px solid #E5E5EA;
-  border-radius: 8px;
-  background: #FAFAFA;
-  font-size: var(--fs-secondary);
-}
-.prose-obsidian .doc-properties .prop-row { display: contents; }
-.prose-obsidian .doc-properties .prop-key { color: #6B7280; font-weight: 500; }
-.prose-obsidian .doc-properties .prop-val { color: #1A1A1A; display: flex; flex-wrap: wrap; gap: 4px; }
-.prose-obsidian .doc-properties .prop-tag {
-  display: inline-block;
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: #E0EBFF;
-  color: #1E40AF;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-/* ── Wikilinks ── */
-.prose-obsidian a.wikilink {
-  color: #6F4FB8;
-  text-decoration: none;
-  border-bottom: 1px dashed #C7B7E8;
-  cursor: pointer;
-}
-.prose-obsidian a.wikilink:hover { background: #F4EEFB; border-bottom-style: solid; }
-
-/* ── Highlights (==text==) ── */
-.prose-obsidian mark { background: #FEF08A; color: inherit; padding: 0 2px; border-radius: 2px; }
-
-/* ── Mermaid container ── */
-.prose-obsidian pre.mermaid {
-  background: transparent;
-  border: 1px solid #E5E5EA;
-  border-radius: 10px;
-  padding: 16px;
-  margin: 0 0 16px;
-  text-align: center;
-  overflow-x: auto;
-}
-.prose-obsidian pre.mermaid svg { max-width: 100%; height: auto; }
-
-/* ── Callouts (Obsidian-style) ── */
-.prose-obsidian .callout {
-  border: 1px solid;
-  border-left-width: 4px;
-  border-radius: 8px;
-  padding: 10px 14px;
-  margin: 0 0 14px;
-  background: var(--cb-bg, #F2F6FB);
-  border-color: var(--cb-border, #BFD7F0);
-}
-.prose-obsidian .callout-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  color: var(--cb-fg, #1E40AF);
-  margin-bottom: 4px;
-}
-.prose-obsidian .callout-body { color: #1A1A1A; }
-.prose-obsidian .callout-body > :first-child { margin-top: 0; }
-.prose-obsidian .callout-body > :last-child { margin-bottom: 0; }
-.prose-obsidian .callout-icon {
-  width: 16px; height: 16px; flex-shrink: 0;
-  background-color: currentColor;
-  -webkit-mask-position: center; mask-position: center;
-  -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
-  -webkit-mask-size: contain; mask-size: contain;
-}
-.prose-obsidian .callout-note,
-.prose-obsidian .callout-info { --cb-bg:#EFF4FB; --cb-border:#9EC1EA; --cb-fg:#1D4ED8; }
-.prose-obsidian .callout-tip,
-.prose-obsidian .callout-hint,
-.prose-obsidian .callout-success,
-.prose-obsidian .callout-check,
-.prose-obsidian .callout-done { --cb-bg:#E8F8EE; --cb-border:#86CFA1; --cb-fg:#15803D; }
-.prose-obsidian .callout-warning,
-.prose-obsidian .callout-caution,
-.prose-obsidian .callout-attention { --cb-bg:#FEF7E6; --cb-border:#F5C97D; --cb-fg:#B45309; }
-.prose-obsidian .callout-danger,
-.prose-obsidian .callout-error,
-.prose-obsidian .callout-failure,
-.prose-obsidian .callout-fail,
-.prose-obsidian .callout-bug { --cb-bg:#FEEBEB; --cb-border:#F1A1A1; --cb-fg:#B91C1C; }
-.prose-obsidian .callout-abstract,
-.prose-obsidian .callout-summary,
-.prose-obsidian .callout-tldr { --cb-bg:#EAF6F8; --cb-border:#7DC9D1; --cb-fg:#0E7490; }
-.prose-obsidian .callout-question,
-.prose-obsidian .callout-help,
-.prose-obsidian .callout-faq { --cb-bg:#FFF7E6; --cb-border:#F1C56B; --cb-fg:#9A6700; }
-.prose-obsidian .callout-example { --cb-bg:#F3EAFC; --cb-border:#C4A5E8; --cb-fg:#6B21A8; }
-.prose-obsidian .callout-quote,
-.prose-obsidian .callout-cite { --cb-bg:#F4F4F5; --cb-border:#A1A1AA; --cb-fg:#3F3F46; }
-.prose-obsidian .callout-todo { --cb-bg:#EFF4FB; --cb-border:#9EC1EA; --cb-fg:#1D4ED8; }
-
-/* Callout icons (encoded SVGs as CSS masks). */
-.prose-obsidian .callout-note .callout-icon,
-.prose-obsidian .callout-info .callout-icon,
-.prose-obsidian .callout-todo .callout-icon { -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='12' y1='16' x2='12' y2='12'/><line x1='12' y1='8' x2='12.01' y2='8'/></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='12' y1='16' x2='12' y2='12'/><line x1='12' y1='8' x2='12.01' y2='8'/></svg>"); }
-.prose-obsidian .callout-tip .callout-icon,
-.prose-obsidian .callout-hint .callout-icon,
-.prose-obsidian .callout-success .callout-icon,
-.prose-obsidian .callout-check .callout-icon,
-.prose-obsidian .callout-done .callout-icon { -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>"); }
-.prose-obsidian .callout-warning .callout-icon,
-.prose-obsidian .callout-caution .callout-icon,
-.prose-obsidian .callout-attention .callout-icon { -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><path d='M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'/><line x1='12' y1='9' x2='12' y2='13'/><line x1='12' y1='17' x2='12.01' y2='17'/></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><path d='M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'/><line x1='12' y1='9' x2='12' y2='13'/><line x1='12' y1='17' x2='12.01' y2='17'/></svg>"); }
-.prose-obsidian .callout-danger .callout-icon,
-.prose-obsidian .callout-error .callout-icon,
-.prose-obsidian .callout-failure .callout-icon,
-.prose-obsidian .callout-fail .callout-icon,
-.prose-obsidian .callout-bug .callout-icon { -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='15' y1='9' x2='9' y2='15'/><line x1='9' y1='9' x2='15' y2='15'/></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><line x1='15' y1='9' x2='9' y2='15'/><line x1='9' y1='9' x2='15' y2='15'/></svg>"); }
-.prose-obsidian .callout-abstract .callout-icon,
-.prose-obsidian .callout-summary .callout-icon,
-.prose-obsidian .callout-tldr .callout-icon { -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><line x1='8' y1='6' x2='21' y2='6'/><line x1='8' y1='12' x2='21' y2='12'/><line x1='8' y1='18' x2='21' y2='18'/><line x1='3' y1='6' x2='3.01' y2='6'/><line x1='3' y1='12' x2='3.01' y2='12'/><line x1='3' y1='18' x2='3.01' y2='18'/></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><line x1='8' y1='6' x2='21' y2='6'/><line x1='8' y1='12' x2='21' y2='12'/><line x1='8' y1='18' x2='21' y2='18'/><line x1='3' y1='6' x2='3.01' y2='6'/><line x1='3' y1='12' x2='3.01' y2='12'/><line x1='3' y1='18' x2='3.01' y2='18'/></svg>"); }
-.prose-obsidian .callout-question .callout-icon,
-.prose-obsidian .callout-help .callout-icon,
-.prose-obsidian .callout-faq .callout-icon { -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><path d='M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3'/><line x1='12' y1='17' x2='12.01' y2='17'/></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><path d='M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3'/><line x1='12' y1='17' x2='12.01' y2='17'/></svg>"); }
-.prose-obsidian .callout-example .callout-icon { -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><polygon points='12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2'/></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'><polygon points='12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2'/></svg>"); }
-.prose-obsidian .callout-quote .callout-icon,
-.prose-obsidian .callout-cite .callout-icon { -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'><path d='M9 7H5a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2v2a4 4 0 0 1-4 4v2a6 6 0 0 0 6-6V9a2 2 0 0 0-2-2zm12 0h-4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2v2a4 4 0 0 1-4 4v2a6 6 0 0 0 6-6V9a2 2 0 0 0-2-2z'/></svg>"); mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='currentColor'><path d='M9 7H5a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2v2a4 4 0 0 1-4 4v2a6 6 0 0 0 6-6V9a2 2 0 0 0-2-2zm12 0h-4a2 2 0 0 0-2 2v4a2 2 0 0 0 2 2h2v2a4 4 0 0 1-4 4v2a6 6 0 0 0 6-6V9a2 2 0 0 0-2-2z'/></svg>"); }
-
-/* ── Footnote refs/section ── */
-.prose-obsidian sup.footnote-ref a { color: #007AFF; text-decoration: none; font-size: 0.78em; }
-.prose-obsidian section.footnotes { margin-top: 32px; padding-top: 16px; border-top: 1px solid #E5E5EA; font-size: var(--fs-secondary); color: #4B5563; }
-.prose-obsidian section.footnotes ol { padding-left: 20px; }
 
 /* ── Context menu ── */
 .notes-ctx-overlay {

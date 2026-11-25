@@ -269,6 +269,7 @@
 
 <script setup>
 import './documentTree.css'
+import '../../utils/proseObsidian.css'
 import { documentRowGradient } from '../../utils/documentTreeStyle'
 import { useDraggableHamburger } from '../../composables/useDraggableHamburger'
 import { useFloatingPanel } from '../../composables/useFloatingPanel'
