@@ -56,6 +56,24 @@ Real-time voice for hands-free work. Brainstorm on a walk, dictate a report, run
 
 Author drafts inside ClanKit, or open your existing Obsidian vault — same files, same folders, two-way sync. Edit on either side and the other catches up.
 
+### New in 1.0 — your documents become a wiki.
+
+![Wiki overview](./docs/screenshots/en/wiki_overview_en.png)
+
+Drop source files into your AI Doc folder and run **Sync wiki**: ClanKit writes linked wiki pages in the languages you choose. Read them in a dedicated Wiki window with search, a multi-level topic tree built on demand, an outline, backlinks and the sources behind every page.
+
+![Wiki article](./docs/screenshots/en/wiki_article_en.png)
+
+### New in 1.0 — see how your knowledge connects.
+
+![3D knowledge graph](./docs/screenshots/en/graph_3d_en.png)
+
+Explore pages and source files as a 3D graph, colored by topic, with the best-connected pages glowing.
+
+![2D topic map](./docs/screenshots/en/graph_2d_en.png)
+
+Switch to 2D for a topic map: each topic gets its own region sized by how much you know about it, source files are squares, and ringed pages bridge three or more other topics. Hover a node to see only its direct links; click it to open the page.
+
 ### Focus mode — just you, the page, and an agent on call.
 
 ![Focus mode](./docs/screenshots/en/focus_mode_en.png)
@@ -76,12 +94,15 @@ Hide the navigation, the chat, every panel — the writing surface takes over th
 - Agentic tool-use loop (filesystem, shell, git, web, data processing, planning)
 - MCP server integration
 - HTTP tools (bring your own REST endpoints as first-class tools)
+- Code tools: your own JavaScript, run in a sandbox with a time limit and the same approval flow as shell commands
 - Voice pipeline (STT / TTS with usage accounting)
 
 **Knowledge & content**
 - RAG workflows with local vector storage and hybrid search
 - Skills system (local filesystem + remote skill hub)
 - AI docs workspace (markdown + office/drawing helpers)
+- AI Wiki generated from your source documents, with topic classification and a dedicated reading window
+- 3D and 2D knowledge graph
 - AI news view with configurable feed aggregation
 
 **Platform**

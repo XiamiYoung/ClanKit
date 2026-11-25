@@ -62,6 +62,24 @@
 
 在 ClanKit 里直接生成，也可以加载你已有的 Obsidian 仓库——同一份文件、同一套目录，双向同步。改一边，另一边自动跟上。
 
+### 1.0 新增——把你的文档变成知识库。
+
+![Wiki 知识库概览](./docs/screenshots/zh/wiki_overview_zh.png)
+
+把原始资料放进 AI Doc 文件夹，点一下 **同步 Wiki**：ClanKit 按你选择的语言写出相互链接的知识页。在独立的 Wiki 窗口里阅读：全文搜索、按需生成的多级主题目录、本页目录、反向链接，每一页都能追溯到来源文件。
+
+![Wiki 文章页](./docs/screenshots/zh/wiki_article_zh.png)
+
+### 1.0 新增——看见知识之间的联系。
+
+![3D 知识图谱](./docs/screenshots/zh/graph_3d_zh.png)
+
+用 3D 图谱浏览知识页和源文件：按主题着色，连接最多的页面带辉光。
+
+![2D 主题地图](./docs/screenshots/zh/graph_2d_zh.png)
+
+切到 2D 就是一张主题地图：每个主题一块区域，大小代表内容多少；方块是源文件，带外圈的页面连接着三个以上的其他主题。悬停节点只看它的直接关系，点击打开页面。
+
 ### 专注模式——只剩你、文字，和随叫随到的 Agent。
 
 ![专注模式](./docs/screenshots/zh/focus_mode_cn.png)
@@ -82,9 +100,12 @@
 - Agentic 工具循环（文件、Shell、Git、Web、数据处理、规划）
 - MCP 服务集成
 - HTTP 工具（把你自己的 REST 端点接成一等公民工具）
+- 代码工具：你自己写的 JavaScript，在沙箱中限时运行，审批流程与 Shell 命令一致
 - 语音管线（STT / TTS，含用量计费）
 
 **知识与内容**
+- 由原始资料生成的 AI Wiki，支持主题分类和独立阅读窗口
+- 3D / 2D 知识图谱
 - RAG 工作流，本地向量库 + 混合检索
 - Skills 系统（本地文件 + 远程 Skill Hub）
 - AI Doc 工作台（Markdown + Office / 绘图辅助）
