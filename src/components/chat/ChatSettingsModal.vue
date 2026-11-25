@@ -729,7 +729,7 @@ function _loadDraftFromChat() {
 
 /* Footer (dark) */
 .ccm-footer {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center; justify-content: flex-end;
   padding: 0.875rem 1.5rem; border-top: 1px solid #1F1F1F;
   background: #0A0A0A; flex-shrink: 0;
 }
