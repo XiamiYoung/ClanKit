@@ -85,12 +85,14 @@ jobs:
           AWS_DEFAULT_REGION:    auto
           R2_ENDPOINT:           ${{ secrets.R2_ENDPOINT }}
         run: |
+          # The update manifest goes last, so it never points at a file that failed to upload.
           aws s3 cp dist-release/ "s3://clankit-releases/${R2_PREFIX}/" \
             --recursive --endpoint-url "$R2_ENDPOINT" \
             --exclude '*' \
             --include '*.exe' \
-            --include '*.exe.blockmap' \
-            --include 'latest.yml'
+            --include '*.exe.blockmap'
+          aws s3 cp dist-release/latest.yml "s3://clankit-releases/${R2_PREFIX}/latest.yml" \
+            --endpoint-url "$R2_ENDPOINT"
 
   build-macos:
     runs-on: macos-latest
@@ -143,14 +145,16 @@ jobs:
           AWS_DEFAULT_REGION:    auto
           R2_ENDPOINT:           ${{ secrets.R2_ENDPOINT }}
         run: |
+          # The update manifest goes last, so it never points at a file that failed to upload.
           aws s3 cp dist-release/ "s3://clankit-releases/${R2_PREFIX}/" \
             --recursive --endpoint-url "$R2_ENDPOINT" \
             --exclude '*' \
             --include '*.dmg' \
             --include '*.dmg.blockmap' \
             --include '*-mac.zip' \
-            --include '*-mac.zip.blockmap' \
-            --include 'latest-mac.yml'
+            --include '*-mac.zip.blockmap'
+          aws s3 cp dist-release/latest-mac.yml "s3://clankit-releases/${R2_PREFIX}/latest-mac.yml" \
+            --endpoint-url "$R2_ENDPOINT"
 
   github-release:
     name: GitHub Release (best-effort)

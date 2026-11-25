@@ -47,11 +47,12 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-      # release.yml builds on `push: tags`. A PAT-pushed tag triggers it
-      # automatically; a GITHUB_TOKEN-pushed tag does not. We dispatch
-      # explicitly regardless so the build always receives `r2_prefix=stable`.
-      - name: Trigger Release Build workflow
-        if: steps.release.outputs.release_created
+      # release.yml builds on `push: tags` and publishes to `stable` by default.
+      # A PAT-pushed tag triggers it automatically; a GITHUB_TOKEN-pushed tag
+      # does not, so dispatch it only without a PAT. Dispatching as well would
+      # build the same version twice and overwrite already published files.
+      - name: Trigger Release Build workflow (no-PAT fallback)
+        if: steps.release.outputs.release_created && steps.token-check.outputs.has_pat == 'false'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
