@@ -90,7 +90,8 @@ jobs:
             --recursive --endpoint-url "$R2_ENDPOINT" \
             --exclude '*' \
             --include '*.exe' \
-            --include '*.exe.blockmap'
+            --include '*.exe.blockmap' \
+            --exclude 'win-unpacked/*'
           aws s3 cp dist-release/latest.yml "s3://clankit-releases/${R2_PREFIX}/latest.yml" \
             --endpoint-url "$R2_ENDPOINT"
 
