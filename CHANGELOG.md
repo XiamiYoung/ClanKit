@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.0.0](https://github.com/XiamiYoung/ClanKit/compare/v0.5.1...v1.0.0) (2026-11-25)
+
+
+### Features
+
+* **aidoc:** add a Wiki window with topics and a 2D/3D knowledge graph ([#56](https://github.com/XiamiYoung/ClanKit/issues/56)) ([1e49210](https://github.com/XiamiYoung/ClanKit/commit/1e492105bcef85760042184be2e6440fd2e0eb6d))
+* **aidoc:** generate a linked wiki from source documents with background sync ([1e49210](https://github.com/XiamiYoung/ClanKit/commit/1e492105bcef85760042184be2e6440fd2e0eb6d))
+* **aidoc:** generate one independent wiki per language ([1e49210](https://github.com/XiamiYoung/ClanKit/commit/1e492105bcef85760042184be2e6440fd2e0eb6d))
+* **aidoc:** organize documents into general, kb_source and wiki folders ([1e49210](https://github.com/XiamiYoung/ClanKit/commit/1e492105bcef85760042184be2e6440fd2e0eb6d))
+* **aidoc:** process source batches in parallel ([1e49210](https://github.com/XiamiYoung/ClanKit/commit/1e492105bcef85760042184be2e6440fd2e0eb6d))
+* **chat:** add a per-chat switch for AI Doc ([1e49210](https://github.com/XiamiYoung/ClanKit/commit/1e492105bcef85760042184be2e6440fd2e0eb6d))
+* **tools:** run code tools as sandboxed JavaScript ([1e49210](https://github.com/XiamiYoung/ClanKit/commit/1e492105bcef85760042184be2e6440fd2e0eb6d))
+
+
+### Bug Fixes
+
+* **chat:** move the chat settings buttons to the bottom right ([1e49210](https://github.com/XiamiYoung/ClanKit/commit/1e492105bcef85760042184be2e6440fd2e0eb6d))
+* **startup:** stop the app freezing while it loads ([1e49210](https://github.com/XiamiYoung/ClanKit/commit/1e492105bcef85760042184be2e6440fd2e0eb6d))
+
 ## [0.5.1](https://github.com/XiamiYoung/ClanKit/compare/v0.5.0...v0.5.1) (2026-08-12)
 
 
