@@ -98,6 +98,9 @@ function validateToolInput(input) {
     if (!input.code || !String(input.code).trim()) {
       return 'tool.code required for code tools'
     }
+    if (input.language && String(input.language).toLowerCase() !== 'javascript') {
+      return 'tool.language must be "javascript" for code tools'
+    }
   } else if (input.type === 'prompt') {
     if (!input.promptText || !String(input.promptText).trim()) {
       return 'tool.promptText required for prompt tools'
@@ -127,7 +130,7 @@ function normalizeToolInput(input) {
     out.bodyTemplate = (input.bodyTemplate && String(input.bodyTemplate).trim())
       || (bodylessMethod ? '{}' : '')
   } else if (input.type === 'code') {
-    out.language = input.language || 'javascript'
+    out.language = 'javascript' // code tools are executed by ClanKit's JavaScript sandbox; no other language runs
     out.code = input.code || ''
   } else if (input.type === 'prompt') {
     out.promptText = input.promptText || ''
@@ -147,7 +150,7 @@ class ManageToolsJsonTool extends BaseTool {
   constructor(context) {
     super(
       'manage_tools',
-      'Create/update/delete/list ClanKit HTTP / code / prompt / smtp tool definitions stored in tools.json. Types: http (method, endpoint, headers, bodyTemplate), code (language, code), prompt (promptText), smtp (uses global SMTP config). Tool id is derived from the name (lowercase + non-alphanumeric → hyphen). Action enum: create_tool, update_tool, delete_tool, list_tools, get_tool. NEVER call file_operation or execute_shell to edit tools.json — use this tool.',
+      'Create/update/delete/list ClanKit HTTP / code / prompt / smtp tool definitions stored in tools.json. Types: http (method, endpoint, headers, bodyTemplate), code (javascript only: code is the body of an async function with a string variable `input`; `return` the result; runs in a sandbox with no require/network/files; the user approves each run like execute_shell), prompt (promptText), smtp (uses global SMTP config). Tool id is derived from the name (lowercase + non-alphanumeric → hyphen). Action enum: create_tool, update_tool, delete_tool, list_tools, get_tool. NEVER call file_operation or execute_shell to edit tools.json — use this tool.',
       'Manage Tools'
     )
     this._context = context || {}
@@ -174,7 +177,7 @@ class ManageToolsJsonTool extends BaseTool {
             endpoint:     { type: 'string', description: 'http only' },
             headers:      { type: 'object', description: 'http only' },
             bodyTemplate: { type: 'string', description: 'http only' },
-            language:     { type: 'string', description: 'code only' },
+            language:     { type: 'string', enum: ['javascript'], description: 'code only; javascript is the only supported language (default)' },
             code:         { type: 'string', description: 'code only' },
             promptText:   { type: 'string', description: 'prompt only' },
           },

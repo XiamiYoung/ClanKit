@@ -24,6 +24,7 @@ const { SubAgentManager }  = require('./managers/SubAgentManager')
 const { TaskManager }      = require('./managers/TaskManager')
 const { mcpManager }       = require('./mcp/McpManager')
 const { PermissionGate }   = require('./tools/PermissionGate')
+const { runCodeTool, buildCodeToolDescription } = require('./tools/CodeToolRunner')
 
 // Extracted modules
 const spb = require('./systemPromptBuilder')
@@ -405,11 +406,12 @@ class AgentLoop {
     const RESTRICTED_KNOWLEDGE_OPS = ['create_knowledge_base', 'upload_file', 'add_text', 'delete_document']
     const isMcp = toolName.startsWith('mcp_')
 
-    // Only check: execute_shell, file_operation (write/append/delete/mkdir), knowledge_manage (write ops), mcp_*
+    // Only check: execute_shell, file_operation (write/append/delete/mkdir), knowledge_manage (write ops), mcp_*, code_*
     const needsCheck = toolName === 'execute_shell'
       || (toolName === 'file_operation' && RESTRICTED_FILE_OPS.includes(toolInput.operation))
       || (toolName === 'knowledge_manage' && RESTRICTED_KNOWLEDGE_OPS.includes(toolInput.operation))
       || isMcp
+      || toolName.startsWith('code_') // user-defined code tools run real JavaScript, so they are gated like execute_shell
 
     if (!needsCheck) return { decision: 'allow' }
 
@@ -1024,7 +1026,7 @@ class AgentLoop {
           codeToolMap.set(fullName, tool)
           allToolsAnthropic.push({
             name: fullName,
-            description: `[Code: ${tool.language || 'javascript'}] ${tool.description || tool.name}\n\nReference code:\n\`\`\`${tool.language || 'javascript'}\n${tool.code || ''}\n\`\`\``,
+            description: buildCodeToolDescription(tool),
             input_schema: {
               type: 'object',
               properties: {
@@ -1517,7 +1519,10 @@ class AgentLoop {
                   result = await this._executeSmtpTool(toolInput)
                 } else if (codeToolMap.has(toolName)) {
                   const codeTool = codeToolMap.get(toolName)
-                  result = { success: true, data: 'This is a reference code snippet. Use execute_shell to run similar code.', code: codeTool.code, language: codeTool.language || 'javascript' }
+                  const codePerm = await this._checkPermission(toolName, { input: toolInput.input, code: codeTool.code }, onChunk)
+                  result = (codePerm.decision === 'block' || codePerm.decision === 'reject')
+                    ? codePerm.result
+                    : await this._executeCodeTool(codeTool, toolInput, this._abortController.signal)
                 } else if (promptToolMap.has(toolName)) {
                   const promptTool = promptToolMap.get(toolName)
                   result = { success: true, data: promptTool.promptText || '' }
@@ -2179,7 +2184,10 @@ class AgentLoop {
                     result = await this._executeSmtpTool(toolInput)
                   } else if (codeToolMap.has(toolName)) {
                     const codeTool = codeToolMap.get(toolName)
-                    result = { success: true, data: 'This is a reference code snippet. Use execute_shell to run similar code.', code: codeTool.code, language: codeTool.language || 'javascript' }
+                    const codePerm = await this._checkPermission(toolName, { input: toolInput.input, code: codeTool.code }, onChunk)
+                    result = (codePerm.decision === 'block' || codePerm.decision === 'reject')
+                      ? codePerm.result
+                      : await this._executeCodeTool(codeTool, toolInput, this._abortController.signal)
                   } else if (promptToolMap.has(toolName)) {
                     const promptTool = promptToolMap.get(toolName)
                     result = { success: true, data: promptTool.promptText || '' }
@@ -2815,7 +2823,10 @@ class AgentLoop {
                     result = await this._executeSmtpTool(toolInput)
                   } else if (codeToolMap.has(toolName)) {
                     const codeTool = codeToolMap.get(toolName)
-                    result = { success: true, data: 'This is a reference code snippet. Use execute_shell to run similar code.', code: codeTool.code, language: codeTool.language || 'javascript' }
+                    const codePerm = await this._checkPermission(toolName, { input: toolInput.input, code: codeTool.code }, onChunk)
+                    result = (codePerm.decision === 'block' || codePerm.decision === 'reject')
+                      ? codePerm.result
+                      : await this._executeCodeTool(codeTool, toolInput, this._abortController.signal)
                   } else if (promptToolMap.has(toolName)) {
                     const promptTool = promptToolMap.get(toolName)
                     result = { success: true, data: promptTool.promptText || '' }
@@ -2918,6 +2929,17 @@ class AgentLoop {
    * Execute an HTTP tool by making the configured HTTP request.
    * Merges agent-provided body with the tool's bodyTemplate.
    */
+  /** Run a user-defined code tool (JavaScript) in the sandboxed worker. The permission check happens at the call site. */
+  async _executeCodeTool(codeTool, toolInput, signal) {
+    const run = await runCodeTool({ code: codeTool.code, input: toolInput?.input, signal })
+    return {
+      success: run.ok,
+      ...(run.ok ? { result: run.result } : { error: run.error }),
+      ...(run.logs.length > 0 ? { logs: run.logs } : {}),
+      ...(run.truncated ? { truncated: true } : {}),
+    }
+  }
+
   async _executeHttpTool(tool, input) {
     return te.executeHttpTool(tool, input)
   }

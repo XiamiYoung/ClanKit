@@ -1062,7 +1062,7 @@ TODO LIST DISCIPLINE (non-negotiable, the user reads this panel as live status):
     }
 
     if (codeToolsList.length > 0) {
-      system += `\n\n**Code Tools** (reference implementations — use execute_shell to run):`
+      system += `\n\n**Code Tools** (executable JavaScript — call the tool to run it; no shell needed):`
       for (const t of codeToolsList) {
         system += `\n- \`code_${t.id}\` — ${t.name}${t.description ? `: ${t.description}` : ''}`
       }
