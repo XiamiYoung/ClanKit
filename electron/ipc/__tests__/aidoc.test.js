@@ -79,7 +79,8 @@ function configuredProvider() {
 }
 
 async function ingestFixture(runAgent, config = configuredProvider(), extraDs = {}) {
-  const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'aidoc-ingest-ipc-'))
+  // The temp directory may be a short (8.3) path on Windows; the app reports canonical paths.
+  const dataDir = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'aidoc-ingest-ipc-')))
   dirs.push(dataDir)
   const root = path.join(dataDir, 'vault')
   const source = path.join(root, 'kb_source', 'note.md')

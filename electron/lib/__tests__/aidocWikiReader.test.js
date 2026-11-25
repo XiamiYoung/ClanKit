@@ -10,7 +10,8 @@ describe('AI Doc Wiki reader', () => {
   let root
 
   beforeEach(async () => {
-    root = await fs.mkdtemp(path.join(os.tmpdir(), 'aidoc-wiki-reader-'))
+    // The temp directory may be a short (8.3) path on Windows; the app reports canonical paths.
+    root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'aidoc-wiki-reader-')))
   })
 
   afterEach(async () => {
