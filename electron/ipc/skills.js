@@ -178,8 +178,7 @@ function register() {
               try {
                 const manifestPath = path.join(skillDir, 'manifest.json')
                 if (fs.existsSync(manifestPath)) {
-                  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
-                  if (manifest && manifest.builtin === true) isBuiltin = true
+                  isBuiltin = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))?.builtin === true
                 }
               } catch {}
             }
